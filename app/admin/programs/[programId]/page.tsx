@@ -46,10 +46,20 @@ export default async function EditProgramPage({
       <Link href="/admin" className="text-sm text-slate-500 hover:underline">
         ← กลับไปหน้าหลักสูตร
       </Link>
-      <h1 className="mt-3 text-xl font-semibold text-slate-800">
-        แก้ไขหลักสูตร {program.code}
-      </h1>
-      <p className="mt-1 text-sm text-slate-500">{program.nameTh}</p>
+      <div className="mt-3 flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-xl font-semibold text-slate-800">
+            แก้ไขหลักสูตร {program.code}
+          </h1>
+          <p className="mt-1 text-sm text-slate-500">{program.nameTh}</p>
+        </div>
+        <Link
+          href={`/admin/programs/${program.id}/courses`}
+          className="shrink-0 rounded-lg border border-mfu-primary px-4 py-2 text-sm font-medium text-mfu-primary hover:bg-mfu-primary/5"
+        >
+          จัดการรายวิชา →
+        </Link>
+      </div>
       <div className="mt-6">
         <ProgramForm mode="edit" programId={program.id} initial={initial} />
       </div>

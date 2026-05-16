@@ -1,6 +1,15 @@
 {
   "indexes": [
     {
+      "comment": "Courses of a program, ordered by code",
+      "collectionGroup": "courses",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "programId", "order": "ASCENDING" },
+        { "fieldPath": "code", "order": "ASCENDING" }
+      ]
+    },
+    {
       "comment": "Offerings list for a program in a given semester",
       "collectionGroup": "offerings",
       "queryScope": "COLLECTION",
