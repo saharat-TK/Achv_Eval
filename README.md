@@ -106,8 +106,11 @@ npm run firebase:indexes
 
 ### 6. Deploy Cloud Functions, Storage, and report logging
 
-Two functions: `analyzeCourse` (Gemini analysis) and `generateReportPdf`
-(renders the report PDF, stores it, logs it).
+One callable function, `analyzeCourse`: it runs the Gemini analysis, then
+(inline, non-fatally) renders the report PDF, stores it in Firebase Storage,
+and appends the log-Sheet row. PDF generation is in-process rather than a
+Firestore trigger because the project's Firestore database is in
+`asia-southeast3`, where Firestore-triggered functions are not available.
 
 First-time setup:
 

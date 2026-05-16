@@ -1,11 +1,13 @@
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
-import { defineSecret } from 'firebase-functions/params';
+import { defineSecret, defineString } from 'firebase-functions/params';
 import * as admin from 'firebase-admin';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 import { runAnalysis, type InputFile } from './gemini';
+import { generateAndStoreReport } from './reportPdf';
 
 const GEMINI_API_KEY = defineSecret('GEMINI_API_KEY');
+const LOG_SHEET_ID = defineString('GOOGLE_LOG_SHEET_ID', { default: '' });
 const REGION = 'asia-southeast1';
 const MAX_TOTAL_BYTES = 25 * 1024 * 1024; // 25 MB across all files
 
@@ -27,10 +29,10 @@ export const analyzeCourse = onCall(
   {
     region: REGION,
     secrets: [GEMINI_API_KEY],
-    // Four section-by-section Gemini calls run in parallel (~60-120s), but
-    // allow generous headroom for slow runs / large documents.
+    // Four section-by-section Gemini calls (~60-120s) plus headless-Chromium
+    // PDF rendering. 2 GiB is required for Chromium.
     timeoutSeconds: 540,
-    memory: '1GiB',
+    memory: '2GiB',
   },
   async (request) => {
     if (!request.auth) {
@@ -149,6 +151,21 @@ export const analyzeCourse = onCall(
         updatedBy: uid,
       });
       await writeAudit(db, uid, actorEmail, 'ai_analysis_succeeded', reportRef.id);
+
+      // Generate the PDF report inline. Non-fatal: the analysis is already
+      // marked 'succeeded' and visible to the lecturer; a PDF failure only
+      // means the download link is missing and can be retried.
+      try {
+        await generateAndStoreReport({
+          offeringId,
+          reportId: reportRef.id,
+          reportRef,
+          result,
+          logSheetId: LOG_SHEET_ID.value(),
+        });
+      } catch (pdfErr) {
+        console.error('generateAndStoreReport failed (non-fatal)', pdfErr);
+      }
 
       return { reportId: reportRef.id, version, status: 'succeeded' };
     } catch (err) {
