@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import { getCurrentProfile } from '@/lib/firebase/auth-server';
-import { getOffering, getAiRubricSuggestions } from '@/lib/data/offerings';
+import { getOffering } from '@/lib/data/offerings';
 import StatusBadge from '@/components/StatusBadge';
 import AiReportsList from '@/components/AiReportsList';
 import AssessmentForm from '@/components/AssessmentForm';
@@ -26,12 +26,6 @@ export default async function AssessorOfferingPage({
   ) {
     notFound();
   }
-
-  // The AI's section-4 rubric result — pre-fills the assessor's form.
-  const aiSuggestions = await getAiRubricSuggestions(
-    offering.id,
-    offering.latestAiReportId,
-  );
 
   return (
     <div>
@@ -84,7 +78,6 @@ export default async function AssessorOfferingPage({
           <AssessmentForm
             offeringId={offering.id}
             hasExamAssessment={offering.hasExamAssessment}
-            aiSuggestions={aiSuggestions}
           />
         </section>
       </div>

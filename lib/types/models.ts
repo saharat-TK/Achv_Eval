@@ -260,17 +260,6 @@ export interface AuditLogDoc {
   after: Record<string, unknown> | null;
 }
 
-/**
- * One AI-suggested rubric evaluation (from an AI report's section 4),
- * surfaced to the assessor as an editable starting draft.
- */
-export interface AiRubricSuggestion {
-  key: string;
-  score: number;
-  strengths: string;
-  improvements: string;
-}
-
 // ----- Rubric scoring helper ----------------------------------------
 /**
  * Computes total/max/percent/band for an assessment.

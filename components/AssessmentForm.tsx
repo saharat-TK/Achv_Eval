@@ -18,7 +18,6 @@ import type {
   AssessmentDoc,
   RubricScore,
   RubricItemComment,
-  AiRubricSuggestion,
 } from '@/lib/types/models';
 import { computeRubricResult } from '@/lib/types/models';
 
@@ -115,11 +114,9 @@ const DEFAULT_SCORES: AssessmentDoc['scores'] = {
 export default function AssessmentForm({
   offeringId,
   hasExamAssessment,
-  aiSuggestions,
 }: {
   offeringId: string;
   hasExamAssessment: boolean;
-  aiSuggestions?: AiRubricSuggestion[] | null;
 }) {
   const [assessmentId, setAssessmentId] = useState<string | null>(null);
   const [scores, setScores] = useState<AssessmentDoc['scores']>({
@@ -136,7 +133,6 @@ export default function AssessmentForm({
   const [loaded, setLoaded] = useState(false);
   const [signedPdfUrl, setSignedPdfUrl] = useState<string | null>(null);
   const [generatingPdf, setGeneratingPdf] = useState(false);
-  const [prefilledFromAi, setPrefilledFromAi] = useState(false);
 
   // Subscribe to existing assessment
   useEffect(() => {
@@ -165,21 +161,6 @@ export default function AssessmentForm({
             setGeneralNotes(data.generalNotes ?? '');
             setIsLocked(data.isLocked);
             setSignedPdfUrl(data.signedPdfUrl ?? null);
-          } else if (aiSuggestions && aiSuggestions.length > 0) {
-            // No assessment yet — seed the ข้อดี/ข้อเสนอแนะ boxes with the
-            // AI's section-4 result so the assessor can review and adjust.
-            const validKeys = new Set(RUBRIC_ITEMS.map((r) => r.key));
-            const seeded: Partial<Record<ScoreKey, RubricItemComment>> = {};
-            for (const s of aiSuggestions) {
-              if (validKeys.has(s.key as ScoreKey)) {
-                seeded[s.key as ScoreKey] = {
-                  strengths: s.strengths,
-                  improvements: s.improvements,
-                };
-              }
-            }
-            setComments(seeded);
-            setPrefilledFromAi(true);
           }
           setLoaded(true);
         },
@@ -194,7 +175,7 @@ export default function AssessmentForm({
       cancelled = true;
       unsub();
     };
-  }, [offeringId, aiSuggestions]);
+  }, [offeringId]);
 
   // Computed result
   const result = useMemo(() => computeRubricResult(scores), [scores]);
@@ -347,13 +328,6 @@ export default function AssessmentForm({
             หัวข้อการทวนสอบ (7 รายการ)
           </h3>
         </div>
-
-        {prefilledFromAi && !isLocked && (
-          <p className="border-b border-amber-100 bg-amber-50 px-4 py-2 text-xs text-amber-700">
-            ข้อความในช่อง “ข้อดี” และ “ข้อเสนอแนะ” เป็นผลวิเคราะห์เบื้องต้นจาก AI
-            (ส่วนที่ 4) — กรุณาตรวจสอบและปรับแก้ตามดุลยพินิจของท่านก่อนลงนาม
-          </p>
-        )}
 
         <div className="divide-y divide-slate-100">
           {RUBRIC_ITEMS.map((item) => {
