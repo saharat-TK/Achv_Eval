@@ -1,14 +1,29 @@
-import { redirect } from 'next/navigation';
-import { createServerClient } from '@/lib/supabase/server';
+'use client';
 
-export default async function HomePage() {
-  const supabase = await createServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+import { useRouter } from 'next/navigation';
+import { useEffect, useState } from 'react';
+import { auth } from '@/lib/firebase/config';
+import { onAuthStateChanged, User } from 'firebase/auth';
 
-  if (!user) {
-    redirect('/login');
+export default function HomePage() {
+  const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
+  const router = useRouter();
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      if (!currentUser) {
+        router.push('/login');
+      } else {
+        setUser(currentUser);
+      }
+      setLoading(false);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  if (loading) {
+    return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
   }
 
   // TODO Phase 1/2/3: route to the user's role-appropriate dashboard.
@@ -24,7 +39,7 @@ export default async function HomePage() {
         </p>
         <div className="mt-6 p-4 bg-slate-50 rounded-lg text-sm">
           <div className="font-medium text-slate-700">เข้าสู่ระบบสำเร็จ</div>
-          <div className="mt-1 text-slate-500">{user.email}</div>
+          <div className="mt-1 text-slate-500">{user?.email}</div>
         </div>
         <p className="mt-6 text-xs text-slate-500">
           Phase 0 scaffold. Lecturer / Assessor / Admin workspaces will appear here

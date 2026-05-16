@@ -1,31 +1,39 @@
 'use client';
 
-import { createBrowserClient } from '@/lib/supabase/client';
 import { useState } from 'react';
+import { auth } from '@/lib/firebase/config';
+import { GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
+import { useRouter } from 'next/navigation';
 
 export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const router = useRouter();
 
   async function signInWithGoogle() {
     setLoading(true);
     setError(null);
-    const supabase = createBrowserClient();
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
-        queryParams: {
-          // Hint to Google's consent screen: filter to MFU domain.
-          // Supabase's domain-restrict happens on the callback handler.
-          hd: 'mfu.ac.th',
-          access_type: 'offline',
-          prompt: 'consent',
-        },
-      },
-    });
-    if (error) {
-      setError(error.message);
+    try {
+      const provider = new GoogleAuthProvider();
+      provider.setCustomParameters({
+        hd: 'mfu.ac.th',
+        prompt: 'consent',
+      });
+      const result = await signInWithPopup(auth, provider);
+      
+      // Verify domain explicitly just in case
+      if (!result.user.email?.endsWith('@mfu.ac.th')) {
+        await auth.signOut();
+        throw new Error('domain_not_allowed');
+      }
+      
+      router.push('/');
+    } catch (e: any) {
+      if (e.message === 'domain_not_allowed') {
+        setError('เฉพาะบัญชีอีเมล @mfu.ac.th เท่านั้น');
+      } else {
+        setError(e.message || 'เกิดข้อผิดพลาดในการเข้าสู่ระบบ');
+      }
       setLoading(false);
     }
   }

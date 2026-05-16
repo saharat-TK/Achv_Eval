@@ -8,20 +8,17 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "typecheck": "tsc --noEmit",
-    "db:types": "supabase gen types typescript --local > lib/types/database.ts",
-    "db:reset": "supabase db reset",
-    "db:push": "supabase db push"
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@supabase/ssr": "^0.5.2",
-    "@supabase/supabase-js": "^2.45.4",
     "@google/generative-ai": "^0.21.0",
+    "clsx": "^2.1.1",
+    "firebase": "^12.13.0",
+    "firebase-admin": "^13.10.0",
     "googleapis": "^144.0.0",
     "next": "14.2.15",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "clsx": "^2.1.1",
     "tailwind-merge": "^2.5.4",
     "zod": "^3.23.8"
   },
@@ -33,7 +30,6 @@
     "eslint": "^8.57.1",
     "eslint-config-next": "14.2.15",
     "postcss": "^8.4.47",
-    "supabase": "^1.207.9",
     "tailwindcss": "^3.4.14",
     "typescript": "^5.6.3"
   }
