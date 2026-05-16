@@ -1,0 +1,13 @@
+rules_version = '2';
+
+// Report PDFs are written by the generateReportPdf Cloud Function (Admin SDK,
+// which bypasses these rules) and read via Firebase Storage download-token
+// URLs (which also bypass rules). No direct client access is needed or
+// allowed — deny everything.
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

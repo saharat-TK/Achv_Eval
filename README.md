@@ -31,7 +31,7 @@ Phase 0 (foundation) — **in progress**
 - [x] OHS seed script
 - [x] Phase 1A: lecturer workspace, dashboard, offering detail
 - [x] Phase 1B: Gemini analysis pipeline (`analyzeCourse` Cloud Function)
-- [ ] Phase 1C: report PDF rendering + Firebase Storage + log Sheet
+- [x] Phase 1C: report PDF (`generateReportPdf`) → Firebase Storage + log Sheet
 - [ ] Phase 2: assessor flow · Phase 3: admin
 - [ ] Phase 4: verification · Phase 5: dashboard · Phase 6: notifications · Phase 7: hardening
 
@@ -104,18 +104,36 @@ npm run firebase:rules
 npm run firebase:indexes
 ```
 
-### 6. Deploy Cloud Functions
+### 6. Deploy Cloud Functions, Storage, and report logging
 
-The `analyzeCourse` callable runs the Gemini analysis. It needs the Gemini
-key as a Firebase secret (not a plain env var):
+Two functions: `analyzeCourse` (Gemini analysis) and `generateReportPdf`
+(renders the report PDF, stores it, logs it).
+
+First-time setup:
+
+1. **Enable Firebase Storage** — Firebase Console → Build → Storage → Get
+   started. `generateReportPdf` writes report PDFs there.
+2. **Create the log Google Sheet** with header row:
+   `timestamp · course code · course name · academic year · semester · report link · lecturer · email`.
+   Note its ID (the long string in the Sheet URL).
+3. **Share that Sheet** (Editor) with the functions' service account —
+   `<project-number>-compute@developer.gserviceaccount.com`
+   (find it in Google Cloud Console → IAM).
+4. **Enable the Google Sheets API** for the project (console.cloud.google.com
+   → APIs & Services → Library → Google Sheets API).
+
+Then deploy:
 
 ```bash
 cd functions && npm install && cd ..
 npx firebase functions:secrets:set GEMINI_API_KEY   # paste the key when prompted
-npx firebase deploy --only functions
+echo "GOOGLE_LOG_SHEET_ID=<your-sheet-id>" >> functions/.env
+npx firebase deploy --only functions,storage
 ```
 
-The function is deployed to region `asia-southeast1`.
+Functions deploy to region `asia-southeast1`. If `GOOGLE_LOG_SHEET_ID` is
+unset the PDF is still produced and stored — only the log-Sheet row is
+skipped.
 
 ### 7. Seed the OHS program
 
