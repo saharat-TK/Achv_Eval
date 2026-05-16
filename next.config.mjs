@@ -8,6 +8,19 @@ const nextConfig = {
     // (Next 14 key; on Next 15 this moves to top-level serverExternalPackages.)
     serverComponentsExternalPackages: ['firebase-admin'],
   },
+  async headers() {
+    return [
+      {
+        source: '/(.*)',
+        headers: [
+          {
+            key: 'Cross-Origin-Opener-Policy',
+            value: 'same-origin-allow-popups',
+          },
+        ],
+      },
+    ];
+  },
 };
 
 export default nextConfig;
