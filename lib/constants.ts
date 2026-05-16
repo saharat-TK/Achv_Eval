@@ -3,6 +3,10 @@ import type {
   UploadType,
   Semester,
   AiReportStatus,
+  ProgramLevel,
+  PloSchema,
+  PloDomain,
+  CourseType,
 } from '@/lib/types/models';
 
 /**
@@ -84,4 +88,34 @@ export const REPORT_STATUS_TH: Record<AiReportStatus, string> = {
   running: 'กำลังวิเคราะห์',
   succeeded: 'วิเคราะห์สำเร็จ',
   failed: 'วิเคราะห์ล้มเหลว',
+};
+
+export const PROGRAM_LEVEL_LABEL: Record<ProgramLevel, string> = {
+  undergraduate: 'ปริญญาตรี',
+  master: 'ปริญญาโท',
+  doctoral: 'ปริญญาเอก',
+};
+
+export const PLO_SCHEMA_LABEL: Record<PloSchema, string> = {
+  '4_domain': '4 ด้าน',
+  '6_domain_tqf': '6 ด้าน (TQF)',
+};
+
+export const PLO_DOMAIN_LABEL: Record<PloDomain, string> = {
+  ethics: 'จริยธรรม',
+  knowledge: 'ความรู้',
+  intellectual: 'ทักษะทางปัญญา',
+  interpersonal: 'ทักษะความสัมพันธ์ระหว่างบุคคล',
+  numerical_comm_it: 'ทักษะการวิเคราะห์ สื่อสาร และ IT',
+  psychomotor: 'ทักษะพิสัย',
+  character: 'ลักษณะบุคคล',
+  skill: 'ทักษะ',
+};
+
+export const COURSE_TYPE_LABEL: Record<CourseType, string> = {
+  theory: 'ทฤษฎี',
+  theory_practice: 'ทฤษฎี + ปฏิบัติ',
+  practice: 'ปฏิบัติ',
+  field: 'ภาคสนาม',
+  s_u: 'S/U',
 };
