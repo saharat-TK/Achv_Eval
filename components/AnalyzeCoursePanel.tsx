@@ -1,9 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { httpsCallable } from 'firebase/functions';
-import { getFirebaseFunctions } from '@/lib/firebase/config';
+import { getFirebaseAuth, getFirebaseFunctions } from '@/lib/firebase/config';
 import { DOCUMENT_SLOTS } from '@/lib/constants';
 import type { UploadType } from '@/lib/types/models';
 
@@ -29,6 +29,12 @@ export default function AnalyzeCoursePanel({ offeringId }: { offeringId: string 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Start the Firebase Auth SDK loading its persisted session as soon as the
+  // panel mounts, so the callable can attach an ID token when invoked.
+  useEffect(() => {
+    getFirebaseAuth();
+  }, []);
+
   const hasTqf3 = Boolean(selected.tqf3);
   const totalBytes = Object.values(selected).reduce((s, f) => s + (f?.size ?? 0), 0);
   const tooLarge = totalBytes > MAX_TOTAL_BYTES;
@@ -47,6 +53,16 @@ export default function AnalyzeCoursePanel({ offeringId }: { offeringId: string 
     setBusy(true);
     setError(null);
     try {
+      // The callable authenticates via the Firebase ID token. Wait for the
+      // Auth SDK to finish restoring the persisted session before calling it.
+      const auth = getFirebaseAuth();
+      await auth.authStateReady();
+      if (!auth.currentUser) {
+        setError('เซสชันหมดอายุ กรุณาออกจากระบบและเข้าสู่ระบบใหม่');
+        setBusy(false);
+        return;
+      }
+
       const entries = Object.entries(selected) as [UploadType, File][];
       const files = await Promise.all(
         entries.map(async ([type, file]) => ({
