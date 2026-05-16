@@ -23,6 +23,13 @@ export type PloDomain =
 export type CourseType = 'theory' | 'theory_practice' | 'practice' | 'field' | 's_u';
 export type Semester = '1' | '2' | '3'; // 3 = summer
 export type AppRole = 'admin' | 'program_director' | 'assessor' | 'corresponding_lecturer';
+/**
+ * Categories of source document a lecturer submits for analysis.
+ * NOTE: these files are transient — they are streamed to Gemini and then
+ * discarded. They are NOT stored. Only the generated PDF report persists
+ * (in Firebase Storage). `UploadType` is kept only to label submitted files
+ * and define what the lecturer is expected to provide.
+ */
 export type UploadType =
   | 'tqf3'
   | 'tqf4'
@@ -136,18 +143,12 @@ export interface OfferingDoc {
   updatedBy: string;
 }
 
-// ----- offerings/{id}/uploads/{uploadId} ----------------------------
-export interface UploadDoc {
-  offeringId: string;
+/** A source file submitted for one analysis run. The file itself is NOT
+ *  stored — only this metadata record of what was analyzed. */
+export interface AnalyzedInputFile {
   type: UploadType;
-  originalFilename: string;
-  driveFileId: string;
-  driveWebViewLink: string | null;
-  mimeType: string | null;
-  sizeBytes: number | null;
-  uploadedAt: Ts;
-  uploadedBy: string;
-  isSuperseded: boolean;
+  filename: string;
+  sizeBytes: number;
 }
 
 // ----- offerings/{id}/aiReports/{reportId} --------------------------
@@ -160,8 +161,11 @@ export interface AiReportDoc {
   geminiRequestId: string | null;
   inputTokenCount: number | null;
   outputTokenCount: number | null;
-  drivePdfId: string | null;
-  drivePdfLink: string | null;
+  /** What was submitted for this run (filenames only — files are transient). */
+  inputFiles: AnalyzedInputFile[];
+  /** Generated PDF report in Firebase Storage. */
+  reportStoragePath: string | null; // gs path within the bucket
+  reportDownloadUrl: string | null; // signed/public download URL
   logSheetRowId: string | null;
   /** Parsed sections 1..4 for in-app rendering. */
   structuredOutput: Record<string, unknown> | null;

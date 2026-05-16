@@ -1,11 +1,7 @@
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import { getSessionUser } from '@/lib/firebase/auth-server';
-import {
-  getOffering,
-  getUploadsForOffering,
-  getAiReportsForOffering,
-} from '@/lib/data/offerings';
+import { getOffering, getAiReportsForOffering } from '@/lib/data/offerings';
 import StatusBadge from '@/components/StatusBadge';
 import { DOCUMENT_SLOTS, SEMESTER_LABEL } from '@/lib/constants';
 
@@ -26,15 +22,7 @@ export default async function OfferingDetailPage({
     notFound();
   }
 
-  const [uploads, aiReports] = await Promise.all([
-    getUploadsForOffering(offering.id),
-    getAiReportsForOffering(offering.id),
-  ]);
-
-  const uploadByType = new Map(uploads.map((u) => [u.type, u]));
-  const requiredMissing = DOCUMENT_SLOTS.filter(
-    (s) => s.required && !uploadByType.has(s.type),
-  );
+  const aiReports = await getAiReportsForOffering(offering.id);
 
   return (
     <div>
@@ -55,64 +43,64 @@ export default async function OfferingDetailPage({
         <StatusBadge status={offering.status} />
       </div>
 
-      {/* Document checklist */}
+      {/* Analysis submission */}
       <section className="mt-8">
         <h2 className="text-sm font-semibold text-slate-700">
-          เอกสารประกอบการประเมิน
+          ส่งเอกสารเพื่อวิเคราะห์ด้วย AI
         </h2>
+        <p className="mt-1 text-xs text-slate-500">
+          ไฟล์ที่อัปโหลดจะถูกส่งให้ระบบ AI วิเคราะห์ทันทีและ
+          <strong>ไม่ถูกจัดเก็บไว้ในระบบ</strong> — ระบบเก็บเฉพาะรายงาน PDF
+          ที่สร้างขึ้นเท่านั้น
+        </p>
         <div className="mt-3 divide-y divide-slate-100 rounded-xl border border-slate-200 bg-white">
-          {DOCUMENT_SLOTS.map((slot) => {
-            const upload = uploadByType.get(slot.type);
-            return (
-              <div
-                key={slot.type}
-                className="flex items-center justify-between gap-4 px-4 py-3"
-              >
-                <div>
-                  <div className="text-sm font-medium text-slate-800">
-                    {slot.labelTh}
-                    {slot.required && (
-                      <span className="ml-2 text-xs text-red-500">บังคับ</span>
-                    )}
-                  </div>
-                  <div className="text-xs text-slate-500">
-                    {slot.descriptionTh}
-                  </div>
-                </div>
-                {upload ? (
-                  <span className="text-xs font-medium text-green-700">
-                    ✓ อัปโหลดแล้ว
-                  </span>
-                ) : (
-                  <span className="text-xs text-slate-400">ยังไม่อัปโหลด</span>
+          {DOCUMENT_SLOTS.map((slot) => (
+            <div key={slot.type} className="px-4 py-3">
+              <div className="text-sm font-medium text-slate-800">
+                {slot.labelTh}
+                {slot.required && (
+                  <span className="ml-2 text-xs text-red-500">บังคับ</span>
                 )}
               </div>
-            );
-          })}
+              <div className="text-xs text-slate-500">{slot.descriptionTh}</div>
+            </div>
+          ))}
         </div>
-        <p className="mt-3 text-xs text-slate-400">
-          {requiredMissing.length > 0
-            ? `ยังขาดเอกสารบังคับ ${requiredMissing.length} รายการ`
-            : 'เอกสารบังคับครบถ้วน'}
-          {' · '}การอัปโหลดไฟล์จะเปิดใช้งานในขั้นถัดไป (Phase 1B)
+        <button
+          disabled
+          className="mt-4 rounded-lg bg-mfu-primary px-4 py-2 text-sm font-medium text-white opacity-50"
+        >
+          อัปโหลดและเริ่มวิเคราะห์
+        </button>
+        <p className="mt-2 text-xs text-slate-400">
+          การอัปโหลดและการวิเคราะห์จะเปิดใช้งานใน Phase 1B
         </p>
       </section>
 
       {/* AI reports */}
       <section className="mt-8">
         <h2 className="text-sm font-semibold text-slate-700">
-          รายงานการวิเคราะห์ด้วย AI
+          รายงานการวิเคราะห์
         </h2>
         {aiReports.length === 0 ? (
-          <p className="mt-2 text-sm text-slate-400">
-            ยังไม่มีรายงาน — จะเปิดใช้งานหลังอัปโหลดเอกสารและเชื่อมต่อ Gemini
-            (Phase 1C)
-          </p>
+          <p className="mt-2 text-sm text-slate-400">ยังไม่มีรายงาน</p>
         ) : (
-          <ul className="mt-2 space-y-1 text-sm">
+          <ul className="mt-2 divide-y divide-slate-100 rounded-xl border border-slate-200 bg-white">
             {aiReports.map((r) => (
-              <li key={r.id} className="text-slate-700">
-                เวอร์ชัน {r.version} — {r.status}
+              <li
+                key={r.id}
+                className="flex items-center justify-between px-4 py-3 text-sm"
+              >
+                <span className="text-slate-700">เวอร์ชัน {r.version}</span>
+                <span className="text-slate-500">{r.status}</span>
+                {r.reportDownloadUrl && (
+                  <a
+                    href={r.reportDownloadUrl}
+                    className="text-mfu-primary hover:underline"
+                  >
+                    ดาวน์โหลด PDF
+                  </a>
+                )}
               </li>
             ))}
           </ul>
