@@ -1,15 +1,23 @@
 import { redirect } from 'next/navigation';
-import { getSessionUser } from '@/lib/firebase/auth-server';
+import { getCurrentProfile } from '@/lib/firebase/auth-server';
 
 /**
- * Root route. Middleware already redirects unauthenticated users to /login;
- * here we route signed-in users to their workspace.
+ * Root route. Routes signed-in users to the correct workspace based on their
+ * role assignments.
  *
- * Phase 1 ships only the lecturer workspace, so everyone lands there.
- * Role-aware routing (admin / director / assessor) arrives in Phase 3.
+ * Priority: admin → assessor → lecturer (default).
+ * Admin routing will be added in Phase 3.
  */
 export default async function RootPage() {
-  const user = await getSessionUser();
-  if (!user) redirect('/login');
+  const profile = await getCurrentProfile();
+  if (!profile) redirect('/login');
+
+  // Assessors go to the assessor workspace.
+  if (profile.roles.assessorOf && profile.roles.assessorOf.length > 0) {
+    redirect('/assessor');
+  }
+
+  // Default: lecturer workspace.
   redirect('/lecturer');
 }
+
