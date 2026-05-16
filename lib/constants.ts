@@ -1,4 +1,9 @@
-import type { OfferingStatus, UploadType, Semester } from '@/lib/types/models';
+import type {
+  OfferingStatus,
+  UploadType,
+  Semester,
+  AiReportStatus,
+} from '@/lib/types/models';
 
 /**
  * Offering lifecycle status — Thai label + a Tailwind colour token group
@@ -72,4 +77,11 @@ export const SEMESTER_LABEL: Record<Semester, string> = {
   '1': 'ภาคต้น',
   '2': 'ภาคปลาย',
   '3': 'ภาคฤดูร้อน',
+};
+
+export const REPORT_STATUS_TH: Record<AiReportStatus, string> = {
+  queued: 'รอดำเนินการ',
+  running: 'กำลังวิเคราะห์',
+  succeeded: 'วิเคราะห์สำเร็จ',
+  failed: 'วิเคราะห์ล้มเหลว',
 };

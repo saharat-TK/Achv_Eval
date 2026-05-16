@@ -29,8 +29,10 @@ Phase 0 (foundation) — **in progress**
 - [x] Server session cookies + middleware gate
 - [x] Firestore data model, security rules, indexes
 - [x] OHS seed script
-- [ ] First end-to-end sign-in test against a live Firebase project
-- [ ] Phase 1: lecturer flow · Phase 2: assessor flow · Phase 3: admin
+- [x] Phase 1A: lecturer workspace, dashboard, offering detail
+- [x] Phase 1B: Gemini analysis pipeline (`analyzeCourse` Cloud Function)
+- [ ] Phase 1C: report PDF rendering + Firebase Storage + log Sheet
+- [ ] Phase 2: assessor flow · Phase 3: admin
 - [ ] Phase 4: verification · Phase 5: dashboard · Phase 6: notifications · Phase 7: hardening
 
 ## Prerequisites
@@ -38,6 +40,9 @@ Phase 0 (foundation) — **in progress**
 - Node.js 20.6+ (the `seed` script uses `--env-file`)
 - A Firebase project with **Authentication** (Google provider) and
   **Cloud Firestore** enabled
+- The Firebase project on the **Blaze (pay-as-you-go) plan** — required to
+  deploy Cloud Functions. The free monthly quota still covers this app's
+  volume, but a billing account must be attached.
 - A Firebase service account key (Project Settings → Service accounts)
 - A Gemini API key — <https://aistudio.google.com/app/apikey>
 
@@ -99,7 +104,20 @@ npm run firebase:rules
 npm run firebase:indexes
 ```
 
-### 6. Seed the OHS program
+### 6. Deploy Cloud Functions
+
+The `analyzeCourse` callable runs the Gemini analysis. It needs the Gemini
+key as a Firebase secret (not a plain env var):
+
+```bash
+cd functions && npm install && cd ..
+npx firebase functions:secrets:set GEMINI_API_KEY   # paste the key when prompted
+npx firebase deploy --only functions
+```
+
+The function is deployed to region `asia-southeast1`.
+
+### 7. Seed the OHS program
 
 ```bash
 npm run seed
@@ -107,7 +125,7 @@ npm run seed
 
 Creates 1 program (6 TQF PLOs), 5 courses, 1 sample offering.
 
-### 7. Run locally and promote yourself to admin
+### 8. Run locally and promote yourself to admin
 
 ```bash
 npm run dev    # → http://localhost:3000
@@ -131,19 +149,26 @@ app/
   layout.tsx, page.tsx, globals.css   App shell
   login/page.tsx                      Google sign-in
   api/auth/session/route.ts           Session-cookie mint/clear + profile upsert
-  (lecturer)/ (assessor)/ (admin)/    Phases 1–3
+  lecturer/                           Lecturer workspace (Phase 1)
+
+components/                           Shared UI (StatusBadge, AnalyzeCoursePanel…)
 
 lib/
   firebase/
-    config.ts                         Client SDK (lazy init)
+    config.ts                         Client SDK (lazy init) + Functions
     admin.ts                          Admin SDK (lazy init)
     auth-server.ts                    Session verification helpers
+  data/offerings.ts                   Firestore data-access layer
   types/models.ts                     Firestore document types + rubric scoring
+  constants.ts                        Status labels, document slots
 
 middleware.ts                         Session-cookie gate
 
-prompts/                              AI evaluation guidelines (authoritative)
-  CLAUDE.master.md / CLAUDE.undergrad.md
+functions/                            Firebase Cloud Functions (separate deploy)
+  src/analyzeCourse.ts                Callable: run Gemini course analysis
+  src/gemini.ts                       Gemini integration + result schema
+  prompts/                            AI evaluation guidelines (authoritative)
+    CLAUDE.master.md / CLAUDE.undergrad.md
 
 docs/FIRESTORE_MODEL.md               Data model + design rationale
 
@@ -163,6 +188,11 @@ npm run typecheck         # tsc --noEmit
 npm run seed              # Seed Firestore with OHS data
 npm run firebase:rules    # Deploy firestore.rules
 npm run firebase:indexes  # Deploy firestore.indexes.json
+
+# Cloud Functions (run inside functions/)
+cd functions && npm run build    # Typecheck/compile
+cd functions && npm run deploy   # Deploy functions
+cd functions && npm run logs     # Tail function logs
 ```
 
 ## Security notes

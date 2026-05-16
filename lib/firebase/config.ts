@@ -1,6 +1,7 @@
 import { initializeApp, getApps, getApp, type FirebaseApp } from 'firebase/app';
 import { getAuth, type Auth } from 'firebase/auth';
 import { getFirestore, type Firestore } from 'firebase/firestore';
+import { getFunctions, type Functions } from 'firebase/functions';
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -23,6 +24,10 @@ const firebaseConfig = {
 let app: FirebaseApp | undefined;
 let authInstance: Auth | undefined;
 let dbInstance: Firestore | undefined;
+let functionsInstance: Functions | undefined;
+
+/** Cloud Functions region — keep in sync with the region in functions/src. */
+export const FUNCTIONS_REGION = 'asia-southeast1';
 
 function getFirebaseApp(): FirebaseApp {
   if (!app) {
@@ -43,4 +48,11 @@ export function getFirebaseDb(): Firestore {
     dbInstance = getFirestore(getFirebaseApp());
   }
   return dbInstance;
+}
+
+export function getFirebaseFunctions(): Functions {
+  if (!functionsInstance) {
+    functionsInstance = getFunctions(getFirebaseApp(), FUNCTIONS_REGION);
+  }
+  return functionsInstance;
 }

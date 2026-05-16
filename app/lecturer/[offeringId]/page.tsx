@@ -3,7 +3,8 @@ import { notFound, redirect } from 'next/navigation';
 import { getSessionUser } from '@/lib/firebase/auth-server';
 import { getOffering, getAiReportsForOffering } from '@/lib/data/offerings';
 import StatusBadge from '@/components/StatusBadge';
-import { DOCUMENT_SLOTS, SEMESTER_LABEL } from '@/lib/constants';
+import AnalyzeCoursePanel from '@/components/AnalyzeCoursePanel';
+import { SEMESTER_LABEL, REPORT_STATUS_TH } from '@/lib/constants';
 
 export const dynamic = 'force-dynamic';
 
@@ -53,28 +54,9 @@ export default async function OfferingDetailPage({
           <strong>ไม่ถูกจัดเก็บไว้ในระบบ</strong> — ระบบเก็บเฉพาะรายงาน PDF
           ที่สร้างขึ้นเท่านั้น
         </p>
-        <div className="mt-3 divide-y divide-slate-100 rounded-xl border border-slate-200 bg-white">
-          {DOCUMENT_SLOTS.map((slot) => (
-            <div key={slot.type} className="px-4 py-3">
-              <div className="text-sm font-medium text-slate-800">
-                {slot.labelTh}
-                {slot.required && (
-                  <span className="ml-2 text-xs text-red-500">บังคับ</span>
-                )}
-              </div>
-              <div className="text-xs text-slate-500">{slot.descriptionTh}</div>
-            </div>
-          ))}
+        <div className="mt-3">
+          <AnalyzeCoursePanel offeringId={offering.id} />
         </div>
-        <button
-          disabled
-          className="mt-4 rounded-lg bg-mfu-primary px-4 py-2 text-sm font-medium text-white opacity-50"
-        >
-          อัปโหลดและเริ่มวิเคราะห์
-        </button>
-        <p className="mt-2 text-xs text-slate-400">
-          การอัปโหลดและการวิเคราะห์จะเปิดใช้งานใน Phase 1B
-        </p>
       </section>
 
       {/* AI reports */}
@@ -85,26 +67,67 @@ export default async function OfferingDetailPage({
         {aiReports.length === 0 ? (
           <p className="mt-2 text-sm text-slate-400">ยังไม่มีรายงาน</p>
         ) : (
-          <ul className="mt-2 divide-y divide-slate-100 rounded-xl border border-slate-200 bg-white">
-            {aiReports.map((r) => (
-              <li
-                key={r.id}
-                className="flex items-center justify-between px-4 py-3 text-sm"
-              >
-                <span className="text-slate-700">เวอร์ชัน {r.version}</span>
-                <span className="text-slate-500">{r.status}</span>
-                {r.reportDownloadUrl && (
-                  <a
-                    href={r.reportDownloadUrl}
-                    className="text-mfu-primary hover:underline"
-                  >
-                    ดาวน์โหลด PDF
-                  </a>
-                )}
-              </li>
-            ))}
-          </ul>
+          <div className="mt-2 space-y-3">
+            {aiReports.map((r) => {
+              const out = r.structuredOutput as
+                | { overallSummary?: string; criticalIssues?: string[] }
+                | null;
+              return (
+                <div
+                  key={r.id}
+                  className="rounded-xl border border-slate-200 bg-white p-4"
+                >
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="font-medium text-slate-800">
+                      รายงานเวอร์ชัน {r.version}
+                    </span>
+                    <span className="text-xs text-slate-500">
+                      {REPORT_STATUS_TH[r.status] ?? r.status}
+                    </span>
+                  </div>
+
+                  {r.status === 'failed' && r.errorMessage && (
+                    <p className="mt-2 text-xs text-red-600">{r.errorMessage}</p>
+                  )}
+
+                  {r.status === 'succeeded' && out && (
+                    <div className="mt-3 space-y-2">
+                      {out.overallSummary && (
+                        <p className="whitespace-pre-wrap text-sm text-slate-700">
+                          {out.overallSummary}
+                        </p>
+                      )}
+                      {out.criticalIssues && out.criticalIssues.length > 0 && (
+                        <div>
+                          <div className="text-xs font-semibold text-red-700">
+                            ประเด็นสำคัญที่ต้องแก้ไข
+                          </div>
+                          <ul className="mt-1 list-disc pl-5 text-xs text-slate-600">
+                            {out.criticalIssues.map((issue, i) => (
+                              <li key={i}>{issue}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {r.reportDownloadUrl && (
+                    <a
+                      href={r.reportDownloadUrl}
+                      className="mt-3 inline-block text-sm text-mfu-primary hover:underline"
+                    >
+                      ดาวน์โหลดรายงาน PDF
+                    </a>
+                  )}
+                </div>
+              );
+            })}
+          </div>
         )}
+        <p className="mt-2 text-xs text-slate-400">
+          การสร้างรายงาน PDF และจัดเก็บจะเปิดใช้งานใน Phase 1C
+        </p>
       </section>
     </div>
   );

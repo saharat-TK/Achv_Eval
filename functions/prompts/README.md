@@ -20,5 +20,8 @@ when running course evaluation.
 
 ## Loading at runtime
 
-The AI pipeline loads these via `lib/gemini/load-prompt.ts` (to be added in
-Phase 1) which picks the file based on the program's level enum.
+The `analyzeCourse` Cloud Function reads the file directly from this folder
+(`functions/src/analyzeCourse.ts`), picking `CLAUDE.undergrad.md` when the
+program's `level` is `undergraduate` and `CLAUDE.master.md` otherwise. The
+file is sent to Gemini as the system instruction. Because these files ship
+inside the `functions/` deploy bundle, they must stay in this directory.
