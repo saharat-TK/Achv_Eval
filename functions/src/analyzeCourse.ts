@@ -27,7 +27,9 @@ export const analyzeCourse = onCall(
   {
     region: REGION,
     secrets: [GEMINI_API_KEY],
-    timeoutSeconds: 300,
+    // Four section-by-section Gemini calls run in parallel (~60-120s), but
+    // allow generous headroom for slow runs / large documents.
+    timeoutSeconds: 540,
     memory: '1GiB',
   },
   async (request) => {

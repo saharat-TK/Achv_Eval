@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { httpsCallable } from 'firebase/functions';
 import { getFirebaseAuth, getFirebaseFunctions } from '@/lib/firebase/config';
 import { DOCUMENT_SLOTS } from '@/lib/constants';
@@ -21,16 +20,13 @@ async function fileToBase64(file: File): Promise<string> {
   return btoa(binary);
 }
 
-type AnalyzeResult = { reportId: string; version: number; status: string };
-
 export default function AnalyzeCoursePanel({ offeringId }: { offeringId: string }) {
-  const router = useRouter();
   const [selected, setSelected] = useState<Partial<Record<UploadType, File>>>({});
   const [busy, setBusy] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Start the Firebase Auth SDK loading its persisted session as soon as the
-  // panel mounts, so the callable can attach an ID token when invoked.
+  // Warm up the Firebase Auth SDK so the callable can attach an ID token.
   useEffect(() => {
     getFirebaseAuth();
   }, []);
@@ -53,8 +49,8 @@ export default function AnalyzeCoursePanel({ offeringId }: { offeringId: string 
     setBusy(true);
     setError(null);
     try {
-      // The callable authenticates via the Firebase ID token. Wait for the
-      // Auth SDK to finish restoring the persisted session before calling it.
+      // Wait for the Auth SDK to restore the session so the callable can
+      // attach the ID token.
       const auth = getFirebaseAuth();
       await auth.authStateReady();
       if (!auth.currentUser) {
@@ -73,20 +69,47 @@ export default function AnalyzeCoursePanel({ offeringId }: { offeringId: string 
         })),
       );
 
-      const callable = httpsCallable<
-        { offeringId: string; files: unknown[] },
-        AnalyzeResult
-      >(getFirebaseFunctions(), 'analyzeCourse', { timeout: 300_000 });
+      const callable = httpsCallable<{ offeringId: string; files: unknown[] }, unknown>(
+        getFirebaseFunctions(),
+        'analyzeCourse',
+        { timeout: 540_000 },
+      );
 
-      await callable({ offeringId, files });
-      router.refresh();
+      // Fire and forget. The Cloud Function runs to completion server-side
+      // even if the lecturer navigates away; it writes the aiReports doc,
+      // which the live report list below picks up. We only catch fast
+      // invocation errors here.
+      callable({ offeringId, files }).catch((e) => {
+        console.error('analyzeCourse invocation failed', e);
+      });
+
+      setSubmitted(true);
       setSelected({});
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : 'การวิเคราะห์ล้มเหลว';
-      setError(msg);
+      setError(e instanceof Error ? e.message : 'ส่งคำขอวิเคราะห์ไม่สำเร็จ');
     } finally {
       setBusy(false);
     }
+  }
+
+  if (submitted) {
+    return (
+      <div className="rounded-xl border border-green-200 bg-green-50 p-4">
+        <p className="text-sm font-medium text-green-800">
+          ส่งคำขอวิเคราะห์เรียบร้อยแล้ว
+        </p>
+        <p className="mt-1 text-xs text-green-700">
+          ระบบกำลังวิเคราะห์เอกสารทีละส่วน — ท่านสามารถออกจากหน้านี้หรือไป
+          วิเคราะห์รายวิชาอื่นได้ สถานะและผลการวิเคราะห์จะปรากฏด้านล่างโดยอัตโนมัติ
+        </p>
+        <button
+          onClick={() => setSubmitted(false)}
+          className="mt-3 text-xs text-green-800 underline hover:text-green-900"
+        >
+          ส่งคำขอวิเคราะห์อีกครั้ง
+        </button>
+      </div>
+    );
   }
 
   return (
@@ -135,16 +158,11 @@ export default function AnalyzeCoursePanel({ offeringId }: { offeringId: string 
         disabled={busy || !hasTqf3 || tooLarge}
         className="mt-4 rounded-lg bg-mfu-primary px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-40"
       >
-        {busy ? 'กำลังวิเคราะห์… (อาจใช้เวลา 1–2 นาที)' : 'อัปโหลดและเริ่มวิเคราะห์'}
+        {busy ? 'กำลังส่งเอกสาร…' : 'อัปโหลดและเริ่มวิเคราะห์'}
       </button>
       {!hasTqf3 && !busy && (
         <p className="mt-2 text-xs text-slate-400">
           ต้องแนบไฟล์ มคอ.3 (TQF3) เป็นอย่างน้อยจึงจะเริ่มวิเคราะห์ได้
-        </p>
-      )}
-      {busy && (
-        <p className="mt-2 text-xs text-slate-400">
-          กรุณาอย่าปิดหน้านี้ — ระบบกำลังส่งเอกสารให้ AI วิเคราะห์
         </p>
       )}
     </div>
