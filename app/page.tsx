@@ -1,65 +1,15 @@
-'use client';
+import { redirect } from 'next/navigation';
+import { getSessionUser } from '@/lib/firebase/auth-server';
 
-import { useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
-import { getFirebaseAuth } from '@/lib/firebase/config';
-import { onAuthStateChanged, signOut, type User } from 'firebase/auth';
-
-export default function HomePage() {
-  const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
-  const router = useRouter();
-
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(getFirebaseAuth(), (currentUser) => {
-      if (!currentUser) {
-        router.push('/login');
-      } else {
-        setUser(currentUser);
-      }
-      setLoading(false);
-    });
-    return () => unsubscribe();
-  }, [router]);
-
-  async function handleSignOut() {
-    await signOut(getFirebaseAuth());
-    await fetch('/api/auth/session', { method: 'DELETE' });
-    router.push('/login');
-  }
-
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center text-slate-500">
-        กำลังโหลด…
-      </div>
-    );
-  }
-
-  return (
-    <main className="min-h-screen flex flex-col items-center justify-center px-6">
-      <div className="max-w-xl w-full bg-white rounded-2xl shadow-sm border border-slate-200 p-8">
-        <h1 className="text-2xl font-semibold text-mfu-primary">
-          ระบบประเมินและทวนสอบรายวิชา
-        </h1>
-        <p className="mt-2 text-sm text-slate-600">
-          Course Evaluation &amp; Monitoring System — School of Health Science, MFU
-        </p>
-        <div className="mt-6 p-4 bg-slate-50 rounded-lg text-sm">
-          <div className="font-medium text-slate-700">เข้าสู่ระบบสำเร็จ</div>
-          <div className="mt-1 text-slate-500">{user?.email}</div>
-        </div>
-        <p className="mt-6 text-xs text-slate-500">
-          Phase 0 scaffold. Lecturer / Assessor / Admin workspaces will appear here
-          as Phases 1–3 land.
-        </p>
-        <button
-          onClick={handleSignOut}
-          className="mt-6 text-sm text-slate-500 underline hover:text-slate-700"
-        >
-          ออกจากระบบ
-        </button>
-      </div>
-    </main>
-  );
+/**
+ * Root route. Middleware already redirects unauthenticated users to /login;
+ * here we route signed-in users to their workspace.
+ *
+ * Phase 1 ships only the lecturer workspace, so everyone lands there.
+ * Role-aware routing (admin / director / assessor) arrives in Phase 3.
+ */
+export default async function RootPage() {
+  const user = await getSessionUser();
+  if (!user) redirect('/login');
+  redirect('/lecturer');
 }
