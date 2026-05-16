@@ -1,8 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import { auth } from '@/lib/firebase/config';
-import { GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
+import { getFirebaseAuth } from '@/lib/firebase/config';
+import { GoogleAuthProvider, signInWithPopup, signOut } from 'firebase/auth';
 import { useRouter } from 'next/navigation';
 
 export default function LoginPage() {
@@ -13,26 +13,43 @@ export default function LoginPage() {
   async function signInWithGoogle() {
     setLoading(true);
     setError(null);
+    const auth = getFirebaseAuth();
     try {
       const provider = new GoogleAuthProvider();
-      provider.setCustomParameters({
-        hd: 'mfu.ac.th',
-        prompt: 'consent',
-      });
+      provider.setCustomParameters({ hd: 'mfu.ac.th', prompt: 'consent' });
       const result = await signInWithPopup(auth, provider);
-      
-      // Verify domain explicitly just in case
+
+      // Client-side domain check (fast feedback). The server re-verifies
+      // it in /api/auth/session before issuing the session cookie.
       if (!result.user.email?.endsWith('@mfu.ac.th')) {
-        await auth.signOut();
+        await signOut(auth);
         throw new Error('domain_not_allowed');
       }
-      
+
+      // Exchange the Firebase ID token for an httpOnly session cookie so the
+      // server (middleware + route handlers) can authorize requests.
+      const idToken = await result.user.getIdToken();
+      const res = await fetch('/api/auth/session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ idToken }),
+      });
+
+      if (!res.ok) {
+        await signOut(auth);
+        const { error: serverError } = await res.json().catch(() => ({ error: 'session_failed' }));
+        throw new Error(serverError ?? 'session_failed');
+      }
+
       router.push('/');
-    } catch (e: any) {
-      if (e.message === 'domain_not_allowed') {
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : 'unknown';
+      if (message === 'domain_not_allowed') {
         setError('เฉพาะบัญชีอีเมล @mfu.ac.th เท่านั้น');
+      } else if (message === 'session_failed') {
+        setError('สร้างเซสชันไม่สำเร็จ กรุณาลองใหม่');
       } else {
-        setError(e.message || 'เกิดข้อผิดพลาดในการเข้าสู่ระบบ');
+        setError('เกิดข้อผิดพลาดในการเข้าสู่ระบบ');
       }
       setLoading(false);
     }
@@ -57,9 +74,7 @@ export default function LoginPage() {
           {loading ? 'กำลังเข้าสู่ระบบ…' : 'เข้าสู่ระบบด้วยบัญชี @mfu.ac.th'}
         </button>
 
-        {error && (
-          <p className="mt-4 text-sm text-red-600">{error}</p>
-        )}
+        {error && <p className="mt-4 text-sm text-red-600">{error}</p>}
 
         <p className="mt-8 text-xs text-slate-400">
           เฉพาะบัญชีอีเมล @mfu.ac.th เท่านั้น

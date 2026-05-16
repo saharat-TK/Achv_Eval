@@ -10,54 +10,43 @@ semester for verification.
 ## Stack
 
 - **Frontend:** Next.js 14 (App Router) + TypeScript + Tailwind CSS
-- **Auth & DB:** Supabase (Postgres + Auth + RLS), Google SSO restricted to `@mfu.ac.th`
+- **Auth:** Firebase Authentication, Google SSO restricted to `@mfu.ac.th`
+- **Database:** Cloud Firestore (security rules enforce the four-role matrix)
 - **AI:** Google Gemini 2.5 Pro (single-shot, with deterministic grade-stats hybrid)
 - **File storage:** Google Drive (owned by Academic & QA Department)
-- **Visibility mirror:** Google Sheets nightly export for QA department
+- **Visibility mirror:** Google Sheets — lecturer-action log
 - **Notifications:** Gmail API (in-app inbox + email)
 - **Hosting:** Vercel
 
-See `prompts/CLAUDE.master.md` and `prompts/CLAUDE.undergrad.md` for the
-evaluation framework the AI follows.
+See [`docs/FIRESTORE_MODEL.md`](docs/FIRESTORE_MODEL.md) for the data model and
+[`prompts/`](prompts/) for the AI evaluation guidelines.
 
 ## Project status
 
 Phase 0 (foundation) — **in progress**
 
-- [x] Schema + RLS migrations
-- [x] OHS seed data
-- [x] Next.js scaffold + Google SSO callback
-- [x] Domain-restriction middleware
-- [ ] First end-to-end test in the linked Supabase project
-- [ ] Phase 1: lecturer flow
-- [ ] Phase 2: assessor flow
-- [ ] Phase 3: admin/director management
-- [ ] Phase 4: cross-semester verification
-- [ ] Phase 5: dashboard
-- [ ] Phase 6: notifications
-- [ ] Phase 7: hardening + audit-log UI
+- [x] Firebase Auth with Google SSO + `@mfu.ac.th` enforcement
+- [x] Server session cookies + middleware gate
+- [x] Firestore data model, security rules, indexes
+- [x] OHS seed script
+- [ ] First end-to-end sign-in test against a live Firebase project
+- [ ] Phase 1: lecturer flow · Phase 2: assessor flow · Phase 3: admin
+- [ ] Phase 4: verification · Phase 5: dashboard · Phase 6: notifications · Phase 7: hardening
 
 ## Prerequisites
 
-- Node.js 20+
-- A Supabase project (already provisioned — `msyvlbdyynbesfkpdpip`)
-- A Google Cloud project with:
-  - OAuth 2.0 client for Supabase Auth
-  - Drive API, Sheets API, Gmail API enabled
-  - A service account JSON key for backend access
-- A Gemini API key from <https://aistudio.google.com/app/apikey>
+- Node.js 20.6+ (the `seed` script uses `--env-file`)
+- A Firebase project with **Authentication** (Google provider) and
+  **Cloud Firestore** enabled
+- A Firebase service account key (Project Settings → Service accounts)
+- A Gemini API key — <https://aistudio.google.com/app/apikey>
 
 ## A note on OneDrive
 
-This folder lives inside OneDrive. **Do not let OneDrive sync `node_modules`
-or `.next`** — it will sync hundreds of thousands of files and lock build
-output. Two options:
-
-1. **Right-click `node_modules` and `.next` after first install → "Always
-   keep on this device" then "Free up space"** so OneDrive marks them as
-   local-only.
-2. **Develop in a non-OneDrive directory** (e.g. `~/dev/Achv_Evaluation_app`)
-   and sync only your source changes back via git.
+If this folder lives inside OneDrive, **move it out before developing**
+(e.g. `~/dev/Achv_Eval`). OneDrive will try to sync `node_modules` and
+`.next` — hundreds of thousands of files — and lock build output. Everything
+is on GitHub, so `git clone` into a non-OneDrive path is the clean fix.
 
 ## Setup
 
@@ -67,73 +56,73 @@ output. Two options:
 npm install
 ```
 
-### 2. Configure environment
+### 2. Create the Firebase project
+
+1. <https://console.firebase.google.com> → Add project
+2. **Build → Authentication** → Get started → enable **Google** provider
+3. **Build → Firestore Database** → Create database (production mode)
+4. **Project Settings → General** → register a Web app → copy the config keys
+5. **Project Settings → Service accounts** → Generate new private key (JSON)
+
+### 3. Configure environment
 
 ```bash
 cp .env.local.example .env.local
-# Fill in the values
 ```
 
-Required for Phase 0 sign-in:
+Fill in:
 
-- `NEXT_PUBLIC_SUPABASE_URL` — already filled to `msyvlbdyynbesfkpdpip`
-- `NEXT_PUBLIC_SUPABASE_ANON_KEY` — copy from Supabase dashboard → Settings → API
-- `SUPABASE_SERVICE_ROLE_KEY` — same dashboard, for privileged ops
-- `SUPABASE_DB_URL` — Postgres connection string for the `supabase` CLI
+| Variable | Where it comes from |
+|---|---|
+| `NEXT_PUBLIC_FIREBASE_*` | Web app config (step 2.4) |
+| `FIREBASE_CLIENT_EMAIL`, `FIREBASE_PRIVATE_KEY` | Service account JSON (step 2.5) — keep the `\n` escapes in the private key |
+| `GEMINI_API_KEY` | Google AI Studio |
+| `ALLOWED_EMAIL_DOMAINS` | leave as `mfu.ac.th` |
 
-### 3. Apply database migrations
+Also set the project id in [`.firebaserc`](.firebaserc) (replace
+`REPLACE_WITH_FIREBASE_PROJECT_ID`).
+
+### 4. Restrict Google sign-in to MFU
+
+In the Google Cloud Console for the Firebase project, OAuth consent screen
+→ set **User type** appropriately. The app additionally enforces the domain
+in three places: the login page (`hd` hint + client check), the
+`/api/auth/session` route (server check before issuing the cookie), and the
+Firestore rules (`isMfu()`).
+
+### 5. Deploy Firestore rules and indexes
 
 ```bash
-# Link to the remote project
-npx supabase login
-npx supabase link --project-ref msyvlbdyynbesfkpdpip
-
-# Push migrations
-npx supabase db push
-
-# Apply seed (one-time, dev only)
-psql "$SUPABASE_DB_URL" -f supabase/seed.sql
-
-# Generate TypeScript types from the schema
-npm run db:types
+npx firebase login
+npx firebase use <your-project-id>
+npm run firebase:rules
+npm run firebase:indexes
 ```
 
-### 4. Configure Google OAuth in Supabase
-
-1. Supabase Dashboard → **Authentication** → **Providers** → **Google** → Enable
-2. Paste your Google OAuth Client ID and Secret
-3. Set the authorized redirect URI in Google Cloud Console:
-   ```
-   https://msyvlbdyynbesfkpdpip.supabase.co/auth/v1/callback
-   ```
-4. Under **Authentication → URL Configuration** add to **Redirect URLs**:
-   ```
-   http://localhost:3000/auth/callback
-   https://<your-vercel-domain>/auth/callback
-   ```
-
-The login screen passes `hd=mfu.ac.th` as a Google consent-screen hint, and
-the app's `/auth/callback` route plus middleware enforce the domain server-
-side. A CHECK constraint on `profiles.email` is the final defense.
-
-### 5. Run locally
+### 6. Seed the OHS program
 
 ```bash
-npm run dev
-# → http://localhost:3000
+npm run seed
 ```
 
-You should land on `/login` → sign in with an `@mfu.ac.th` account → land
-on the home page showing your email. The `profiles` row is created
-automatically by the `handle_new_user` trigger.
+Creates 1 program (6 TQF PLOs), 5 courses, 1 sample offering.
 
-To grant yourself admin (until the admin UI ships in Phase 3):
+### 7. Run locally and promote yourself to admin
 
-```sql
--- Run in Supabase SQL Editor
-insert into role_assignments (user_id, role)
-values ((select id from profiles where email = 'saharat.arr@mfu.ac.th'), 'admin');
+```bash
+npm run dev    # → http://localhost:3000
 ```
+
+Sign in with `saharat.arr@mfu.ac.th`. The `users/{uid}` profile is created
+automatically by `/api/auth/session` on first sign-in.
+
+Then, in the Firebase Console → Firestore → `users` → your document, set:
+
+```
+roles.isAdmin = true
+```
+
+(or run a one-off admin script). Re-sign-in to pick up the change.
 
 ## Project structure
 
@@ -141,49 +130,47 @@ values ((select id from profiles where email = 'saharat.arr@mfu.ac.th'), 'admin'
 app/
   layout.tsx, page.tsx, globals.css   App shell
   login/page.tsx                      Google sign-in
-  auth/callback/route.ts              OAuth callback + domain guard
-  (lecturer)/                         Phase 1
-  (assessor)/                         Phase 2
-  (admin)/                            Phase 3
-  api/                                Server route handlers
+  api/auth/session/route.ts           Session-cookie mint/clear + profile upsert
+  (lecturer)/ (assessor)/ (admin)/    Phases 1–3
 
 lib/
-  supabase/
-    client.ts                         Browser client
-    server.ts                         Server client + service-role helper
-    middleware.ts                     Session refresh + domain guard
-  types/database.ts                   Generated from schema
+  firebase/
+    config.ts                         Client SDK (lazy init)
+    admin.ts                          Admin SDK (lazy init)
+    auth-server.ts                    Session verification helpers
+  types/models.ts                     Firestore document types + rubric scoring
 
-middleware.ts                         Next.js middleware entry
+middleware.ts                         Session-cookie gate
 
 prompts/                              AI evaluation guidelines (authoritative)
-  CLAUDE.master.md                    For master/doctoral programs
-  CLAUDE.undergrad.md                 For undergraduate programs
+  CLAUDE.master.md / CLAUDE.undergrad.md
 
-supabase/
-  config.toml
-  migrations/
-    20260515000001_initial_schema.sql Tables, enums, triggers, audit
-    20260515000002_rls_policies.sql   RLS policies + auto-profile
-  seed.sql                            OHS program seed
+docs/FIRESTORE_MODEL.md               Data model + design rationale
+
+firestore.rules                       Four-role security rules
+firestore.indexes.json                Composite indexes
+firebase.json, .firebaserc            Firebase CLI config
+
+scripts/seed.ts                       OHS seed
 ```
 
-## Useful commands
+## Commands
 
 ```bash
-npm run dev          # Start dev server
-npm run build        # Production build
-npm run typecheck    # tsc --noEmit
-npm run db:push      # Push migrations to remote Supabase
-npm run db:reset     # Reset local DB and re-apply migrations + seed
-npm run db:types     # Regenerate lib/types/database.ts
+npm run dev               # Dev server
+npm run build             # Production build
+npm run typecheck         # tsc --noEmit
+npm run seed              # Seed Firestore with OHS data
+npm run firebase:rules    # Deploy firestore.rules
+npm run firebase:indexes  # Deploy firestore.indexes.json
 ```
 
 ## Security notes
 
-- **Never commit `.env.local`.** It's gitignored.
-- **Never expose `SUPABASE_SERVICE_ROLE_KEY` to the browser.** It bypasses RLS.
-- **Rotate the database password** before pointing production at it. The
-  initial password may have been exposed during setup.
-- RLS is enabled on every public table. Test new tables with `SET ROLE` to
-  verify policies before deploying.
+- **Never commit `.env.local`** — gitignored. The service-account private key
+  must never reach the browser or the repo.
+- Firestore rules deny by default; every new collection needs an explicit
+  `match` block. Test rule changes with the emulator before deploying.
+- Server code (Admin SDK) bypasses rules — keep Admin SDK imports out of any
+  `'use client'` file.
+- The audit log is server-write-only and admin-read-only by rule.

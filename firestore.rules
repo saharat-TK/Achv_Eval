@@ -1,0 +1,161 @@
+rules_version = '2';
+
+// =====================================================================
+// Firestore security rules — four-role permission matrix.
+//
+// Roles cannot join in rules, so they are denormalized onto users/{uid}.
+// The lecturer role is per-offering (offerings/{id}.lecturerId).
+//
+// Server code uses the Admin SDK, which bypasses these rules entirely;
+// `allow ...: if false` therefore means "client cannot do this — server only".
+// =====================================================================
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ----- Helpers ---------------------------------------------------
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isMfu() {
+      return isSignedIn()
+        && request.auth.token.email is string
+        && request.auth.token.email.matches('.*@mfu[.]ac[.]th');
+    }
+
+    function hasProfile() {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
+
+    function userDoc() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function isAdmin() {
+      return isMfu() && hasProfile() && userDoc().roles.isAdmin == true;
+    }
+
+    function directsProgram(pid) {
+      return isMfu() && hasProfile() && (pid in userDoc().roles.directorOf);
+    }
+
+    function assessesProgram(pid) {
+      return isMfu() && hasProfile() && (pid in userDoc().roles.assessorOf);
+    }
+
+    function offering(oid) {
+      return get(/databases/$(database)/documents/offerings/$(oid)).data;
+    }
+
+    function canReadOffering(oid) {
+      let o = offering(oid);
+      return isAdmin()
+        || directsProgram(o.programId)
+        || assessesProgram(o.programId)
+        || o.lecturerId == request.auth.uid;
+    }
+
+    function isOfferingLecturer(oid) {
+      return offering(oid).lecturerId == request.auth.uid;
+    }
+
+    // ----- users -----------------------------------------------------
+    match /users/{uid} {
+      // Any signed-in MFU user can read profiles (names shown across the app).
+      allow read: if isMfu();
+
+      // A user may update their own profile but NOT their roles.
+      allow update: if isMfu()
+        && request.auth.uid == uid
+        && request.resource.data.roles == resource.data.roles;
+
+      // Admin can do anything, including changing roles.
+      allow create, update, delete: if isAdmin();
+    }
+
+    // ----- programs --------------------------------------------------
+    match /programs/{programId} {
+      allow read: if isMfu();
+      allow create, delete: if isAdmin();
+      allow update: if isAdmin() || directsProgram(programId);
+    }
+
+    // ----- courses ---------------------------------------------------
+    match /courses/{courseId} {
+      allow read: if isMfu();
+      allow create: if isAdmin() || directsProgram(request.resource.data.programId);
+      allow update, delete: if isAdmin() || directsProgram(resource.data.programId);
+    }
+
+    // ----- offerings + subcollections --------------------------------
+    match /offerings/{offeringId} {
+      allow read: if isAdmin()
+        || directsProgram(resource.data.programId)
+        || assessesProgram(resource.data.programId)
+        || resource.data.lecturerId == request.auth.uid;
+
+      allow create: if isAdmin() || directsProgram(request.resource.data.programId);
+      allow delete: if isAdmin() || directsProgram(resource.data.programId);
+
+      // Director may update anything; lecturer may update only their own
+      // offering (the state-machine guardrails are enforced server-side).
+      allow update: if isAdmin()
+        || directsProgram(resource.data.programId)
+        || resource.data.lecturerId == request.auth.uid;
+
+      match /uploads/{uploadId} {
+        allow read: if canReadOffering(offeringId);
+        allow create, update: if isAdmin() || isOfferingLecturer(offeringId);
+        allow delete: if isAdmin();
+      }
+
+      match /aiReports/{reportId} {
+        allow read: if canReadOffering(offeringId);
+        allow create: if isAdmin() || isOfferingLecturer(offeringId);
+        allow update, delete: if isAdmin(); // status updates are server-driven
+      }
+
+      match /assessments/{assessmentId} {
+        allow read: if canReadOffering(offeringId);
+        allow create: if assessesProgram(offering(offeringId).programId)
+          && request.resource.data.assessorId == request.auth.uid;
+        // Owning assessor may edit until the assessment is locked.
+        allow update: if assessesProgram(offering(offeringId).programId)
+          && resource.data.assessorId == request.auth.uid
+          && resource.data.isLocked == false;
+        allow delete: if false;
+      }
+    }
+
+    // ----- implementationReviews -------------------------------------
+    match /implementationReviews/{reviewId} {
+      allow read: if isAdmin()
+        || directsProgram(resource.data.programId)
+        || assessesProgram(resource.data.programId);
+      allow create: if assessesProgram(request.resource.data.programId)
+        && request.resource.data.reviewerId == request.auth.uid;
+      allow update, delete: if false;
+    }
+
+    // ----- notifications ---------------------------------------------
+    match /notifications/{notificationId} {
+      allow read: if isMfu() && resource.data.recipientId == request.auth.uid;
+      // Recipient may mark as read; nothing else from the client.
+      allow update: if isMfu() && resource.data.recipientId == request.auth.uid;
+      allow create, delete: if false; // server-only
+    }
+
+    // ----- auditLog --------------------------------------------------
+    match /auditLog/{logId} {
+      allow read: if isAdmin();
+      allow create, update, delete: if false; // server-only, tamper-proof
+    }
+
+    // ----- Default deny ----------------------------------------------
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

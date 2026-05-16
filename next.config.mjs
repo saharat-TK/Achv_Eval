@@ -3,6 +3,10 @@ const nextConfig = {
   reactStrictMode: true,
   experimental: {
     serverActions: { bodySizeLimit: '20mb' }, // TQF PDFs can be large
+    // firebase-admin is server-only and not bundler-friendly. Keep it
+    // external so Next loads it as a plain Node module at runtime.
+    // (Next 14 key; on Next 15 this moves to top-level serverExternalPackages.)
+    serverComponentsExternalPackages: ['firebase-admin'],
   },
 };
 

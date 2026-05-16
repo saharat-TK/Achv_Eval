@@ -1,0 +1,282 @@
+/**
+ * Firestore data model — shared types for client and server.
+ *
+ * See docs/FIRESTORE_MODEL.md for the collection layout and design rationale.
+ *
+ * Timestamps are typed structurally so this file does not couple to either
+ * the client (`firebase/firestore`) or admin (`firebase-admin/firestore`) SDK.
+ */
+export type Ts = { toDate(): Date; seconds: number; nanoseconds: number };
+
+// ----- Enums ---------------------------------------------------------
+export type ProgramLevel = 'undergraduate' | 'master' | 'doctoral';
+export type PloSchema = '4_domain' | '6_domain_tqf';
+export type PloDomain =
+  | 'ethics'
+  | 'knowledge'
+  | 'intellectual'
+  | 'interpersonal'
+  | 'numerical_comm_it'
+  | 'psychomotor'
+  | 'character'
+  | 'skill';
+export type CourseType = 'theory' | 'theory_practice' | 'practice' | 'field' | 's_u';
+export type Semester = '1' | '2' | '3'; // 3 = summer
+export type AppRole = 'admin' | 'program_director' | 'assessor' | 'corresponding_lecturer';
+export type UploadType =
+  | 'tqf3'
+  | 'tqf4'
+  | 'tqf5'
+  | 'tqf6'
+  | 'grade_report_pdf'
+  | 'grade_raw_scores'
+  | 'item_analysis'
+  | 'rubric'
+  | 'supporting';
+export type OfferingStatus =
+  | 'draft'
+  | 'documents_pending'
+  | 'ready_for_ai'
+  | 'ai_in_progress'
+  | 'ai_complete'
+  | 'assessor_review'
+  | 'assessed'
+  | 'pending_review_next_semester'
+  | 'implemented'
+  | 'not_implemented';
+export type AiReportStatus = 'queued' | 'running' | 'succeeded' | 'failed';
+export type RubricScore = 1 | 2 | 3 | 'na';
+export type AssessmentBand = 'improve' | 'good' | 'excellent';
+export type ImplementationDecision =
+  | 'implemented'
+  | 'not_implemented'
+  | 'partially_implemented';
+
+// ----- users/{uid} ---------------------------------------------------
+export interface UserDoc {
+  email: string;
+  nameTh: string;
+  nameEn: string;
+  titleTh?: string;
+  titleEn?: string;
+  isActive: boolean;
+  /**
+   * Roles are denormalized onto the user doc so Firestore security rules
+   * can authorize via a single get() with no joins. The lecturer role is
+   * NOT here — it lives on each offering's `lecturerId`.
+   */
+  roles: {
+    isAdmin: boolean;
+    directorOf: string[]; // programIds
+    assessorOf: string[]; // programIds
+  };
+  createdAt: Ts;
+  updatedAt: Ts;
+}
+
+// ----- programs/{programId} -----------------------------------------
+export interface ProgramPlo {
+  ploNumber: number;
+  domain: PloDomain;
+  descriptionTh: string;
+  descriptionEn?: string;
+  bloomLevel?: number; // 1..6
+}
+
+export interface ProgramDoc {
+  code: string;
+  nameTh: string;
+  nameEn: string;
+  school: string;
+  level: ProgramLevel;
+  ploDomainSchema: PloSchema;
+  isActive: boolean;
+  /** Embedded — only ~6 PLOs, always read together with the program. */
+  plos: ProgramPlo[];
+  createdAt: Ts;
+  updatedAt: Ts;
+}
+
+// ----- courses/{courseId} -------------------------------------------
+export interface CourseDoc {
+  programId: string;
+  code: string;
+  nameTh: string;
+  nameEn: string;
+  creditStructure: string; // e.g. "2(2-0-4)"
+  credits: number;
+  type: CourseType;
+  yearOfStudy?: number; // 1..6
+  isActive: boolean;
+  createdAt: Ts;
+  updatedAt: Ts;
+}
+
+// ----- offerings/{offeringId} ---------------------------------------
+export interface OfferingDoc {
+  courseId: string;
+  programId: string; // denormalized for rules + queries
+  courseCode: string; // denormalized for list views
+  courseNameTh: string;
+  courseNameEn: string;
+  academicYear: number; // Buddhist year, e.g. 2568
+  semester: Semester;
+  section: string;
+  lecturerId: string | null;
+  lecturerEmail: string | null;
+  hasExamAssessment: boolean; // drives rubric item 3.4 applicability
+  assignedPloNumbers: number[]; // PLOs this offering is responsible for
+  status: OfferingStatus;
+  previousOfferingId: string | null; // carry-forward link
+  latestAiReportId: string | null;
+  assessmentId: string | null;
+  createdAt: Ts;
+  updatedAt: Ts;
+  createdBy: string;
+  updatedBy: string;
+}
+
+// ----- offerings/{id}/uploads/{uploadId} ----------------------------
+export interface UploadDoc {
+  offeringId: string;
+  type: UploadType;
+  originalFilename: string;
+  driveFileId: string;
+  driveWebViewLink: string | null;
+  mimeType: string | null;
+  sizeBytes: number | null;
+  uploadedAt: Ts;
+  uploadedBy: string;
+  isSuperseded: boolean;
+}
+
+// ----- offerings/{id}/aiReports/{reportId} --------------------------
+export interface AiReportDoc {
+  offeringId: string;
+  version: number;
+  status: AiReportStatus;
+  promptTemplate: 'CLAUDE.master.md' | 'CLAUDE.undergrad.md';
+  geminiModel: string;
+  geminiRequestId: string | null;
+  inputTokenCount: number | null;
+  outputTokenCount: number | null;
+  drivePdfId: string | null;
+  drivePdfLink: string | null;
+  logSheetRowId: string | null;
+  /** Parsed sections 1..4 for in-app rendering. */
+  structuredOutput: Record<string, unknown> | null;
+  /** Deterministic grade stats computed in code, not by Gemini. */
+  gradeStats: Record<string, unknown> | null;
+  errorMessage: string | null;
+  startedAt: Ts | null;
+  completedAt: Ts | null;
+  createdAt: Ts;
+  createdBy: string;
+}
+
+// ----- offerings/{id}/assessments/{assessmentId} --------------------
+export interface RubricItemComment {
+  strengths?: string;
+  improvements?: string;
+}
+
+export interface AssessmentDoc {
+  offeringId: string;
+  aiReportId: string;
+  assessorId: string;
+  assessorName: string;
+
+  /** The 7 official rubric items. `na` only valid for item34 when the
+   *  offering has no exam-based assessment. */
+  scores: {
+    item1Clo: RubricScore;
+    item21Content: RubricScore;
+    item22Methods: RubricScore;
+    item31AssessmentMethods: RubricScore;
+    item32AssessmentForms: RubricScore;
+    item33Proportions: RubricScore;
+    item34ExamQuality: RubricScore;
+  };
+
+  /** Server-computed on write (Firestore has no generated columns). */
+  totalScore: number;
+  maxScore: number;
+  percentScore: number;
+  band: AssessmentBand;
+
+  comments: Partial<Record<keyof AssessmentDoc['scores'], RubricItemComment>>;
+  sectionComments: { section: string; text: string }[];
+  generalNotes: string | null;
+
+  signedPdfDriveId: string | null;
+  signedPdfDriveLink: string | null;
+  signedAt: Ts | null;
+  isLocked: boolean;
+  followUpStatus: 'pending_review_next_semester' | 'implemented' | 'not_implemented' | null;
+
+  createdAt: Ts;
+  updatedAt: Ts;
+}
+
+// ----- implementationReviews/{reviewId} -----------------------------
+export interface ImplementationReviewDoc {
+  previousAssessmentId: string;
+  previousOfferingId: string;
+  newOfferingId: string;
+  programId: string; // denormalized for rules
+  decision: ImplementationDecision;
+  reviewerId: string;
+  reviewerName: string;
+  notes: string | null;
+  reviewedAt: Ts;
+}
+
+// ----- notifications/{notificationId} -------------------------------
+export interface NotificationDoc {
+  recipientId: string;
+  type: string;
+  title: string;
+  body: string | null;
+  relatedOfferingId: string | null;
+  emailSentAt: Ts | null;
+  readAt: Ts | null;
+  createdAt: Ts;
+}
+
+// ----- auditLog/{logId} ---------------------------------------------
+export interface AuditLogDoc {
+  occurredAt: Ts;
+  actorId: string | null;
+  actorEmail: string | null;
+  action: string; // 'create' | 'update' | 'delete' | 'sign_off' | 'status_change' | ...
+  entityType: string; // collection name
+  entityId: string;
+  before: Record<string, unknown> | null;
+  after: Record<string, unknown> | null;
+}
+
+// ----- Rubric scoring helper ----------------------------------------
+/**
+ * Computes total/max/percent/band for an assessment.
+ * `na` items are excluded from both numerator and denominator.
+ * Grade bands: <70 improve, 70–79 good, 80–100 excellent.
+ */
+export function computeRubricResult(scores: AssessmentDoc['scores']): {
+  totalScore: number;
+  maxScore: number;
+  percentScore: number;
+  band: AssessmentBand;
+} {
+  const values = Object.values(scores);
+  let total = 0;
+  let max = 0;
+  for (const v of values) {
+    if (v === 'na') continue;
+    total += v;
+    max += 3;
+  }
+  const percent = max === 0 ? 0 : Math.round((1000 * total) / max) / 10;
+  const band: AssessmentBand =
+    percent >= 80 ? 'excellent' : percent >= 70 ? 'good' : 'improve';
+  return { totalScore: total, maxScore: max, percentScore: percent, band };
+}

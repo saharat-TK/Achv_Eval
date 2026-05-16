@@ -2,8 +2,8 @@
 
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import { auth } from '@/lib/firebase/config';
-import { onAuthStateChanged, User } from 'firebase/auth';
+import { getFirebaseAuth } from '@/lib/firebase/config';
+import { onAuthStateChanged, signOut, type User } from 'firebase/auth';
 
 export default function HomePage() {
   const [user, setUser] = useState<User | null>(null);
@@ -11,7 +11,7 @@ export default function HomePage() {
   const router = useRouter();
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+    const unsubscribe = onAuthStateChanged(getFirebaseAuth(), (currentUser) => {
       if (!currentUser) {
         router.push('/login');
       } else {
@@ -20,14 +20,22 @@ export default function HomePage() {
       setLoading(false);
     });
     return () => unsubscribe();
-  }, []);
+  }, [router]);
 
-  if (loading) {
-    return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
+  async function handleSignOut() {
+    await signOut(getFirebaseAuth());
+    await fetch('/api/auth/session', { method: 'DELETE' });
+    router.push('/login');
   }
 
-  // TODO Phase 1/2/3: route to the user's role-appropriate dashboard.
-  // For now, show a minimal landing.
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center text-slate-500">
+        กำลังโหลด…
+      </div>
+    );
+  }
+
   return (
     <main className="min-h-screen flex flex-col items-center justify-center px-6">
       <div className="max-w-xl w-full bg-white rounded-2xl shadow-sm border border-slate-200 p-8">
@@ -45,6 +53,12 @@ export default function HomePage() {
           Phase 0 scaffold. Lecturer / Assessor / Admin workspaces will appear here
           as Phases 1–3 land.
         </p>
+        <button
+          onClick={handleSignOut}
+          className="mt-6 text-sm text-slate-500 underline hover:text-slate-700"
+        >
+          ออกจากระบบ
+        </button>
       </div>
     </main>
   );
