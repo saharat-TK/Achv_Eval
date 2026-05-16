@@ -105,11 +105,8 @@ service cloud.firestore {
         || directsProgram(resource.data.programId)
         || resource.data.lecturerId == request.auth.uid;
 
-      match /uploads/{uploadId} {
-        allow read: if canReadOffering(offeringId);
-        allow create, update: if isAdmin() || isOfferingLecturer(offeringId);
-        allow delete: if isAdmin();
-      }
+      // Source TQF/grade files are NOT stored — they are streamed to Gemini
+      // and discarded. There is therefore no `uploads` subcollection.
 
       match /aiReports/{reportId} {
         allow read: if canReadOffering(offeringId);

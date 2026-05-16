@@ -13,13 +13,25 @@ users/{uid}                                 UserDoc
 programs/{programId}                         ProgramDoc   (PLOs embedded as array)
 courses/{courseId}                           CourseDoc
 offerings/{offeringId}                       OfferingDoc  ← core working entity
-  └─ uploads/{uploadId}                      UploadDoc
   └─ aiReports/{reportId}                    AiReportDoc
   └─ assessments/{assessmentId}              AssessmentDoc
 implementationReviews/{reviewId}             ImplementationReviewDoc
 notifications/{notificationId}               NotificationDoc
 auditLog/{logId}                             AuditLogDoc
 ```
+
+## Files are NOT stored
+
+Source documents (TQF3/4, TQF5/6, grade reports, supporting files) are
+**transient**: the lecturer's browser sends them to a server action, which
+streams them to Gemini and discards them. Nothing is written to Firestore or
+Storage for the inputs — `AiReportDoc.inputFiles` keeps only filenames as an
+audit record of what was analyzed.
+
+The **only** stored artifact is the generated PDF report, which goes to
+**Firebase Storage** (`reportStoragePath` / `reportDownloadUrl` on
+`AiReportDoc`). This is also the link recorded in the lecturer-action log
+Sheet.
 
 ## Key design decisions (and why they differ from the Postgres design)
 
@@ -44,11 +56,12 @@ There are only ~6 PLOs per program and they are always read together with
 the program. An embedded array (`ProgramDoc.plos`) avoids an extra read.
 A subcollection would be over-engineering.
 
-### 3. Uploads / AI reports / assessments are subcollections of the offering
+### 3. AI reports and assessments are subcollections of the offering
 
 They are owned by exactly one offering and always queried within its scope.
 Subcollections keep them naturally partitioned and let security rules
-inherit the offering's `programId` via the parent path.
+inherit the offering's `programId` via the parent path. (There is no
+`uploads` subcollection — see "Files are NOT stored" above.)
 
 ### 4. `programId` and course identity are denormalized onto offerings
 
