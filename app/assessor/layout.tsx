@@ -19,7 +19,7 @@ export default async function AssessorLayout({
   return (
     <div className="min-h-screen">
       <header className="border-b border-slate-200 bg-white">
-        <div className="mx-auto max-w-5xl px-6 py-3 flex items-center justify-between">
+        <div className="mx-auto max-w-7xl px-6 py-3 flex items-center justify-between">
           <Link href="/assessor" className="flex flex-col">
             <span className="text-sm font-semibold text-mfu-primary">
               ระบบประเมินและทวนสอบรายวิชา
@@ -37,7 +37,7 @@ export default async function AssessorLayout({
           </div>
         </div>
       </header>
-      <main className="mx-auto max-w-5xl px-6 py-8">{children}</main>
+      <main className="mx-auto max-w-7xl px-6 py-8">{children}</main>
     </div>
   );
 }

@@ -51,31 +51,36 @@ export default async function AssessorOfferingPage({
         <StatusBadge status={offering.status} />
       </div>
 
-      {/* AI Report — read-only for assessor */}
-      <section className="mt-8">
-        <h2 className="text-sm font-semibold text-slate-700">
-          รายงานการวิเคราะห์ AI
-        </h2>
-        <p className="mt-1 text-xs text-slate-500">
-          ผลวิเคราะห์จากระบบ AI เพื่อประกอบการพิจารณาของผู้ทวนสอบ
-        </p>
-        <AiReportsList offeringId={offering.id} />
-      </section>
+      {/* AI report and the evaluation form side by side. On large screens
+          each column scrolls on its own so the assessor can read the report
+          while filling the form without scrolling the whole page. */}
+      <div className="mt-6 grid gap-6 lg:grid-cols-2">
+        {/* Left — AI analysis report (read-only) */}
+        <section className="lg:max-h-[calc(100vh-13rem)] lg:overflow-y-auto lg:pr-1">
+          <h2 className="sticky top-0 z-10 bg-slate-50 py-1 text-sm font-semibold text-slate-700">
+            รายงานการวิเคราะห์ AI
+          </h2>
+          <p className="mt-1 text-xs text-slate-500">
+            ผลวิเคราะห์จากระบบ AI เพื่อประกอบการพิจารณาของผู้ทวนสอบ
+          </p>
+          <AiReportsList offeringId={offering.id} />
+        </section>
 
-      {/* Assessment rubric form */}
-      <section className="mt-8">
-        <h2 className="text-sm font-semibold text-slate-700">
-          แบบประเมินการทวนสอบ (7 หัวข้อ)
-        </h2>
-        <p className="mt-1 text-xs text-slate-500 mb-4">
-          ให้คะแนนแต่ละหัวข้อ (1–3) พร้อมข้อดีและข้อเสนอแนะ
-          แล้วบันทึกหรือลงนามทวนสอบ
-        </p>
-        <AssessmentForm
-          offeringId={offering.id}
-          hasExamAssessment={offering.hasExamAssessment}
-        />
-      </section>
+        {/* Right — assessor evaluation form */}
+        <section className="lg:max-h-[calc(100vh-13rem)] lg:overflow-y-auto lg:pl-1">
+          <h2 className="sticky top-0 z-10 bg-slate-50 py-1 text-sm font-semibold text-slate-700">
+            แบบประเมินการทวนสอบ (7 หัวข้อ)
+          </h2>
+          <p className="mt-1 mb-4 text-xs text-slate-500">
+            ให้คะแนนแต่ละหัวข้อ (1–3) พร้อมข้อดีและข้อเสนอแนะ
+            แล้วบันทึกหรือลงนามทวนสอบ
+          </p>
+          <AssessmentForm
+            offeringId={offering.id}
+            hasExamAssessment={offering.hasExamAssessment}
+          />
+        </section>
+      </div>
     </div>
   );
 }
