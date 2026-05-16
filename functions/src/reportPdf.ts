@@ -1,8 +1,6 @@
 import * as admin from 'firebase-admin';
-import { randomUUID } from 'crypto';
-import puppeteer from 'puppeteer-core';
-import chromium from '@sparticuz/chromium';
 import { google } from 'googleapis';
+import { renderHtmlToPdf, storePdf } from './pdf';
 import { buildReportHtml, type ReportMeta } from './reportHtml';
 import type { AnalysisResult } from './gemini';
 
@@ -73,36 +71,13 @@ export async function generateAndStoreReport(args: {
     generatedAt,
   };
 
-  // ----- Render HTML → PDF ------------------------------------------
+  // ----- Render HTML → PDF → Storage --------------------------------
   const html = buildReportHtml(result, meta);
-
-  const browser = await puppeteer.launch({
-    args: chromium.args,
-    executablePath: await chromium.executablePath(),
-    headless: true,
-  });
-  let pdf: Buffer;
-  try {
-    const page = await browser.newPage();
-    await page.setContent(html, { waitUntil: 'networkidle0' });
-    pdf = Buffer.from(await page.pdf({ format: 'A4', printBackground: true }));
-  } finally {
-    await browser.close();
-  }
-
-  // ----- Upload to Firebase Storage ---------------------------------
-  const bucket = admin.storage().bucket();
-  const filePath = `reports/${offeringId}/${reportId}.pdf`;
-  const token = randomUUID();
-  await bucket.file(filePath).save(pdf, {
-    metadata: {
-      contentType: 'application/pdf',
-      metadata: { firebaseStorageDownloadTokens: token },
-    },
-  });
-  const downloadUrl =
-    `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/` +
-    `${encodeURIComponent(filePath)}?alt=media&token=${token}`;
+  const pdf = await renderHtmlToPdf(html);
+  const { filePath, downloadUrl } = await storePdf(
+    pdf,
+    `reports/${offeringId}/${reportId}.pdf`,
+  );
 
   // ----- Append to the lecturer-action log Sheet --------------------
   let logSheetRowId: string | null = null;

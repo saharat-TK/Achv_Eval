@@ -3,13 +3,17 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   collection,
-  doc,
   onSnapshot,
   query,
   orderBy,
   limit,
 } from 'firebase/firestore';
-import { getFirebaseAuth, getFirebaseDb } from '@/lib/firebase/config';
+import { httpsCallable } from 'firebase/functions';
+import {
+  getFirebaseAuth,
+  getFirebaseDb,
+  getFirebaseFunctions,
+} from '@/lib/firebase/config';
 import type {
   AssessmentDoc,
   RubricScore,
@@ -74,6 +78,8 @@ export default function AssessmentForm({
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
   const [loaded, setLoaded] = useState(false);
+  const [signedPdfUrl, setSignedPdfUrl] = useState<string | null>(null);
+  const [generatingPdf, setGeneratingPdf] = useState(false);
 
   // Subscribe to existing assessment
   useEffect(() => {
@@ -101,6 +107,7 @@ export default function AssessmentForm({
             setComments(data.comments ?? {});
             setGeneralNotes(data.generalNotes ?? '');
             setIsLocked(data.isLocked);
+            setSignedPdfUrl(data.signedPdfUrl ?? null);
           }
           setLoaded(true);
         },
@@ -142,6 +149,32 @@ export default function AssessmentForm({
     [isLocked],
   );
 
+  // Generates the combined report PDF (AI analysis + assessor form) for a
+  // signed assessment. The signedPdfUrl arrives via the onSnapshot listener.
+  const generateCombinedPdf = useCallback(
+    async (aId: string | null) => {
+      if (!aId) return;
+      setGeneratingPdf(true);
+      try {
+        await getFirebaseAuth().authStateReady();
+        const callable = httpsCallable(
+          getFirebaseFunctions(),
+          'generateCombinedReport',
+          { timeout: 240_000 },
+        );
+        await callable({ offeringId, assessmentId: aId });
+      } catch {
+        setMessage({
+          type: 'err',
+          text: 'สร้างรายงานฉบับลงนามไม่สำเร็จ — สามารถกดสร้างใหม่ได้ภายหลัง',
+        });
+      } finally {
+        setGeneratingPdf(false);
+      }
+    },
+    [offeringId],
+  );
+
   // Submit handler
   const handleSubmit = useCallback(
     async (lock: boolean) => {
@@ -164,18 +197,22 @@ export default function AssessmentForm({
         if (!res.ok) {
           throw new Error(json.error || 'submission_failed');
         }
+        if (json.assessmentId) setAssessmentId(json.assessmentId);
         setMessage({
           type: 'ok',
           text: lock ? 'ลงนามทวนสอบแล้ว — ไม่สามารถแก้ไขได้อีก' : 'บันทึกร่างเรียบร้อย',
         });
-        if (lock) setIsLocked(true);
+        if (lock) {
+          setIsLocked(true);
+          await generateCombinedPdf(json.assessmentId ?? assessmentId);
+        }
       } catch (e: any) {
         setMessage({ type: 'err', text: e.message || 'เกิดข้อผิดพลาด' });
       } finally {
         setSaving(false);
       }
     },
-    [offeringId, assessmentId, scores, comments, generalNotes],
+    [offeringId, assessmentId, scores, comments, generalNotes, generateCombinedPdf],
   );
 
   if (!loaded) {
@@ -202,6 +239,34 @@ export default function AssessmentForm({
           )}
         </div>
       </div>
+
+      {/* Combined signed report */}
+      {isLocked && (
+        <div className="rounded-xl border border-slate-200 bg-white p-4">
+          <h3 className="text-sm font-semibold text-slate-700">
+            รายงานฉบับลงนาม (รวมผลวิเคราะห์ AI + ผลการทวนสอบ)
+          </h3>
+          {signedPdfUrl ? (
+            <a
+              href={signedPdfUrl}
+              className="mt-2 inline-block text-sm text-mfu-primary hover:underline"
+            >
+              ดาวน์โหลดรายงานฉบับลงนาม (PDF)
+            </a>
+          ) : generatingPdf ? (
+            <p className="mt-2 text-xs text-slate-500">
+              กำลังสร้างรายงานฉบับลงนาม… อาจใช้เวลาสักครู่
+            </p>
+          ) : (
+            <button
+              onClick={() => generateCombinedPdf(assessmentId)}
+              className="mt-2 text-xs text-mfu-primary underline hover:text-mfu-primary/80"
+            >
+              สร้างรายงานฉบับลงนาม
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Rubric table */}
       <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">

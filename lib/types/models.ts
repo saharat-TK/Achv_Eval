@@ -212,8 +212,9 @@ export interface AssessmentDoc {
   sectionComments: { section: string; text: string }[];
   generalNotes: string | null;
 
-  signedPdfDriveId: string | null;
-  signedPdfDriveLink: string | null;
+  /** Combined report PDF (AI analysis + assessor form), in Firebase Storage. */
+  signedPdfStoragePath: string | null;
+  signedPdfUrl: string | null;
   signedAt: Ts | null;
   isLocked: boolean;
   followUpStatus: 'pending_review_next_semester' | 'implemented' | 'not_implemented' | null;

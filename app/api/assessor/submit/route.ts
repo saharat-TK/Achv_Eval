@@ -84,11 +84,12 @@ export async function POST(request: NextRequest) {
     comments: comments ?? {},
     sectionComments: [],
     generalNotes: generalNotes || null,
-    signedPdfDriveId: null,
-    signedPdfDriveLink: null,
+    signedPdfStoragePath: null,
+    signedPdfUrl: null,
     signedAt: lock ? now : null,
     isLocked: lock,
-    followUpStatus: null,
+    // On sign-off the record carries forward for next-semester verification.
+    followUpStatus: lock ? 'pending_review_next_semester' : null,
     createdAt: now,
     updatedAt: now,
   };
