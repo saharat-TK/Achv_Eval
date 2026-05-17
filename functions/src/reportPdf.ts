@@ -2,7 +2,11 @@ import * as admin from 'firebase-admin';
 import { google } from 'googleapis';
 import { renderHtmlToPdf, storePdf } from './pdf';
 import { buildReportHtml, type ReportMeta } from './reportHtml';
-import { getProgramCode, offeringReportDir } from './storagePaths';
+import {
+  getProgramCode,
+  offeringReportDir,
+  offeringReportFileName,
+} from './storagePaths';
 import type { AnalysisResult } from './gemini';
 
 const SEMESTER_LABEL: Record<string, string> = {
@@ -77,16 +81,18 @@ export async function generateAndStoreReport(args: {
   const html = buildReportHtml(result, meta);
   const pdf = await renderHtmlToPdf(html);
   const programCode = await getProgramCode(db, offering.programId);
-  const dir = offeringReportDir({
+  const pathParts = {
     programCode,
     courseCode: offering.courseCode,
     academicYear: offering.academicYear,
     semester: offering.semester,
     section: offering.section,
-  });
+  };
+  const dir = offeringReportDir(pathParts);
   const { filePath, downloadUrl } = await storePdf(
     pdf,
     `${dir}/ai-report-${reportId}.pdf`,
+    offeringReportFileName('reports', pathParts, reportId),
   );
 
   // ----- Append to the lecturer-action log Sheet --------------------
