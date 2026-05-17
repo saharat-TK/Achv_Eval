@@ -92,7 +92,7 @@ export async function generateAndStoreReport(args: {
   const { filePath, downloadUrl } = await storePdf(
     pdf,
     `${dir}/ai-report-${reportId}.pdf`,
-    offeringReportFileName('reports', pathParts, reportId),
+    offeringReportFileName('ai-report', pathParts, reportId),
   );
 
   // ----- Append to the lecturer-action log Sheet --------------------
