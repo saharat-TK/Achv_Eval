@@ -4,6 +4,7 @@ import { getCurrentProfile, getSessionUser } from '@/lib/firebase/auth-server';
 import { getUser } from '@/lib/data/users';
 import { getAllPrograms } from '@/lib/data/programs';
 import UserRolesEditor from '@/components/UserRolesEditor';
+import UserActiveToggle from '@/components/UserActiveToggle';
 
 export const dynamic = 'force-dynamic';
 
@@ -33,7 +34,12 @@ export default async function ManageUserRolesPage({
       </h1>
       <p className="mt-1 text-sm text-slate-500">{target.email}</p>
 
-      <div className="mt-6">
+      <div className="mt-6 space-y-5">
+        <UserActiveToggle
+          userId={target.id}
+          isSelf={actor?.uid === target.id}
+          initialActive={target.isActive ?? true}
+        />
         <UserRolesEditor
           userId={target.id}
           isSelf={actor?.uid === target.id}

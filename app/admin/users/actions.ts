@@ -60,3 +60,47 @@ export async function updateUserRoles(
   revalidatePath(`/admin/users/${userId}`);
   return { ok: true };
 }
+
+/**
+ * Activates or deactivates a user account. Admin only. A deactivated user
+ * is blocked at sign-in and loses access mid-session, but their records
+ * (assessments, offerings, audit trail) are preserved.
+ *
+ * Guards against an admin deactivating their own account.
+ */
+export async function setUserActive(
+  userId: string,
+  isActive: boolean,
+): Promise<RolesActionResult> {
+  const actor = await getSessionUser();
+  const profile = await getCurrentProfile();
+  if (!actor || !profile?.roles.isAdmin) {
+    return { ok: false, error: 'เฉพาะผู้ดูแลระบบเท่านั้นที่จัดการบัญชีผู้ใช้ได้' };
+  }
+  if (userId === actor.uid && !isActive) {
+    return { ok: false, error: 'ไม่สามารถปิดใช้งานบัญชีของตนเองได้' };
+  }
+
+  const db = getAdminDb();
+  const userRef = db.collection('users').doc(userId);
+  if (!(await userRef.get()).exists) {
+    return { ok: false, error: 'ไม่พบผู้ใช้' };
+  }
+
+  await userRef.update({ isActive, updatedAt: FieldValue.serverTimestamp() });
+
+  await db.collection('auditLog').add({
+    occurredAt: FieldValue.serverTimestamp(),
+    actorId: actor.uid,
+    actorEmail: actor.email ?? null,
+    action: isActive ? 'user_reactivated' : 'user_deactivated',
+    entityType: 'users',
+    entityId: userId,
+    before: null,
+    after: { isActive },
+  });
+
+  revalidatePath('/admin/users');
+  revalidatePath(`/admin/users/${userId}`);
+  return { ok: true };
+}

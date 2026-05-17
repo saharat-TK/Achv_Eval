@@ -45,25 +45,39 @@ export default async function AdminUsersPage() {
                 <th className="px-4 py-3 font-medium">ชื่อ</th>
                 <th className="px-4 py-3 font-medium">อีเมล</th>
                 <th className="px-4 py-3 font-medium">สิทธิ์ปัจจุบัน</th>
+                <th className="px-4 py-3 font-medium">สถานะบัญชี</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {users.map((u) => (
-                <tr key={u.id} className="hover:bg-slate-50">
-                  <td className="px-4 py-3">
-                    <Link
-                      href={`/admin/users/${u.id}`}
-                      className="font-medium text-mfu-primary hover:underline"
-                    >
-                      {u.nameTh || '(ไม่มีชื่อ)'}
-                    </Link>
-                  </td>
-                  <td className="px-4 py-3 text-slate-600">{u.email}</td>
-                  <td className="px-4 py-3 text-slate-600">
-                    {roleSummary(u.roles)}
-                  </td>
-                </tr>
-              ))}
+              {users.map((u) => {
+                const inactive = u.isActive === false;
+                return (
+                  <tr
+                    key={u.id}
+                    className={`hover:bg-slate-50 ${inactive ? 'bg-slate-50/60' : ''}`}
+                  >
+                    <td className="px-4 py-3">
+                      <Link
+                        href={`/admin/users/${u.id}`}
+                        className="font-medium text-mfu-primary hover:underline"
+                      >
+                        {u.nameTh || '(ไม่มีชื่อ)'}
+                      </Link>
+                    </td>
+                    <td className="px-4 py-3 text-slate-600">{u.email}</td>
+                    <td className="px-4 py-3 text-slate-600">
+                      {roleSummary(u.roles)}
+                    </td>
+                    <td className="px-4 py-3 text-xs">
+                      {inactive ? (
+                        <span className="text-red-600">ปิดใช้งาน</span>
+                      ) : (
+                        <span className="text-green-700">ใช้งาน</span>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
