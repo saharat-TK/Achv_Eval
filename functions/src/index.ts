@@ -4,3 +4,4 @@ admin.initializeApp();
 
 export { analyzeCourse } from './analyzeCourse';
 export { generateCombinedReport } from './generateCombinedReport';
+export { generateFinalVerificationReport } from './generateFinalVerificationReport';

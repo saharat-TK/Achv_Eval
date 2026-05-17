@@ -1,5 +1,5 @@
-import { marked } from 'marked';
 import type { AnalysisResult } from './gemini';
+import { REPORT_STYLES, esc, md, scoreCells, signatureTable } from './reportShared';
 
 export interface ReportMeta {
   courseCode: string;
@@ -10,30 +10,6 @@ export interface ReportMeta {
   section: string;
   lecturerName: string;
   generatedAt: string; // formatted Thai date-time
-}
-
-const BAND_TH: Record<string, string> = {
-  excellent: 'ดีเยี่ยม',
-  good: 'ดี',
-  improve: 'ควรปรับปรุง',
-};
-
-function esc(s: string): string {
-  return s
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;');
-}
-
-function md(src: string): string {
-  return marked.parse(src ?? '', { async: false }) as string;
-}
-
-/** A score cell carries ● in the column matching the item's score. */
-function scoreCells(score: number): string {
-  return [3, 2, 1]
-    .map((n) => `<td class="score">${score === n ? '●' : ''}</td>`)
-    .join('');
 }
 
 /**
@@ -65,24 +41,7 @@ export function buildReportHtml(result: AnalysisResult, meta: ReportMeta): strin
 <meta charset="utf-8" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;600;700&display=swap" rel="stylesheet" />
-<style>
-  * { box-sizing: border-box; }
-  body { font-family: 'Sarabun', sans-serif; color: #1e293b; font-size: 12px; line-height: 1.6; margin: 0; }
-  h1 { font-size: 18px; color: #7c1f2e; margin: 0 0 4px; }
-  h2 { font-size: 14px; color: #7c1f2e; border-bottom: 2px solid #f0b323; padding-bottom: 3px; margin: 22px 0 8px; }
-  h3 { font-size: 12.5px; margin: 12px 0 4px; }
-  table { border-collapse: collapse; width: 100%; font-size: 11px; margin: 6px 0; }
-  th, td { border: 1px solid #cbd5e1; padding: 4px 6px; vertical-align: top; }
-  th { background: #f1f5f9; text-align: left; }
-  .cover { border-bottom: 3px solid #7c1f2e; padding-bottom: 10px; margin-bottom: 8px; }
-  .muted { color: #64748b; }
-  .meta td { border: none; padding: 1px 0; }
-  .score { text-align: center; width: 28px; font-size: 13px; }
-  .crit { background: #fef2f2; border: 1px solid #fecaca; padding: 8px 12px; border-radius: 6px; }
-  .summary { background: #f8fafc; border: 1px solid #e2e8f0; padding: 8px 12px; border-radius: 6px; }
-  .result-box { border: 1px solid #cbd5e1; padding: 8px 12px; margin-top: 8px; }
-  .sign td { height: 54px; vertical-align: bottom; text-align: center; font-size: 11px; }
-  .section-body { page-break-inside: auto; }
+<style>${REPORT_STYLES}
   @page { size: A4; margin: 18mm 16mm; }
 </style>
 </head>
@@ -138,19 +97,7 @@ export function buildReportHtml(result: AnalysisResult, meta: ReportMeta): strin
   &nbsp; ${v.band === 'excellent' ? '☑' : '☐'} ดีเยี่ยม (80–100%)
 </div>
 
-<h3>ลายมือชื่อรับรอง</h3>
-<table class="sign">
-  <tr>
-    <td>....................................<br/>ผู้ทวนสอบภายใน</td>
-    <td>....................................<br/>ผู้ทวนสอบภายนอก</td>
-    <td>....................................<br/>อาจารย์ผู้รับผิดชอบรายวิชา</td>
-  </tr>
-  <tr>
-    <td>....................................<br/>ประธานสาขาวิชา</td>
-    <td>....................................<br/>คณบดี / ผู้แทน</td>
-    <td></td>
-  </tr>
-</table>
+${signatureTable()}
 
 <p class="muted" style="margin-top:14px;font-size:10px;">
   เอกสารนี้เป็นส่วนหนึ่งของกระบวนการทวนสอบผลลัพธ์การเรียนรู้รายวิชา
