@@ -1,7 +1,7 @@
 rules_version = '2';
 
 // =====================================================================
-// Firestore security rules — four-role permission matrix.
+// Firestore security rules — role permission matrix.
 //
 // Roles cannot join in rules, so they are denormalized onto users/{uid}.
 // The lecturer role is per-offering (offerings/{id}.lecturerId).
@@ -45,6 +45,13 @@ service cloud.firestore {
       return isMfu() && hasProfile() && (pid in userDoc().roles.assessorOf);
     }
 
+    function verifiesProgram(pid) {
+      return isMfu()
+        && hasProfile()
+        && userDoc().roles.verifierOf is list
+        && (pid in userDoc().roles.verifierOf);
+    }
+
     function offering(oid) {
       return get(/databases/$(database)/documents/offerings/$(oid)).data;
     }
@@ -54,6 +61,7 @@ service cloud.firestore {
       return isAdmin()
         || directsProgram(o.programId)
         || assessesProgram(o.programId)
+        || verifiesProgram(o.programId)
         || o.lecturerId == request.auth.uid;
     }
 
@@ -94,6 +102,7 @@ service cloud.firestore {
       allow read: if isAdmin()
         || directsProgram(resource.data.programId)
         || assessesProgram(resource.data.programId)
+        || verifiesProgram(resource.data.programId)
         || resource.data.lecturerId == request.auth.uid;
 
       allow create: if isAdmin() || directsProgram(request.resource.data.programId);
@@ -124,14 +133,28 @@ service cloud.firestore {
           && resource.data.isLocked == false;
         allow delete: if false;
       }
+
+      match /verifications/{verificationId} {
+        allow read: if canReadOffering(offeringId);
+        allow create: if verifiesProgram(offering(offeringId).programId)
+          && request.resource.data.verifierId == request.auth.uid
+          && request.resource.data.programId == offering(offeringId).programId;
+        // Owning committee member may edit a draft until it is locked.
+        allow update: if verifiesProgram(offering(offeringId).programId)
+          && resource.data.verifierId == request.auth.uid
+          && resource.data.isLocked == false;
+        allow delete: if false;
+      }
     }
 
     // ----- implementationReviews -------------------------------------
     match /implementationReviews/{reviewId} {
       allow read: if isAdmin()
         || directsProgram(resource.data.programId)
-        || assessesProgram(resource.data.programId);
-      allow create: if assessesProgram(request.resource.data.programId)
+        || assessesProgram(resource.data.programId)
+        || verifiesProgram(resource.data.programId);
+      allow create: if (assessesProgram(request.resource.data.programId)
+          || verifiesProgram(request.resource.data.programId))
         && request.resource.data.reviewerId == request.auth.uid;
       allow update, delete: if false;
     }

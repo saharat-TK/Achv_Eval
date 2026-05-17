@@ -13,7 +13,7 @@ export default async function LecturerLayout({
 
   return (
     <div className="min-h-screen">
-      <header className="border-b border-slate-200 bg-white">
+      <header className="sticky top-0 z-50 border-b border-slate-200 bg-white shadow-sm">
         <div className="mx-auto max-w-5xl px-6 py-3 flex items-center justify-between">
           <Link href="/lecturer" className="flex flex-col">
             <span className="text-sm font-semibold text-mfu-primary">

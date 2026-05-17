@@ -15,6 +15,7 @@ courses/{courseId}                           CourseDoc
 offerings/{offeringId}                       OfferingDoc  ← core working entity
   └─ aiReports/{reportId}                    AiReportDoc
   └─ assessments/{assessmentId}              AssessmentDoc
+  └─ verifications/{verificationId}           VerificationDoc
 implementationReviews/{reviewId}             ImplementationReviewDoc
 notifications/{notificationId}               NotificationDoc
 auditLog/{logId}                             AuditLogDoc
@@ -42,8 +43,16 @@ security rules **cannot join** — they can only `get()` one document. So each
 user doc carries:
 
 ```
-roles: { isAdmin: boolean, directorOf: [programId], assessorOf: [programId] }
+roles: {
+  isAdmin: boolean,
+  directorOf: [programId],
+  assessorOf: [programId],
+  verifierOf: [programId]
+}
 ```
+
+`verifierOf` is for verification committee members who can review
+final-assessed offerings for selected programs.
 
 Rules authorize by reading the caller's own `users/{uid}` doc. The
 **lecturer** role is the exception: it is per-offering, so it lives on
@@ -56,7 +65,7 @@ There are only ~6 PLOs per program and they are always read together with
 the program. An embedded array (`ProgramDoc.plos`) avoids an extra read.
 A subcollection would be over-engineering.
 
-### 3. AI reports and assessments are subcollections of the offering
+### 3. AI reports, assessments, and verifications are subcollections of the offering
 
 They are owned by exactly one offering and always queried within its scope.
 Subcollections keep them naturally partitioned and let security rules
@@ -106,6 +115,8 @@ draft
   → ai_complete
   → assessor_review
   → assessed               (assessor signed off)
+  → verification_review
+  → verified | needs_follow_up   (committee final verification)
   → pending_review_next_semester
   → implemented | not_implemented   (verified next semester — advisory gate)
 ```
@@ -123,7 +134,7 @@ Composite indexes required by app queries are declared in
 
 ## Security rules
 
-[`firestore.rules`](../firestore.rules) ports the four-role permission matrix.
+[`firestore.rules`](../firestore.rules) ports the role permission matrix.
 Because rules cannot join, they rely on the denormalized `programId` on
 offerings and the `roles` map on user docs. The authoritative server checks
 (`getSessionUser`, server actions) are the second line of defense.

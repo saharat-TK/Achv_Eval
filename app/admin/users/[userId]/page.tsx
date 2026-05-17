@@ -52,6 +52,7 @@ export default async function ManageUserRolesPage({
             isAdmin: target.roles?.isAdmin ?? false,
             directorOf: target.roles?.directorOf ?? [],
             assessorOf: target.roles?.assessorOf ?? [],
+            verifierOf: target.roles?.verifierOf ?? [],
           }}
         />
       </div>

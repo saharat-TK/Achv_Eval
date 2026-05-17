@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { getCurrentProfile } from '@/lib/firebase/auth-server';
 import SignOutButton from '@/components/SignOutButton';
 
-export default async function AssessorLayout({
+export default async function VerificationLayout({
   children,
 }: {
   children: React.ReactNode;
@@ -11,37 +11,43 @@ export default async function AssessorLayout({
   const profile = await getCurrentProfile();
   if (!profile) redirect('/login');
 
-  // Must have assessor role for at least one program.
-  if (!profile.roles.assessorOf || profile.roles.assessorOf.length === 0) {
-    redirect('/login');
+  const canVerify =
+    profile.roles.isAdmin ||
+    (profile.roles.directorOf ?? []).length > 0 ||
+    (profile.roles.verifierOf ?? []).length > 0;
+
+  if (!canVerify) {
+    redirect('/lecturer');
   }
 
   return (
     <div className="min-h-screen">
       <header className="sticky top-0 z-50 border-b border-slate-200 bg-white shadow-sm">
-        <div className="mx-auto max-w-5xl px-6 py-3 flex items-center justify-between">
-          <Link href="/assessor" className="flex flex-col">
+        <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-3">
+          <Link href="/verification" className="flex flex-col">
             <span className="text-sm font-semibold text-mfu-primary">
               ระบบประเมินและทวนสอบรายวิชา
             </span>
             <span className="text-xs text-slate-500">
-              พื้นที่ทำงานผู้ทวนสอบ
+              พื้นที่ทำงานคณะกรรมการรับรองผล
             </span>
           </Link>
           <div className="flex items-center gap-4">
             <nav className="flex items-center gap-4 text-sm">
               <Link
-                href="/assessor"
+                href="/verification"
                 className="text-slate-600 hover:text-mfu-primary"
               >
-                รายการทวนสอบ
+                รายการรอรับรอง
               </Link>
-              <Link
-                href="/assessor/verification"
-                className="text-slate-600 hover:text-mfu-primary"
-              >
-                การนำไปปฏิบัติ
-              </Link>
+              {profile.roles.isAdmin || (profile.roles.directorOf ?? []).length > 0 ? (
+                <Link
+                  href="/admin"
+                  className="text-slate-600 hover:text-mfu-primary"
+                >
+                  จัดการหลักสูตร
+                </Link>
+              ) : null}
             </nav>
             <div className="text-right">
               <div className="text-sm text-slate-700">{profile.nameTh}</div>
@@ -51,7 +57,7 @@ export default async function AssessorLayout({
           </div>
         </div>
       </header>
-      <main className="mx-auto max-w-5xl px-6 py-8">{children}</main>
+      <main className="mx-auto max-w-7xl px-6 py-8">{children}</main>
     </div>
   );
 }

@@ -114,9 +114,11 @@ const DEFAULT_SCORES: AssessmentDoc['scores'] = {
 export default function AssessmentForm({
   offeringId,
   hasExamAssessment,
+  scrollBody = false,
 }: {
   offeringId: string;
   hasExamAssessment: boolean;
+  scrollBody?: boolean;
 }) {
   const [assessmentId, setAssessmentId] = useState<string | null>(null);
   const [scores, setScores] = useState<AssessmentDoc['scores']>({
@@ -273,10 +275,16 @@ export default function AssessmentForm({
   }
 
   return (
-    <div className="space-y-6">
+    <div
+      className={
+        scrollBody
+          ? 'space-y-6 lg:flex lg:h-full lg:min-h-0 lg:flex-col lg:gap-0 lg:space-y-0'
+          : 'space-y-6'
+      }
+    >
       {/* Scoring summary card */}
       <div
-        className={`rounded-xl border p-4 ${bandInfo.color}`}
+        className={`rounded-xl border p-4 lg:shrink-0 ${bandInfo.color}`}
       >
         <div className="flex items-center justify-between">
           <div>
@@ -295,7 +303,7 @@ export default function AssessmentForm({
 
       {/* Combined signed report */}
       {isLocked && (
-        <div className="rounded-xl border border-slate-200 bg-white p-4">
+        <div className="rounded-xl border border-slate-200 bg-white p-4 lg:shrink-0">
           <h3 className="text-sm font-semibold text-slate-700">
             รายงานฉบับลงนาม (รวมผลวิเคราะห์ AI + ผลการทวนสอบ)
           </h3>
@@ -322,14 +330,26 @@ export default function AssessmentForm({
       )}
 
       {/* Rubric table */}
-      <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
-        <div className="px-4 py-3 border-b border-slate-100">
+      <div
+        className={
+          scrollBody
+            ? 'overflow-hidden rounded-xl border border-slate-200 bg-white lg:flex lg:min-h-[36rem] lg:flex-[3_1_0%] lg:flex-col'
+            : 'overflow-hidden rounded-xl border border-slate-200 bg-white'
+        }
+      >
+        <div className="border-b border-slate-100 px-4 py-3 lg:shrink-0">
           <h3 className="text-sm font-semibold text-slate-700">
             หัวข้อการทวนสอบ (7 รายการ)
           </h3>
         </div>
 
-        <div className="divide-y divide-slate-100">
+        <div
+          className={
+            scrollBody
+              ? 'divide-y divide-slate-100 lg:min-h-0 lg:flex-1 lg:overflow-y-auto'
+              : 'divide-y divide-slate-100'
+          }
+        >
           {RUBRIC_ITEMS.map((item) => {
             const isNaAllowed = item.allowNa && !hasExamAssessment;
             const currentScore = scores[item.key];
@@ -353,32 +373,32 @@ export default function AssessmentForm({
                   </div>
 
                   {/* Score radio group */}
-                  <div className="flex gap-2 shrink-0">
+                  <div
+                    className="flex shrink-0 gap-2"
+                    role="radiogroup"
+                    aria-label={`${item.number}. ${item.labelTh}`}
+                  >
                     {isNaAllowed ? (
                       <span className="text-xs px-2 py-1 rounded bg-slate-100 text-slate-500">
                         N/A
                       </span>
                     ) : (
                       [1, 2, 3].map((v) => (
-                        <label
+                        <button
                           key={v}
-                          className={`cursor-pointer text-sm px-3 py-1 rounded-lg border transition-colors ${
+                          type="button"
+                          role="radio"
+                          aria-checked={currentScore === v}
+                          onClick={() => setScore(item.key, v as RubricScore)}
+                          disabled={isLocked}
+                          className={`flex h-9 w-9 items-center justify-center rounded-lg border text-sm transition-colors ${
                             currentScore === v
                               ? 'bg-mfu-primary text-white border-mfu-primary'
                               : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300'
                           } ${isLocked ? 'opacity-60 cursor-not-allowed' : ''}`}
                         >
-                          <input
-                            type="radio"
-                            name={item.key}
-                            value={v}
-                            checked={currentScore === v}
-                            onChange={() => setScore(item.key, v as RubricScore)}
-                            disabled={isLocked}
-                            className="sr-only"
-                          />
                           {v}
-                        </label>
+                        </button>
                       ))
                     )}
                   </div>
@@ -422,7 +442,7 @@ export default function AssessmentForm({
       </div>
 
       {/* General notes */}
-      <div className="rounded-xl border border-slate-200 bg-white p-4">
+      <div className="rounded-xl border border-slate-200 bg-white p-4 lg:shrink-0">
         <label className="text-sm font-semibold text-slate-700">
           บันทึกทั่วไป
         </label>
@@ -438,7 +458,7 @@ export default function AssessmentForm({
 
       {/* Actions */}
       {!isLocked && (
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 lg:shrink-0">
           <button
             onClick={() => handleSubmit(false)}
             disabled={saving}

@@ -48,7 +48,13 @@ const BAND_TH: Record<string, string> = {
  * Live list of AI reports for an offering. Subscribes to Firestore so the
  * status updates in place (running → succeeded) without a page reload.
  */
-export default function AiReportsList({ offeringId }: { offeringId: string }) {
+export default function AiReportsList({
+  offeringId,
+  scrollBody = false,
+}: {
+  offeringId: string;
+  scrollBody?: boolean;
+}) {
   const [reports, setReports] = useState<Report[] | null>(null);
 
   useEffect(() => {
@@ -81,17 +87,36 @@ export default function AiReportsList({ offeringId }: { offeringId: string }) {
   }, [offeringId]);
 
   if (reports === null) {
-    return <p className="mt-2 text-sm text-slate-400">กำลังโหลด…</p>;
+    return <p className="text-sm text-slate-400">กำลังโหลด…</p>;
   }
   if (reports.length === 0) {
-    return <p className="mt-2 text-sm text-slate-400">ยังไม่มีรายงาน</p>;
+    return <p className="text-sm text-slate-400">ยังไม่มีรายงาน</p>;
   }
 
   return (
-    <div className="mt-2 space-y-4">
+    <div
+      className={
+        scrollBody
+          ? 'mt-2 space-y-4 lg:mt-0 lg:h-full lg:min-h-0 lg:overflow-y-auto lg:pr-1'
+          : 'mt-2 space-y-4'
+      }
+    >
       {reports.map((r) => (
-        <div key={r.id} className="rounded-xl border border-slate-200 bg-white p-4">
-          <div className="flex items-center justify-between text-sm">
+        <div
+          key={r.id}
+          className={
+            scrollBody
+              ? 'rounded-xl border border-slate-200 bg-white'
+              : 'rounded-xl border border-slate-200 bg-white p-4'
+          }
+        >
+          <div
+            className={
+              scrollBody
+                ? 'flex items-center justify-between border-b border-slate-100 bg-white px-4 py-4 text-sm lg:sticky lg:top-0 lg:z-10'
+                : 'flex items-center justify-between text-sm'
+            }
+          >
             <span className="font-medium text-slate-800">
               รายงานเวอร์ชัน {r.version}
             </span>
@@ -108,28 +133,30 @@ export default function AiReportsList({ offeringId }: { offeringId: string }) {
             </span>
           </div>
 
-          {r.status === 'running' && (
-            <p className="mt-2 text-xs text-slate-500">
-              ระบบกำลังวิเคราะห์ทีละส่วน (4 ส่วน) — หน้านี้จะอัปเดตอัตโนมัติเมื่อเสร็จ
-            </p>
-          )}
+          <div className={scrollBody ? 'px-4 pb-4 pt-3' : 'mt-2'}>
+            {r.status === 'running' && (
+              <p className="text-xs text-slate-500">
+                ระบบกำลังวิเคราะห์ทีละส่วน (4 ส่วน) — หน้านี้จะอัปเดตอัตโนมัติเมื่อเสร็จ
+              </p>
+            )}
 
-          {r.status === 'failed' && r.errorMessage && (
-            <p className="mt-2 text-xs text-red-600">{r.errorMessage}</p>
-          )}
+            {r.status === 'failed' && r.errorMessage && (
+              <p className="text-xs text-red-600">{r.errorMessage}</p>
+            )}
 
-          {r.status === 'succeeded' && r.structuredOutput && (
-            <ReportBody out={r.structuredOutput} />
-          )}
+            {r.status === 'succeeded' && r.structuredOutput && (
+              <ReportBody out={r.structuredOutput} />
+            )}
 
-          {r.reportDownloadUrl && (
-            <a
-              href={r.reportDownloadUrl}
-              className="mt-3 inline-block text-sm text-mfu-primary hover:underline"
-            >
-              ดาวน์โหลดรายงาน PDF
-            </a>
-          )}
+            {r.reportDownloadUrl && (
+              <a
+                href={r.reportDownloadUrl}
+                className="mt-3 inline-block text-sm text-mfu-primary hover:underline"
+              >
+                ดาวน์โหลดรายงาน PDF
+              </a>
+            )}
+          </div>
         </div>
       ))}
     </div>
