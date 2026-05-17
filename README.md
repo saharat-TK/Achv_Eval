@@ -23,7 +23,7 @@ See [`docs/FIRESTORE_MODEL.md`](docs/FIRESTORE_MODEL.md) for the data model and
 
 ## Project status
 
-Phase 0 (foundation) — **in progress**
+Late Phase 3 (stabilization) — **in progress**
 
 - [x] Firebase Auth with Google SSO + `@mfu.ac.th` enforcement
 - [x] Server session cookies + middleware gate
@@ -42,6 +42,7 @@ Phase 0 (foundation) — **in progress**
 - [x] Phase 3B-1: course management & CSV batch upload
 - [x] Phase 3B-2: offering management — lecturer assignment & clone-from-previous
 - [x] Phase 3C: user & role management
+- [ ] Phase 3D: end-to-end validation, lint/build gate, deployment checklist ([docs/PHASE3_VALIDATION.md](docs/PHASE3_VALIDATION.md))
 - [ ] Phase 4: verification committee flow (final sign-off)
 - [ ] Phase 5: executive dashboard (school-wide analytics)
 - [ ] Phase 6: notifications (email & in-app alerts)
@@ -183,6 +184,8 @@ app/
   login/page.tsx                      Google sign-in
   api/auth/session/route.ts           Session-cookie mint/clear + profile upsert
   lecturer/                           Lecturer workspace (Phase 1)
+  assessor/                           Assessor review and sign-off flow (Phase 2)
+  admin/                              Program, course, offering, and user management (Phase 3)
 
 components/                           Shared UI (StatusBadge, AnalyzeCoursePanel…)
 
@@ -194,12 +197,15 @@ lib/
   data/offerings.ts                   Firestore data-access layer
   types/models.ts                     Firestore document types + rubric scoring
   constants.ts                        Status labels, document slots
+  data/                               Firestore data-access helpers
 
 middleware.ts                         Session-cookie gate
 
 functions/                            Firebase Cloud Functions (separate deploy)
   src/analyzeCourse.ts                Callable: run Gemini course analysis
+  src/generateCombinedReport.ts       Callable: signed combined assessor report
   src/gemini.ts                       Gemini integration + result schema
+  src/reportPdf.ts                    AI report PDF generation
   prompts/                            AI evaluation guidelines (authoritative)
     CLAUDE.master.md / CLAUDE.undergrad.md
 
