@@ -29,6 +29,20 @@ export default async function AssessorLayout({
             </span>
           </Link>
           <div className="flex items-center gap-4">
+            <nav className="flex items-center gap-4 text-sm">
+              <Link
+                href="/assessor"
+                className="text-slate-600 hover:text-mfu-primary"
+              >
+                รายการทวนสอบ
+              </Link>
+              <Link
+                href="/assessor/verification"
+                className="text-slate-600 hover:text-mfu-primary"
+              >
+                การนำไปปฏิบัติ
+              </Link>
+            </nav>
             <div className="text-right">
               <div className="text-sm text-slate-700">{profile.nameTh}</div>
               <div className="text-xs text-slate-400">{profile.email}</div>
