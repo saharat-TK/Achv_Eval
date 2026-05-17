@@ -2,6 +2,7 @@ import * as admin from 'firebase-admin';
 import { google } from 'googleapis';
 import { renderHtmlToPdf, storePdf } from './pdf';
 import { buildReportHtml, type ReportMeta } from './reportHtml';
+import { getProgramCode, offeringReportDir } from './storagePaths';
 import type { AnalysisResult } from './gemini';
 
 const SEMESTER_LABEL: Record<string, string> = {
@@ -36,6 +37,7 @@ export async function generateAndStoreReport(args: {
   const offeringSnap = await db.collection('offerings').doc(offeringId).get();
   const offering = offeringSnap.data() as
     | {
+        programId: string;
         courseCode: string;
         courseNameTh: string;
         courseNameEn: string;
@@ -74,9 +76,17 @@ export async function generateAndStoreReport(args: {
   // ----- Render HTML → PDF → Storage --------------------------------
   const html = buildReportHtml(result, meta);
   const pdf = await renderHtmlToPdf(html);
+  const programCode = await getProgramCode(db, offering.programId);
+  const dir = offeringReportDir({
+    programCode,
+    courseCode: offering.courseCode,
+    academicYear: offering.academicYear,
+    semester: offering.semester,
+    section: offering.section,
+  });
   const { filePath, downloadUrl } = await storePdf(
     pdf,
-    `reports/${offeringId}/${reportId}.pdf`,
+    `${dir}/ai-report-${reportId}.pdf`,
   );
 
   // ----- Append to the lecturer-action log Sheet --------------------
