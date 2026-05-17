@@ -7,6 +7,7 @@ import type {
   PloSchema,
   PloDomain,
   CourseType,
+  ImplementationDecision,
 } from '@/lib/types/models';
 
 /**
@@ -76,6 +77,19 @@ export const DOCUMENT_SLOTS: {
     required: false,
   },
 ];
+
+/**
+ * Verification-committee decision on whether the previous semester's
+ * improvement recommendations were carried out in the next offering.
+ */
+export const IMPLEMENTATION_DECISION: Record<
+  ImplementationDecision,
+  { labelTh: string; tone: 'green' | 'amber' | 'red' }
+> = {
+  implemented: { labelTh: 'ดำเนินการแล้ว', tone: 'green' },
+  partially_implemented: { labelTh: 'ดำเนินการบางส่วน', tone: 'amber' },
+  not_implemented: { labelTh: 'ยังไม่ดำเนินการ', tone: 'red' },
+};
 
 export const SEMESTER_LABEL: Record<Semester, string> = {
   '1': 'ภาคต้น',
