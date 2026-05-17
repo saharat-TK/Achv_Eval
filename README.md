@@ -44,7 +44,8 @@ Late Phase 3 (stabilization) — **in progress**
 - [x] Phase 3C: user & role management
 - [ ] Phase 3D: end-to-end validation, lint/build gate, deployment checklist ([docs/PHASE3_VALIDATION.md](docs/PHASE3_VALIDATION.md))
 - [x] Phase 4A: verification committee role, status model, read-only queue
-- [ ] Phase 4B: verification decision form, final sign-off, final PDF
+- [x] Phase 4B-1: verification decision form, final sign-off, status transition
+- [ ] Phase 4B-2: final verification PDF
 - [ ] Phase 5: executive dashboard (school-wide analytics)
 - [ ] Phase 6: notifications (email & in-app alerts)
 - [ ] Phase 7: hardening & load testing

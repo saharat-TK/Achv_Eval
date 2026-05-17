@@ -7,6 +7,7 @@ import {
 } from '@/lib/data/verifications';
 import { SEMESTER_LABEL, VERIFICATION_DECISION } from '@/lib/constants';
 import StatusBadge from '@/components/StatusBadge';
+import FinalVerificationForm from '@/components/FinalVerificationForm';
 
 export const dynamic = 'force-dynamic';
 
@@ -92,11 +93,18 @@ export default async function VerificationDetailPage({
               บันทึกโดย {latestVerification.verifierName}
             </p>
           </div>
-        ) : (
+        ) : !assessment ? (
           <p className="mt-2 text-sm text-slate-500">
-            Phase 4A เปิดหน้ารายละเอียดและข้อมูลตั้งต้นแล้ว ขั้นตอนบันทึกผลรับรอง
-            และสร้างรายงานสุดท้ายจะอยู่ใน Phase 4B
+            ยังไม่พบผลการทวนสอบจากผู้ทวนสอบ จึงยังรับรองผลขั้นสุดท้ายไม่ได้
           </p>
+        ) : !['assessed', 'verification_review'].includes(offering.status) ? (
+          <p className="mt-2 text-sm text-slate-500">
+            รายวิชานี้ไม่ได้อยู่ในสถานะรอรับรองผล
+          </p>
+        ) : (
+          <div className="mt-3">
+            <FinalVerificationForm offeringId={offering.id} />
+          </div>
         )}
       </section>
     </div>

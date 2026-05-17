@@ -25,6 +25,22 @@ const VERIFICATION_STATUSES: OfferingStatus[] = [
   'verified',
 ];
 
+const STATUS_SORT: Record<OfferingStatus, number> = {
+  assessed: 0,
+  verification_review: 1,
+  needs_follow_up: 2,
+  verified: 3,
+  draft: 9,
+  documents_pending: 9,
+  ready_for_ai: 9,
+  ai_in_progress: 9,
+  ai_complete: 9,
+  assessor_review: 9,
+  pending_review_next_semester: 9,
+  implemented: 9,
+  not_implemented: 9,
+};
+
 function unique(values: string[]): string[] {
   return [...new Set(values.filter(Boolean))];
 }
@@ -108,6 +124,7 @@ export async function getVerificationQueue(
     .map((d) => ({ id: d.id, ...(d.data() as OfferingDoc) }))
     .sort(
       (a, b) =>
+        STATUS_SORT[a.status] - STATUS_SORT[b.status] ||
         b.academicYear - a.academicYear ||
         b.semester.localeCompare(a.semester) ||
         a.courseCode.localeCompare(b.courseCode),

@@ -121,6 +121,10 @@ draft
   → implemented | not_implemented   (verified next semester — advisory gate)
 ```
 
+Phase 4B writes the final committee decision to
+`offerings/{offeringId}/verifications/{verificationId}` and transitions the
+offering to `verified` or `needs_follow_up`.
+
 ## Indexes
 
 Composite indexes required by app queries are declared in
