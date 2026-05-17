@@ -150,7 +150,7 @@ export const generateCombinedReport = onCall(
     const { filePath, downloadUrl } = await storePdf(
       pdf,
       `${dir}/combined-${assessmentId}.pdf`,
-      offeringReportFileName('combined', pathParts, assessmentId),
+      offeringReportFileName('combined-report', pathParts, assessmentId),
     );
 
     await assessmentRef.update({

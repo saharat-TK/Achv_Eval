@@ -34,7 +34,8 @@ export function offeringReportDir(p: OfferingPathParts): string {
 /**
  * Human-readable download filename for a report PDF, e.g.
  * `ai-report_ohs-1808412-2568-1-1_f1WEudIim8j.pdf`. The id keeps its
- * original case so it stays traceable to the Firestore doc.
+ * original case so it stays traceable to the Firestore doc. The prefix is
+ * also slugged so callers cannot accidentally create an unsafe download name.
  */
 export function offeringReportFileName(
   prefix: string,
@@ -50,7 +51,7 @@ export function offeringReportFileName(
   ]
     .map((v) => slug(v).toLowerCase())
     .join('-');
-  return `${prefix}_${tag}_${slug(id)}.pdf`;
+  return `${slug(prefix).toLowerCase()}_${tag}_${slug(id)}.pdf`;
 }
 
 /** Looks up a program's human-readable code; falls back to its id. */
