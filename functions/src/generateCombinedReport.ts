@@ -2,7 +2,11 @@ import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import * as admin from 'firebase-admin';
 import { renderHtmlToPdf, storePdf } from './pdf';
 import { buildCombinedReportHtml } from './assessmentHtml';
-import { getProgramCode, offeringReportDir } from './storagePaths';
+import {
+  getProgramCode,
+  offeringReportDir,
+  offeringReportFileName,
+} from './storagePaths';
 import type { ReportMeta } from './reportHtml';
 import type { AnalysisResult } from './gemini';
 
@@ -135,16 +139,18 @@ export const generateCombinedReport = onCall(
 
     const pdf = await renderHtmlToPdf(html);
     const programCode = await getProgramCode(db, offering.programId);
-    const dir = offeringReportDir({
+    const pathParts = {
       programCode,
       courseCode: offering.courseCode,
       academicYear: offering.academicYear,
       semester: offering.semester,
       section: offering.section,
-    });
+    };
+    const dir = offeringReportDir(pathParts);
     const { filePath, downloadUrl } = await storePdf(
       pdf,
       `${dir}/combined-${assessmentId}.pdf`,
+      offeringReportFileName('combined', pathParts, assessmentId),
     );
 
     await assessmentRef.update({

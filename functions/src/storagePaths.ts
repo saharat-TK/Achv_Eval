@@ -31,6 +31,28 @@ export function offeringReportDir(p: OfferingPathParts): string {
   ].join('/');
 }
 
+/**
+ * Human-readable download filename for a report PDF, e.g.
+ * `ai-report_ohs-1808412-2568-1-1_f1WEudIim8j.pdf`. The id keeps its
+ * original case so it stays traceable to the Firestore doc.
+ */
+export function offeringReportFileName(
+  prefix: string,
+  p: OfferingPathParts,
+  id: string,
+): string {
+  const tag = [
+    p.programCode,
+    p.courseCode,
+    p.academicYear,
+    p.semester,
+    p.section,
+  ]
+    .map((v) => slug(v).toLowerCase())
+    .join('-');
+  return `${prefix}_${tag}_${slug(id)}.pdf`;
+}
+
 /** Looks up a program's human-readable code; falls back to its id. */
 export async function getProgramCode(
   db: admin.firestore.Firestore,

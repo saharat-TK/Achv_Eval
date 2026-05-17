@@ -26,12 +26,16 @@ export async function renderHtmlToPdf(html: string): Promise<Buffer> {
 export async function storePdf(
   pdf: Buffer,
   filePath: string,
+  downloadName?: string,
 ): Promise<{ filePath: string; downloadUrl: string }> {
   const bucket = admin.storage().bucket();
   const token = randomUUID();
   await bucket.file(filePath).save(pdf, {
     metadata: {
       contentType: 'application/pdf',
+      ...(downloadName
+        ? { contentDisposition: `attachment; filename="${downloadName}"` }
+        : {}),
       metadata: { firebaseStorageDownloadTokens: token },
     },
   });
