@@ -46,7 +46,8 @@ export async function POST(request: NextRequest) {
 
   // Auto-create the application profile on first sign-in so Firestore
   // security rules (which require users/{uid} to exist) work immediately.
-  // Never overwrite an existing profile's roles.
+  // Never overwrite an existing profile's roles. A deactivated account is
+  // refused here — it never receives a session cookie.
   try {
     const userRef = getAdminDb().collection('users').doc(decoded.uid);
     const snap = await userRef.get();
@@ -61,6 +62,8 @@ export async function POST(request: NextRequest) {
         createdAt: FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp(),
       });
+    } else if (snap.data()?.isActive === false) {
+      return NextResponse.json({ error: 'account_deactivated' }, { status: 403 });
     }
   } catch {
     return NextResponse.json({ error: 'profile_failed' }, { status: 500 });

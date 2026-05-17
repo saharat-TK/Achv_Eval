@@ -28,7 +28,9 @@ export async function getSessionUser(): Promise<DecodedIdToken | null> {
 
 /**
  * Returns the application profile (users/{uid}) for the current session,
- * including role assignments. Null if not signed in or no profile yet.
+ * including role assignments. Null if not signed in, no profile yet, or the
+ * account has been deactivated — so a deactivated user loses access on the
+ * next navigation even if their session cookie is still valid.
  */
 export async function getCurrentProfile(): Promise<(UserDoc & { uid: string }) | null> {
   const decoded = await getSessionUser();
@@ -37,5 +39,8 @@ export async function getCurrentProfile(): Promise<(UserDoc & { uid: string }) |
   const snap = await getAdminDb().collection('users').doc(decoded.uid).get();
   if (!snap.exists) return null;
 
-  return { uid: decoded.uid, ...(snap.data() as UserDoc) };
+  const data = snap.data() as UserDoc;
+  if (data.isActive === false) return null;
+
+  return { uid: decoded.uid, ...data };
 }

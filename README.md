@@ -32,8 +32,17 @@ Phase 0 (foundation) — **in progress**
 - [x] Phase 1A: lecturer workspace, dashboard, offering detail
 - [x] Phase 1B: Gemini analysis pipeline (`analyzeCourse` Cloud Function)
 - [x] Phase 1C: report PDF (`generateReportPdf`) → Firebase Storage + log Sheet
-- [ ] Phase 2: assessor flow · Phase 3: admin
-- [ ] Phase 4: verification · Phase 5: dashboard · Phase 6: notifications · Phase 7: hardening
+- [x] Phase 2A: assessor workspace & inbox
+- [x] Phase 2B: 7-item rubric evaluation form & sign-off
+- [x] Phase 2C: combined report PDF (AI analysis + assessor form) on sign-off
+- [x] Phase 3A: admin workspace & program management (PLO editor)
+- [x] Phase 3B-1: course management & CSV batch upload
+- [x] Phase 3B-2: offering management — lecturer assignment & clone-from-previous
+- [x] Phase 3C: user & role management
+- [ ] Phase 4: verification committee flow (final sign-off)
+- [ ] Phase 5: executive dashboard (school-wide analytics)
+- [ ] Phase 6: notifications (email & in-app alerts)
+- [ ] Phase 7: hardening & load testing
 
 ## Prerequisites
 
