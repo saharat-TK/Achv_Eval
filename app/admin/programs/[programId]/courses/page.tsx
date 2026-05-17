@@ -4,7 +4,7 @@ import { getCurrentProfile } from '@/lib/firebase/auth-server';
 import { getProgram } from '@/lib/data/programs';
 import { getCoursesForProgram } from '@/lib/data/courses';
 import CourseCsvUpload from '@/components/CourseCsvUpload';
-import { COURSE_TYPE_LABEL } from '@/lib/constants';
+import { COURSE_TYPE_LABEL, SEMESTER_LABEL } from '@/lib/constants';
 
 export const dynamic = 'force-dynamic';
 
@@ -67,6 +67,7 @@ export default async function ProgramCoursesPage({
                 <th className="px-4 py-3 font-medium">หน่วยกิต</th>
                 <th className="px-4 py-3 font-medium">ประเภท</th>
                 <th className="px-4 py-3 font-medium">ชั้นปี</th>
+                <th className="px-4 py-3 font-medium">ภาค</th>
                 <th className="px-4 py-3 font-medium">สถานะ</th>
               </tr>
             </thead>
@@ -88,6 +89,9 @@ export default async function ProgramCoursesPage({
                   </td>
                   <td className="px-4 py-3 text-slate-600">
                     {c.yearOfStudy ? `ปี ${c.yearOfStudy}` : '—'}
+                  </td>
+                  <td className="px-4 py-3 text-slate-600">
+                    {c.semester ? SEMESTER_LABEL[c.semester] : '—'}
                   </td>
                   <td className="px-4 py-3 text-xs">
                     {c.isActive ? (

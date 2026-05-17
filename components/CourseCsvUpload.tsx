@@ -4,7 +4,15 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { batchUploadCourses } from '@/app/admin/programs/[programId]/courses/actions';
 
-const COLUMNS = ['code', 'nameTh', 'nameEn', 'creditStructure', 'type', 'yearOfStudy'];
+const COLUMNS = [
+  'code',
+  'nameTh',
+  'nameEn',
+  'creditStructure',
+  'type',
+  'yearOfStudy',
+  'semester',
+];
 
 /** Minimal CSV parser — handles quoted fields and escaped quotes. */
 function parseCsv(text: string): Record<string, string>[] {
@@ -79,6 +87,8 @@ export default function CourseCsvUpload({ programId }: { programId: string }) {
         คอลัมน์ (แถวแรกเป็นหัวตาราง): <code>{COLUMNS.join(', ')}</code>
         <br />
         ค่า <code>type</code> ใช้: theory, theory_practice, practice, field, s_u
+        <br />
+        ค่า <code>semester</code> ใช้: 1, 2, 3 (เว้นว่างได้)
       </p>
       <label className="mt-3 inline-block cursor-pointer rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50">
         {busy ? 'กำลังนำเข้า…' : 'เลือกไฟล์ CSV'}

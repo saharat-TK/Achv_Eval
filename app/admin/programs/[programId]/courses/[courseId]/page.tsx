@@ -32,6 +32,7 @@ export default async function EditCoursePage({
     creditStructure: course.creditStructure,
     type: course.type,
     yearOfStudy: course.yearOfStudy ?? null,
+    semester: course.semester ?? null,
     isActive: course.isActive,
   };
 

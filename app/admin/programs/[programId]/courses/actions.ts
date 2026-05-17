@@ -4,7 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { FieldValue } from 'firebase-admin/firestore';
 import { getAdminDb } from '@/lib/firebase/admin';
 import { getSessionUser, getCurrentProfile } from '@/lib/firebase/auth-server';
-import type { CourseType } from '@/lib/types/models';
+import type { CourseType, Semester } from '@/lib/types/models';
 
 export interface CourseFormData {
   code: string;
@@ -13,6 +13,7 @@ export interface CourseFormData {
   creditStructure: string; // e.g. "2(2-0-4)"
   type: CourseType;
   yearOfStudy: number | null;
+  semester: Semester | null;
   isActive: boolean;
 }
 
@@ -75,6 +76,7 @@ function toDoc(programId: string, data: CourseFormData) {
     credits: parseCredits(data.creditStructure),
     type: data.type,
     yearOfStudy: data.yearOfStudy ?? null,
+    semester: data.semester ?? null,
     isActive: data.isActive,
   };
 }
@@ -139,6 +141,7 @@ export async function batchUploadCourses(
     const r = rows[i];
     const line = i + 2; // +1 header, +1 for 1-based
     const typeRaw = (r.type ?? '').trim() as CourseType;
+    const semRaw = (r.semester ?? '').trim();
     const data: CourseFormData = {
       code: r.code ?? '',
       nameTh: r.nameTh ?? '',
@@ -146,6 +149,9 @@ export async function batchUploadCourses(
       creditStructure: r.creditStructure ?? '',
       type: COURSE_TYPES.includes(typeRaw) ? typeRaw : 'theory',
       yearOfStudy: r.yearOfStudy ? Number(r.yearOfStudy) || null : null,
+      semester: (['1', '2', '3'] as string[]).includes(semRaw)
+        ? (semRaw as Semester)
+        : null,
       isActive: true,
     };
     const err = validate(data);

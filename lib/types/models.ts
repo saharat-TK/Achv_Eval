@@ -113,7 +113,8 @@ export interface CourseDoc {
   creditStructure: string; // e.g. "2(2-0-4)"
   credits: number;
   type: CourseType;
-  yearOfStudy?: number; // 1..6
+  yearOfStudy?: number; // 1..6 — study-plan year
+  semester?: Semester | null; // study-plan semester
   isActive: boolean;
   createdAt: Ts;
   updatedAt: Ts;

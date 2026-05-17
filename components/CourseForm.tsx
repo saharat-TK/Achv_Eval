@@ -7,8 +7,8 @@ import {
   updateCourse,
   type CourseFormData,
 } from '@/app/admin/programs/[programId]/courses/actions';
-import { COURSE_TYPE_LABEL } from '@/lib/constants';
-import type { CourseType } from '@/lib/types/models';
+import { COURSE_TYPE_LABEL, SEMESTER_LABEL } from '@/lib/constants';
+import type { CourseType, Semester } from '@/lib/types/models';
 
 const EMPTY: CourseFormData = {
   code: '',
@@ -17,8 +17,11 @@ const EMPTY: CourseFormData = {
   creditStructure: '',
   type: 'theory',
   yearOfStudy: null,
+  semester: null,
   isActive: true,
 };
+
+const SEMESTERS: Semester[] = ['1', '2', '3'];
 
 const inputCls =
   'mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-mfu-primary focus:outline-none';
@@ -112,7 +115,7 @@ export default function CourseForm({
             </select>
           </label>
           <label className="text-sm text-slate-600">
-            ชั้นปี
+            ชั้นปี (แผนการเรียน)
             <select
               className={inputCls}
               value={form.yearOfStudy ?? ''}
@@ -124,6 +127,23 @@ export default function CourseForm({
               {[1, 2, 3, 4, 5, 6].map((n) => (
                 <option key={n} value={n}>
                   ปี {n}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="text-sm text-slate-600">
+            ภาคการศึกษา (แผนการเรียน)
+            <select
+              className={inputCls}
+              value={form.semester ?? ''}
+              onChange={(e) =>
+                set('semester', (e.target.value || null) as Semester | null)
+              }
+            >
+              <option value="">ไม่ระบุ</option>
+              {SEMESTERS.map((s) => (
+                <option key={s} value={s}>
+                  {SEMESTER_LABEL[s]}
                 </option>
               ))}
             </select>
