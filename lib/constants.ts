@@ -8,6 +8,7 @@ import type {
   PloDomain,
   CourseType,
   ImplementationDecision,
+  VerificationDecision,
 } from '@/lib/types/models';
 
 /**
@@ -25,6 +26,9 @@ export const OFFERING_STATUS: Record<
   ai_complete: { labelTh: 'วิเคราะห์เสร็จ', tone: 'violet' },
   assessor_review: { labelTh: 'รอผู้ทวนสอบ', tone: 'violet' },
   assessed: { labelTh: 'ทวนสอบแล้ว', tone: 'green' },
+  verification_review: { labelTh: 'รอคณะกรรมการ', tone: 'violet' },
+  verified: { labelTh: 'รับรองผลแล้ว', tone: 'green' },
+  needs_follow_up: { labelTh: 'ต้องติดตาม', tone: 'amber' },
   pending_review_next_semester: { labelTh: 'รอติดตามภาคหน้า', tone: 'amber' },
   implemented: { labelTh: 'ดำเนินการแล้ว', tone: 'green' },
   not_implemented: { labelTh: 'ยังไม่ดำเนินการ', tone: 'red' },
@@ -89,6 +93,17 @@ export const IMPLEMENTATION_DECISION: Record<
   implemented: { labelTh: 'ดำเนินการแล้ว', tone: 'green' },
   partially_implemented: { labelTh: 'ดำเนินการบางส่วน', tone: 'amber' },
   not_implemented: { labelTh: 'ยังไม่ดำเนินการ', tone: 'red' },
+};
+
+/**
+ * Final verification-committee decision after assessor sign-off.
+ */
+export const VERIFICATION_DECISION: Record<
+  VerificationDecision,
+  { labelTh: string; tone: 'green' | 'amber' }
+> = {
+  verified: { labelTh: 'รับรองผลการทวนสอบ', tone: 'green' },
+  needs_follow_up: { labelTh: 'รับรองแบบมีเงื่อนไข / ต้องติดตาม', tone: 'amber' },
 };
 
 export const SEMESTER_LABEL: Record<Semester, string> = {

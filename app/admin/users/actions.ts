@@ -9,6 +9,7 @@ export interface UserRolesData {
   isAdmin: boolean;
   directorOf: string[]; // programIds
   assessorOf: string[]; // programIds
+  verifierOf: string[]; // programIds
 }
 
 export type RolesActionResult = { ok: true } | { ok: false; error: string };
@@ -42,6 +43,7 @@ export async function updateUserRoles(
     'roles.isAdmin': roles.isAdmin,
     'roles.directorOf': [...new Set(roles.directorOf)],
     'roles.assessorOf': [...new Set(roles.assessorOf)],
+    'roles.verifierOf': [...new Set(roles.verifierOf)],
     updatedAt: FieldValue.serverTimestamp(),
   });
 
@@ -53,7 +55,12 @@ export async function updateUserRoles(
     entityType: 'users',
     entityId: userId,
     before: null,
-    after: { isAdmin: roles.isAdmin, directorOf: roles.directorOf, assessorOf: roles.assessorOf },
+    after: {
+      isAdmin: roles.isAdmin,
+      directorOf: roles.directorOf,
+      assessorOf: roles.assessorOf,
+      verifierOf: roles.verifierOf,
+    },
   });
 
   revalidatePath('/admin/users');

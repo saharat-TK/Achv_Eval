@@ -10,3 +10,136 @@
     @apply bg-slate-50 text-slate-900 antialiased;
   }
 }
+
+/* App-wide compact density. Most screens use Tailwind utility spacing
+   directly, so these scoped overrides tighten layout consistently without
+   changing each page component. */
+.app-compact .px-6 {
+  padding-left: 1rem;
+  padding-right: 1rem;
+}
+
+.app-compact .px-5 {
+  padding-left: 0.875rem;
+  padding-right: 0.875rem;
+}
+
+.app-compact .px-4 {
+  padding-left: 0.75rem;
+  padding-right: 0.75rem;
+}
+
+.app-compact .px-3 {
+  padding-left: 0.625rem;
+  padding-right: 0.625rem;
+}
+
+.app-compact .py-8 {
+  padding-top: 1.25rem;
+  padding-bottom: 1.25rem;
+}
+
+.app-compact .py-6 {
+  padding-top: 1rem;
+  padding-bottom: 1rem;
+}
+
+.app-compact .py-5 {
+  padding-top: 0.875rem;
+  padding-bottom: 0.875rem;
+}
+
+.app-compact .py-4 {
+  padding-top: 0.75rem;
+  padding-bottom: 0.75rem;
+}
+
+.app-compact .py-3 {
+  padding-top: 0.5rem;
+  padding-bottom: 0.5rem;
+}
+
+.app-compact .py-2 {
+  padding-top: 0.375rem;
+  padding-bottom: 0.375rem;
+}
+
+.app-compact .p-10 {
+  padding: 1.5rem;
+}
+
+.app-compact .p-8 {
+  padding: 1.5rem;
+}
+
+.app-compact .p-6 {
+  padding: 1rem;
+}
+
+.app-compact .p-5 {
+  padding: 1rem;
+}
+
+.app-compact .p-4 {
+  padding: 0.875rem;
+}
+
+.app-compact .p-3 {
+  padding: 0.625rem;
+}
+
+.app-compact .mt-8 {
+  margin-top: 1.25rem;
+}
+
+.app-compact .mt-6 {
+  margin-top: 1rem;
+}
+
+.app-compact .mt-4 {
+  margin-top: 0.75rem;
+}
+
+.app-compact .mt-3 {
+  margin-top: 0.5rem;
+}
+
+.app-compact .mt-2 {
+  margin-top: 0.375rem;
+}
+
+.app-compact .gap-6 {
+  gap: 1rem;
+}
+
+.app-compact .gap-5 {
+  gap: 0.875rem;
+}
+
+.app-compact .gap-4 {
+  gap: 0.75rem;
+}
+
+.app-compact .gap-3 {
+  gap: 0.5rem;
+}
+
+.app-compact .space-y-6 > :not([hidden]) ~ :not([hidden]) {
+  margin-top: 1rem;
+}
+
+.app-compact .space-y-5 > :not([hidden]) ~ :not([hidden]) {
+  margin-top: 0.875rem;
+}
+
+.app-compact .space-y-4 > :not([hidden]) ~ :not([hidden]) {
+  margin-top: 0.75rem;
+}
+
+.app-compact .space-y-3 > :not([hidden]) ~ :not([hidden]) {
+  margin-top: 0.5rem;
+}
+
+.app-compact .rounded-xl {
+  border-radius: 0.5rem;
+}

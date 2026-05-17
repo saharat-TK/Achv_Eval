@@ -9,11 +9,13 @@ function roleSummary(roles: {
   isAdmin: boolean;
   directorOf?: string[];
   assessorOf?: string[];
+  verifierOf?: string[];
 }): string {
   const parts: string[] = [];
   if (roles.isAdmin) parts.push('ผู้ดูแลระบบ');
   if (roles.directorOf?.length) parts.push(`ประธานหลักสูตร (${roles.directorOf.length})`);
   if (roles.assessorOf?.length) parts.push(`ผู้ทวนสอบ (${roles.assessorOf.length})`);
+  if (roles.verifierOf?.length) parts.push(`กรรมการรับรองผล (${roles.verifierOf.length})`);
   return parts.length ? parts.join(' · ') : '—';
 }
 
@@ -29,7 +31,7 @@ export default async function AdminUsersPage() {
     <div>
       <h1 className="text-xl font-semibold text-slate-800">ผู้ใช้งานและสิทธิ์</h1>
       <p className="mt-1 text-sm text-slate-500">
-        กำหนดสิทธิ์ผู้ดูแลระบบ ประธานหลักสูตร และผู้ทวนสอบ
+        กำหนดสิทธิ์ผู้ดูแลระบบ ประธานหลักสูตร ผู้ทวนสอบ และกรรมการรับรองผล
         (สิทธิ์อาจารย์ผู้รับผิดชอบรายวิชากำหนดที่หน้ารายวิชาที่เปิดสอน)
       </p>
 

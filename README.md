@@ -43,7 +43,9 @@ Late Phase 3 (stabilization) — **in progress**
 - [x] Phase 3B-2: offering management — lecturer assignment & clone-from-previous
 - [x] Phase 3C: user & role management
 - [ ] Phase 3D: end-to-end validation, lint/build gate, deployment checklist ([docs/PHASE3_VALIDATION.md](docs/PHASE3_VALIDATION.md))
-- [ ] Phase 4: verification committee flow (final sign-off)
+- [x] Phase 4A: verification committee role, status model, read-only queue
+- [x] Phase 4B-1: verification decision form, final sign-off, status transition
+- [ ] Phase 4B-2: final verification PDF
 - [ ] Phase 5: executive dashboard (school-wide analytics)
 - [ ] Phase 6: notifications (email & in-app alerts)
 - [ ] Phase 7: hardening & load testing
@@ -186,6 +188,7 @@ app/
   lecturer/                           Lecturer workspace (Phase 1)
   assessor/                           Assessor review and sign-off flow (Phase 2)
   admin/                              Program, course, offering, and user management (Phase 3)
+  verification/                       Verification committee queue and detail shell (Phase 4)
 
 components/                           Shared UI (StatusBadge, AnalyzeCoursePanel…)
 
@@ -195,6 +198,7 @@ lib/
     admin.ts                          Admin SDK (lazy init)
     auth-server.ts                    Session verification helpers
   data/offerings.ts                   Firestore data-access layer
+  data/verifications.ts               Final verification queue helpers
   types/models.ts                     Firestore document types + rubric scoring
   constants.ts                        Status labels, document slots
   data/                               Firestore data-access helpers

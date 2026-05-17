@@ -22,7 +22,12 @@ export type PloDomain =
   | 'skill';
 export type CourseType = 'theory' | 'theory_practice' | 'practice' | 'field' | 's_u';
 export type Semester = '1' | '2' | '3'; // 3 = summer
-export type AppRole = 'admin' | 'program_director' | 'assessor' | 'corresponding_lecturer';
+export type AppRole =
+  | 'admin'
+  | 'program_director'
+  | 'assessor'
+  | 'verification_committee'
+  | 'corresponding_lecturer';
 /**
  * Categories of source document a lecturer submits for analysis.
  * NOTE: these files are transient — they are streamed to Gemini and then
@@ -48,6 +53,9 @@ export type OfferingStatus =
   | 'ai_complete'
   | 'assessor_review'
   | 'assessed'
+  | 'verification_review'
+  | 'verified'
+  | 'needs_follow_up'
   | 'pending_review_next_semester'
   | 'implemented'
   | 'not_implemented';
@@ -58,6 +66,7 @@ export type ImplementationDecision =
   | 'implemented'
   | 'not_implemented'
   | 'partially_implemented';
+export type VerificationDecision = 'verified' | 'needs_follow_up';
 
 // ----- users/{uid} ---------------------------------------------------
 export interface UserDoc {
@@ -76,6 +85,7 @@ export interface UserDoc {
     isAdmin: boolean;
     directorOf: string[]; // programIds
     assessorOf: string[]; // programIds
+    verifierOf: string[]; // programIds
   };
   createdAt: Ts;
   updatedAt: Ts;
@@ -220,6 +230,25 @@ export interface AssessmentDoc {
   isLocked: boolean;
   followUpStatus: 'pending_review_next_semester' | 'implemented' | 'not_implemented' | null;
 
+  createdAt: Ts;
+  updatedAt: Ts;
+}
+
+// ----- offerings/{id}/verifications/{verificationId} ----------------
+export interface VerificationDoc {
+  offeringId: string;
+  programId: string; // denormalized for rules
+  aiReportId: string | null;
+  assessmentId: string | null;
+  verifierId: string;
+  verifierName: string;
+  decision: VerificationDecision;
+  committeeNotes: string | null;
+  requiredActions: string | null;
+  finalPdfStoragePath: string | null;
+  finalPdfUrl: string | null;
+  signedAt: Ts | null;
+  isLocked: boolean;
   createdAt: Ts;
   updatedAt: Ts;
 }

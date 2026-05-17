@@ -65,8 +65,11 @@ export async function POST(request: NextRequest) {
   }
   const offering = offeringSnap.data()!;
 
-  // 4. Authorize: caller must be an assessor of the offering's program
-  if (!profile.roles.assessorOf.includes(offering.programId)) {
+  // 4. Authorize: caller must be an assessor or committee member of the program
+  const canReview =
+    profile.roles.assessorOf.includes(offering.programId) ||
+    (profile.roles.verifierOf ?? []).includes(offering.programId);
+  if (!canReview) {
     return NextResponse.json({ error: 'not_authorized' }, { status: 403 });
   }
 

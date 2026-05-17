@@ -19,50 +19,58 @@ export default async function AdminLayout({
 
   return (
     <div className="min-h-screen">
-      <header className="border-b border-slate-200 bg-white">
-        <div className="mx-auto max-w-7xl px-6 py-3 flex items-center justify-between">
-          <Link href="/admin" className="flex flex-col">
-            <span className="text-sm font-semibold text-mfu-primary">
-              ระบบประเมินและทวนสอบรายวิชา
-            </span>
-            <span className="text-xs text-slate-500">
-              พื้นที่ทำงานผู้ดูแลระบบ / ประธานหลักสูตร
-            </span>
-          </Link>
-          <div className="flex items-center gap-4">
-            <div className="text-right">
-              <div className="text-sm text-slate-700">{profile.nameTh}</div>
-              <div className="text-xs text-slate-400">
-                {profile.roles.isAdmin ? 'ผู้ดูแลระบบ' : 'ประธานหลักสูตร'}
-              </div>
-            </div>
-            <SignOutButton />
-          </div>
-        </div>
-      </header>
-
-      <nav className="border-b border-slate-200 bg-white">
-        <div className="mx-auto max-w-7xl px-6">
-          <div className="flex gap-6 text-sm">
-            <Link
-              href="/admin"
-              className="border-b-2 border-transparent py-3 text-slate-600 hover:border-mfu-primary hover:text-mfu-primary"
-            >
-              หลักสูตร
+      <div className="sticky top-0 z-50 bg-white shadow-sm">
+        <header className="border-b border-slate-200">
+          <div className="mx-auto max-w-5xl px-6 py-3 flex items-center justify-between">
+            <Link href="/admin" className="flex flex-col">
+              <span className="text-sm font-semibold text-mfu-primary">
+                ระบบประเมินและทวนสอบรายวิชา
+              </span>
+              <span className="text-xs text-slate-500">
+                พื้นที่ทำงานผู้ดูแลระบบ / ประธานหลักสูตร
+              </span>
             </Link>
-            {profile.roles.isAdmin && (
+            <div className="flex items-center gap-4">
+              <div className="text-right">
+                <div className="text-sm text-slate-700">{profile.nameTh}</div>
+                <div className="text-xs text-slate-400">
+                  {profile.roles.isAdmin ? 'ผู้ดูแลระบบ' : 'ประธานหลักสูตร'}
+                </div>
+              </div>
+              <SignOutButton />
+            </div>
+          </div>
+        </header>
+
+        <nav className="border-b border-slate-200">
+          <div className="mx-auto max-w-5xl px-6">
+            <div className="flex gap-6 text-sm">
               <Link
-                href="/admin/users"
+                href="/admin"
                 className="border-b-2 border-transparent py-3 text-slate-600 hover:border-mfu-primary hover:text-mfu-primary"
               >
-                ผู้ใช้งานและสิทธิ์
+                หลักสูตร
               </Link>
-            )}
+              <Link
+                href="/verification"
+                className="border-b-2 border-transparent py-3 text-slate-600 hover:border-mfu-primary hover:text-mfu-primary"
+              >
+                รับรองผล
+              </Link>
+              {profile.roles.isAdmin && (
+                <Link
+                  href="/admin/users"
+                  className="border-b-2 border-transparent py-3 text-slate-600 hover:border-mfu-primary hover:text-mfu-primary"
+                >
+                  ผู้ใช้งานและสิทธิ์
+                </Link>
+              )}
+            </div>
           </div>
-        </div>
-      </nav>
+        </nav>
+      </div>
 
-      <main className="mx-auto max-w-7xl px-6 py-8">{children}</main>
+      <main className="mx-auto max-w-5xl px-6 py-8">{children}</main>
     </div>
   );
 }

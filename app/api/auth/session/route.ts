@@ -58,7 +58,7 @@ export async function POST(request: NextRequest) {
         nameTh: displayName,
         nameEn: displayName,
         isActive: true,
-        roles: { isAdmin: false, directorOf: [], assessorOf: [] },
+        roles: { isAdmin: false, directorOf: [], assessorOf: [], verifierOf: [] },
         createdAt: FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp(),
       });

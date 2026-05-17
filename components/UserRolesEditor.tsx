@@ -25,6 +25,7 @@ export default function UserRolesEditor({
   const [isAdmin, setIsAdmin] = useState(initial.isAdmin);
   const [directorOf, setDirectorOf] = useState<string[]>(initial.directorOf);
   const [assessorOf, setAssessorOf] = useState<string[]>(initial.assessorOf);
+  const [verifierOf, setVerifierOf] = useState<string[]>(initial.verifierOf);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
@@ -35,7 +36,12 @@ export default function UserRolesEditor({
   async function save() {
     setBusy(true);
     setMsg(null);
-    const res = await updateUserRoles(userId, { isAdmin, directorOf, assessorOf });
+    const res = await updateUserRoles(userId, {
+      isAdmin,
+      directorOf,
+      assessorOf,
+      verifierOf,
+    });
     setBusy(false);
     if (res.ok) {
       setMsg({ ok: true, text: 'บันทึกสิทธิ์เรียบร้อย' });
@@ -81,6 +87,15 @@ export default function UserRolesEditor({
         programs={programs}
         selected={assessorOf}
         onToggle={(id) => setAssessorOf((l) => toggle(l, id))}
+      />
+
+      {/* Verification committee */}
+      <RoleProgramPicker
+        title="คณะกรรมการรับรองผล"
+        hint="ตรวจรับรองผลหลังผู้ทวนสอบลงนาม และกำหนดรายการที่ต้องติดตาม"
+        programs={programs}
+        selected={verifierOf}
+        onToggle={(id) => setVerifierOf((l) => toggle(l, id))}
       />
 
       {msg && (
