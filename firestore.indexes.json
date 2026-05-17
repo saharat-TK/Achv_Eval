@@ -49,6 +49,17 @@
       ]
     },
     {
+      "comment": "Assessor inbox (descending) — AssessorOfferingsTable query order",
+      "collectionGroup": "offerings",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "programId", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "academicYear", "order": "DESCENDING" },
+        { "fieldPath": "semester", "order": "DESCENDING" }
+      ]
+    },
+    {
       "comment": "Unread notifications for a recipient, newest first",
       "collectionGroup": "notifications",
       "queryScope": "COLLECTION",
