@@ -1,6 +1,15 @@
 {
   "indexes": [
     {
+      "comment": "Courses of a program, ordered by code",
+      "collectionGroup": "courses",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "programId", "order": "ASCENDING" },
+        { "fieldPath": "code", "order": "ASCENDING" }
+      ]
+    },
+    {
       "comment": "Offerings list for a program in a given semester",
       "collectionGroup": "offerings",
       "queryScope": "COLLECTION",
@@ -37,6 +46,17 @@
         { "fieldPath": "status", "order": "ASCENDING" },
         { "fieldPath": "academicYear", "order": "ASCENDING" },
         { "fieldPath": "semester", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "comment": "Assessor inbox (descending) — AssessorOfferingsTable query order",
+      "collectionGroup": "offerings",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "programId", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "academicYear", "order": "DESCENDING" },
+        { "fieldPath": "semester", "order": "DESCENDING" }
       ]
     },
     {
