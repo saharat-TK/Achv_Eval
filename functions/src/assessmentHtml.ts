@@ -78,6 +78,19 @@ export function buildCombinedReportHtml(args: {
     ? `<ul>${aiResult.criticalIssues.map((c) => `<li>${esc(c)}</li>`).join('')}</ul>`
     : '<p class="muted">ไม่พบประเด็นวิกฤต</p>';
 
+  const aiV = aiResult.section4Verification;
+  const aiRubricRows = aiV.items
+    .map(
+      (it) => `
+      <tr>
+        <td>${esc(it.labelTh)}</td>
+        ${scoreCells(it.score)}
+        <td>${esc(it.strengths)}</td>
+        <td>${esc(it.improvements)}</td>
+      </tr>`,
+    )
+    .join('');
+
   return `<!doctype html>
 <html lang="th">
 <head>
@@ -128,6 +141,30 @@ export function buildCombinedReportHtml(args: {
 <div>${md(aiResult.section2Quality)}</div>
 <h3>ร่าง มคอ.3 ฉบับปรับปรุง</h3>
 <div>${md(aiResult.section3RevisedTqf3)}</div>
+
+<h3>แบบรายงานผลการทวนสอบผลลัพธ์การเรียนรู้รายวิชา (ประเมินโดยระบบ AI)</h3>
+<table>
+  <thead>
+    <tr>
+      <th>หัวข้อการพิจารณา</th>
+      <th class="score">3</th><th class="score">2</th><th class="score">1</th>
+      <th>ข้อดี</th><th>ข้อพัฒนา</th>
+    </tr>
+  </thead>
+  <tbody>
+    ${aiRubricRows}
+    <tr>
+      <td colspan="4"><strong>คะแนนรวม</strong></td>
+      <td colspan="2"><strong>${aiV.totalScore} / ${aiV.maxScore} (${aiV.percent}%)</strong></td>
+    </tr>
+  </tbody>
+</table>
+<div class="result-box">
+  <strong>สรุปผลการทวนสอบ (ระบบ AI):</strong>
+  &nbsp; ${aiV.band === 'improve' ? '☑' : '☐'} ควรปรับปรุง (&lt;70%)
+  &nbsp; ${aiV.band === 'good' ? '☑' : '☐'} ดี (70–79%)
+  &nbsp; ${aiV.band === 'excellent' ? '☑' : '☐'} ดีเยี่ยม (80–100%)
+</div>
 
 <h2>ส่วนที่ 2 — ผลการทวนสอบโดยผู้ทวนสอบ <span class="official">ฉบับทางการ</span></h2>
 <table>
