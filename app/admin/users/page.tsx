@@ -1,0 +1,73 @@
+import Link from 'next/link';
+import { redirect } from 'next/navigation';
+import { getCurrentProfile } from '@/lib/firebase/auth-server';
+import { getAllUsers } from '@/lib/data/users';
+
+export const dynamic = 'force-dynamic';
+
+function roleSummary(roles: {
+  isAdmin: boolean;
+  directorOf?: string[];
+  assessorOf?: string[];
+}): string {
+  const parts: string[] = [];
+  if (roles.isAdmin) parts.push('ผู้ดูแลระบบ');
+  if (roles.directorOf?.length) parts.push(`ประธานหลักสูตร (${roles.directorOf.length})`);
+  if (roles.assessorOf?.length) parts.push(`ผู้ทวนสอบ (${roles.assessorOf.length})`);
+  return parts.length ? parts.join(' · ') : '—';
+}
+
+export default async function AdminUsersPage() {
+  const profile = await getCurrentProfile();
+  if (!profile) redirect('/login');
+  // User & role management is admin-only.
+  if (!profile.roles.isAdmin) redirect('/admin');
+
+  const users = await getAllUsers();
+
+  return (
+    <div>
+      <h1 className="text-xl font-semibold text-slate-800">ผู้ใช้งานและสิทธิ์</h1>
+      <p className="mt-1 text-sm text-slate-500">
+        กำหนดสิทธิ์ผู้ดูแลระบบ ประธานหลักสูตร และผู้ทวนสอบ
+        (สิทธิ์อาจารย์ผู้รับผิดชอบรายวิชากำหนดที่หน้ารายวิชาที่เปิดสอน)
+      </p>
+
+      {users.length === 0 ? (
+        <div className="mt-8 rounded-xl border border-dashed border-slate-300 p-10 text-center text-sm text-slate-500">
+          ยังไม่มีผู้ใช้ — ผู้ใช้จะปรากฏหลังเข้าสู่ระบบครั้งแรก
+        </div>
+      ) : (
+        <div className="mt-6 overflow-hidden rounded-xl border border-slate-200 bg-white">
+          <table className="w-full text-sm">
+            <thead className="bg-slate-50 text-left text-xs text-slate-500">
+              <tr>
+                <th className="px-4 py-3 font-medium">ชื่อ</th>
+                <th className="px-4 py-3 font-medium">อีเมล</th>
+                <th className="px-4 py-3 font-medium">สิทธิ์ปัจจุบัน</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {users.map((u) => (
+                <tr key={u.id} className="hover:bg-slate-50">
+                  <td className="px-4 py-3">
+                    <Link
+                      href={`/admin/users/${u.id}`}
+                      className="font-medium text-mfu-primary hover:underline"
+                    >
+                      {u.nameTh || '(ไม่มีชื่อ)'}
+                    </Link>
+                  </td>
+                  <td className="px-4 py-3 text-slate-600">{u.email}</td>
+                  <td className="px-4 py-3 text-slate-600">
+                    {roleSummary(u.roles)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}

@@ -1,0 +1,62 @@
+'use server';
+
+import { revalidatePath } from 'next/cache';
+import { FieldValue } from 'firebase-admin/firestore';
+import { getAdminDb } from '@/lib/firebase/admin';
+import { getSessionUser, getCurrentProfile } from '@/lib/firebase/auth-server';
+
+export interface UserRolesData {
+  isAdmin: boolean;
+  directorOf: string[]; // programIds
+  assessorOf: string[]; // programIds
+}
+
+export type RolesActionResult = { ok: true } | { ok: false; error: string };
+
+/**
+ * Updates a user's role assignments. Admin only.
+ *
+ * Guards against an admin removing their own admin rights (which would
+ * lock them out of this page).
+ */
+export async function updateUserRoles(
+  userId: string,
+  roles: UserRolesData,
+): Promise<RolesActionResult> {
+  const actor = await getSessionUser();
+  const profile = await getCurrentProfile();
+  if (!actor || !profile?.roles.isAdmin) {
+    return { ok: false, error: 'เฉพาะผู้ดูแลระบบเท่านั้นที่จัดการสิทธิ์ผู้ใช้ได้' };
+  }
+  if (userId === actor.uid && !roles.isAdmin) {
+    return { ok: false, error: 'ไม่สามารถถอนสิทธิ์ผู้ดูแลระบบของบัญชีตนเองได้' };
+  }
+
+  const db = getAdminDb();
+  const userRef = db.collection('users').doc(userId);
+  if (!(await userRef.get()).exists) {
+    return { ok: false, error: 'ไม่พบผู้ใช้' };
+  }
+
+  await userRef.update({
+    'roles.isAdmin': roles.isAdmin,
+    'roles.directorOf': [...new Set(roles.directorOf)],
+    'roles.assessorOf': [...new Set(roles.assessorOf)],
+    updatedAt: FieldValue.serverTimestamp(),
+  });
+
+  await db.collection('auditLog').add({
+    occurredAt: FieldValue.serverTimestamp(),
+    actorId: actor.uid,
+    actorEmail: actor.email ?? null,
+    action: 'user_roles_updated',
+    entityType: 'users',
+    entityId: userId,
+    before: null,
+    after: { isAdmin: roles.isAdmin, directorOf: roles.directorOf, assessorOf: roles.assessorOf },
+  });
+
+  revalidatePath('/admin/users');
+  revalidatePath(`/admin/users/${userId}`);
+  return { ok: true };
+}

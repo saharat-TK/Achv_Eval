@@ -38,7 +38,7 @@ Phase 0 (foundation) — **in progress**
 - [x] Phase 3A: admin workspace & program management (PLO editor)
 - [x] Phase 3B-1: course management & CSV batch upload
 - [x] Phase 3B-2: offering management — lecturer assignment & clone-from-previous
-- [ ] Phase 3C: user & role management
+- [x] Phase 3C: user & role management
 - [ ] Phase 4: verification committee flow (final sign-off)
 - [ ] Phase 5: executive dashboard (school-wide analytics)
 - [ ] Phase 6: notifications (email & in-app alerts)
