@@ -50,6 +50,14 @@ export default async function AdminLayout({
             >
               หลักสูตร
             </Link>
+            {profile.roles.isAdmin && (
+              <Link
+                href="/admin/users"
+                className="border-b-2 border-transparent py-3 text-slate-600 hover:border-mfu-primary hover:text-mfu-primary"
+              >
+                ผู้ใช้งานและสิทธิ์
+              </Link>
+            )}
           </div>
         </div>
       </nav>

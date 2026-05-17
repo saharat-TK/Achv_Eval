@@ -46,6 +46,8 @@ export default function LoginPage() {
       const message = e instanceof Error ? e.message : 'unknown';
       if (message === 'domain_not_allowed') {
         setError('เฉพาะบัญชีอีเมล @mfu.ac.th เท่านั้น');
+      } else if (message === 'account_deactivated') {
+        setError('บัญชีนี้ถูกปิดใช้งาน กรุณาติดต่อผู้ดูแลระบบ');
       } else if (message === 'session_failed') {
         setError('สร้างเซสชันไม่สำเร็จ กรุณาลองใหม่');
       } else {
