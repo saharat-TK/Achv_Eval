@@ -19,7 +19,7 @@ export default async function AdminLayout({
 
   return (
     <div className="min-h-screen">
-      <div className="sticky top-0 z-50 bg-white shadow-sm">
+      <div className="sticky top-0 z-50 bg-white shadow-sm print:hidden">
         <header className="border-b border-slate-200">
           <div className="mx-auto max-w-5xl px-6 py-3 flex items-center justify-between">
             <Link href="/admin" className="flex flex-col">

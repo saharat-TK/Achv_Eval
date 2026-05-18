@@ -50,7 +50,7 @@ Phase 5A (dashboard foundation) — **in progress**
   - [x] Phase 5A: dashboard foundation, role-scoped metrics, attention list
   - [x] Phase 5B: cross-semester trend charts (score, completion, band mix)
   - [x] Phase 5C: recurring-weakness analysis (rubric items low across courses)
-  - [x] Phase 5D: QA export of the dashboard (CSV + PDF)
+  - [x] Phase 5D: QA export of the dashboard (CSV, server PDF, print view)
 - [ ] Phase 6: notifications (email & in-app alerts)
 - [ ] Phase 7: hardening & load testing
 

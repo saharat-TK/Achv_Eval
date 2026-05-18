@@ -100,6 +100,7 @@ export default async function AdminDashboardPage({
   if (selectedSemester) exportParams.set('semester', selectedSemester);
   const exportQuery = exportParams.toString();
   const exportHref = `/api/dashboard/export${exportQuery ? `?${exportQuery}` : ''}`;
+  const printHref = `/admin/dashboard/print${exportQuery ? `?${exportQuery}` : ''}`;
 
   const reportContext = {
     programLabel: programFilter
@@ -131,6 +132,12 @@ export default async function AdminDashboardPage({
           >
             ส่งออก CSV
           </a>
+          <Link
+            href={printHref}
+            className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-mfu-primary hover:bg-slate-50"
+          >
+            มุมมองพิมพ์
+          </Link>
           <Link
             href="/verification"
             className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
