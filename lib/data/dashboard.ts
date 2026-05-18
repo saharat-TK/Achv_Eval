@@ -48,8 +48,23 @@ export interface RubricAverage {
   count: number;
 }
 
+/** One (academic year, semester) term in the cross-semester trend. */
+export interface DashboardTrendPoint {
+  termKey: string; // "2568-2"
+  label: string; // "2568/2"
+  academicYear: number;
+  semester: Semester;
+  totalOfferings: number;
+  completionRate: number; // 0–100, assessed ÷ total
+  averagePercentScore: number | null;
+  excellent: number;
+  good: number;
+  improve: number;
+}
+
 export interface ExecutiveDashboardData {
   availableAcademicYears: number[];
+  trend: DashboardTrendPoint[];
   summary: {
     totalPrograms: number;
     totalOfferings: number;
@@ -165,6 +180,52 @@ function assessmentReason(
   return null;
 }
 
+function buildTrend(
+  offerings: OfferingWithId[],
+  assessmentByOffering: Map<string, AssessmentWithId | null>,
+): DashboardTrendPoint[] {
+  const groups = new Map<string, OfferingWithId[]>();
+  for (const offering of offerings) {
+    const key = `${offering.academicYear}-${offering.semester}`;
+    const group = groups.get(key);
+    if (group) group.push(offering);
+    else groups.set(key, [offering]);
+  }
+
+  return [...groups.entries()]
+    .map(([termKey, group]) => {
+      const { academicYear, semester } = group[0];
+      const signed = group
+        .map((offering) => assessmentByOffering.get(offering.id))
+        .filter((a): a is AssessmentWithId => Boolean(a?.isLocked));
+      const assessedCount = group.filter((o) =>
+        ASSESSED_STATUSES.includes(o.status),
+      ).length;
+      const bands: Record<AssessmentBand, number> = {
+        excellent: 0,
+        good: 0,
+        improve: 0,
+      };
+      for (const assessment of signed) bands[assessment.band] += 1;
+      return {
+        termKey,
+        label: `${academicYear}/${semester}`,
+        academicYear,
+        semester,
+        totalOfferings: group.length,
+        completionRate: Math.round((assessedCount / group.length) * 1000) / 10,
+        averagePercentScore: average(signed.map((a) => a.percentScore)),
+        excellent: bands.excellent,
+        good: bands.good,
+        improve: bands.improve,
+      };
+    })
+    .sort(
+      (a, b) =>
+        a.academicYear - b.academicYear || a.semester.localeCompare(b.semester),
+    );
+}
+
 function sortOfferings(a: OfferingWithId, b: OfferingWithId): number {
   return (
     b.academicYear - a.academicYear ||
@@ -229,8 +290,12 @@ export async function getExecutiveDashboardData(
   const visiblePrograms = filters.programId
     ? programs.filter((program) => program.id === filters.programId)
     : programs;
-  const offerings = allOfferings.filter((offering) => {
-    if (filters.programId && offering.programId !== filters.programId) return false;
+  // Program-scoped (but every term): the basis for the cross-semester trend.
+  const programScopedOfferings = filters.programId
+    ? allOfferings.filter((offering) => offering.programId === filters.programId)
+    : allOfferings;
+  // Snapshot scope: also constrained by the year/semester filters.
+  const offerings = programScopedOfferings.filter((offering) => {
     if (
       filters.academicYear &&
       offering.academicYear !== filters.academicYear
@@ -240,19 +305,27 @@ export async function getExecutiveDashboardData(
     if (filters.semester && offering.semester !== filters.semester) return false;
     return true;
   });
-  const assessments = await Promise.all(offerings.map(getAssessmentForOffering));
-  const assessmentByOffering = new Map(
-    offerings.map((offering, index) => [offering.id, assessments[index]]),
+  const scopedAssessments = await Promise.all(
+    programScopedOfferings.map(getAssessmentForOffering),
   );
+  const assessmentByOffering = new Map(
+    programScopedOfferings.map((offering, index) => [
+      offering.id,
+      scopedAssessments[index],
+    ]),
+  );
+  const trend = buildTrend(programScopedOfferings, assessmentByOffering);
 
   const statusCounts: Partial<Record<OfferingStatus, number>> = {};
   for (const offering of offerings) {
     statusCounts[offering.status] = (statusCounts[offering.status] ?? 0) + 1;
   }
 
-  const signedAssessments = assessments.filter(
-    (assessment): assessment is AssessmentWithId => Boolean(assessment?.isLocked),
-  );
+  const signedAssessments = offerings
+    .map((offering) => assessmentByOffering.get(offering.id))
+    .filter((assessment): assessment is AssessmentWithId =>
+      Boolean(assessment?.isLocked),
+    );
   const percentScores = signedAssessments.map((assessment) => assessment.percentScore);
   const implementedCount = offerings.filter((o) => o.status === 'implemented').length;
   const reviewedImplementationCount = offerings.filter((o) =>
@@ -332,6 +405,7 @@ export async function getExecutiveDashboardData(
 
   return {
     availableAcademicYears,
+    trend,
     summary: {
       totalPrograms: visiblePrograms.length,
       totalOfferings: offerings.length,

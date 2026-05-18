@@ -48,6 +48,7 @@ Phase 5A (dashboard foundation) — **in progress**
 - [x] Phase 4B-2: final verification PDF
 - [ ] Phase 5: executive dashboard (school-wide analytics)
   - [x] Phase 5A: dashboard foundation, role-scoped metrics, attention list
+  - [x] Phase 5B: cross-semester trend charts (score, completion, band mix)
 - [ ] Phase 6: notifications (email & in-app alerts)
 - [ ] Phase 7: hardening & load testing
 
