@@ -76,24 +76,14 @@ export default async function OfferingDetailPage({
 
       {/* AI reports — live-updating */}
       <section className="mt-8">
-        <div className="flex items-center justify-between gap-3">
-          <h2 className="text-sm font-semibold text-slate-700">
-            รายงานการวิเคราะห์
-          </h2>
-          {assessment?.signedPdfUrl ? (
-            <a
-              href={assessment.signedPdfUrl}
-              className="text-sm font-medium text-mfu-primary hover:underline"
-            >
-              ดาวน์โหลดรายงานรวม AI + ผลทวนสอบ
-            </a>
-          ) : assessment ? (
-            <span className="text-xs text-slate-400">
-              รายงานรวมกำลังรอการสร้าง
-            </span>
-          ) : null}
-        </div>
-        <AiReportsList offeringId={offering.id} />
+        <h2 className="text-sm font-semibold text-slate-700">
+          รายงานการวิเคราะห์
+        </h2>
+        <AiReportsList
+          offeringId={offering.id}
+          combinedReportUrl={assessment?.signedPdfUrl ?? null}
+          combinedReportPending={Boolean(assessment && !assessment.signedPdfUrl)}
+        />
       </section>
     </div>
   );

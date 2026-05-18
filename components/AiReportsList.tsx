@@ -51,9 +51,13 @@ const BAND_TH: Record<string, string> = {
 export default function AiReportsList({
   offeringId,
   scrollBody = false,
+  combinedReportUrl = null,
+  combinedReportPending = false,
 }: {
   offeringId: string;
   scrollBody?: boolean;
+  combinedReportUrl?: string | null;
+  combinedReportPending?: boolean;
 }) {
   const [reports, setReports] = useState<Report[] | null>(null);
 
@@ -148,13 +152,29 @@ export default function AiReportsList({
               <ReportBody out={r.structuredOutput} />
             )}
 
-            {r.reportDownloadUrl && (
-              <a
-                href={r.reportDownloadUrl}
-                className="mt-3 inline-block text-sm text-mfu-primary hover:underline"
-              >
-                ดาวน์โหลดรายงาน PDF
-              </a>
+            {(r.reportDownloadUrl || combinedReportUrl || combinedReportPending) && (
+              <div className="mt-3 flex flex-wrap items-center gap-3 text-sm">
+                {r.reportDownloadUrl && (
+                  <a
+                    href={r.reportDownloadUrl}
+                    className="font-medium text-mfu-primary hover:underline"
+                  >
+                    ดาวน์โหลดรายงาน PDF
+                  </a>
+                )}
+                {combinedReportUrl ? (
+                  <a
+                    href={combinedReportUrl}
+                    className="font-medium text-mfu-primary hover:underline"
+                  >
+                    ดาวน์โหลดรายงานรวมผลทวนสอบ
+                  </a>
+                ) : combinedReportPending ? (
+                  <span className="text-xs text-slate-400">
+                    รายงานรวมกำลังรอการสร้าง
+                  </span>
+                ) : null}
+              </div>
             )}
           </div>
         </div>
