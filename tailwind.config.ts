@@ -13,9 +13,11 @@ const config: Config = {
         sans: ['"Sarabun"', 'system-ui', 'sans-serif'],
       },
       colors: {
+        // Theme tokens — see docs/THEME.md. Names kept as `mfu.*` so the
+        // components using `mfu-primary` re-theme without markup changes.
         mfu: {
-          primary: '#7c1f2e',  // MFU maroon
-          accent:  '#f0b323',  // MFU gold
+          primary: '#00704A',  // Starbucks green
+          accent:  '#1E3932',  // Starbucks house green
         },
       },
     },

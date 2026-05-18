@@ -7,7 +7,9 @@
     font-family: 'Sarabun', system-ui, sans-serif;
   }
   body {
-    @apply bg-slate-50 text-slate-900 antialiased;
+    /* Mint Cream page background — see docs/THEME.md */
+    @apply text-slate-900 antialiased;
+    background-color: #f1f6f3;
   }
 }
 
