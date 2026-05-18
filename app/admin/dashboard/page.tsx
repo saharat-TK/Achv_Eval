@@ -130,13 +130,13 @@ export default async function AdminDashboardPage({
             href={exportHref}
             className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-mfu-primary hover:bg-slate-50"
           >
-            ส่งออก CSV
+            ดาวน์โหลด CSV
           </a>
           <Link
             href={printHref}
             className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-mfu-primary hover:bg-slate-50"
           >
-            มุมมองพิมพ์
+            พิมพ์ Dashboard
           </Link>
           <Link
             href="/verification"

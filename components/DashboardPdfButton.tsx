@@ -74,7 +74,7 @@ export default function DashboardPdfButton({
         disabled={generating}
         className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-mfu-primary hover:bg-slate-50 disabled:opacity-50"
       >
-        {generating ? 'กำลังสร้าง PDF…' : 'ส่งออก PDF'}
+        {generating ? 'กำลังสร้าง PDF…' : 'ดาวน์โหลด PDF'}
       </button>
       {failed && (
         <p className="mt-1 text-xs text-red-600">
