@@ -62,9 +62,32 @@ export interface DashboardTrendPoint {
   improve: number;
 }
 
+/** One course where a rubric item scored at the lowest level. */
+export interface WeaknessCourse {
+  offeringId: string;
+  programId: string;
+  courseCode: string;
+  courseNameTh: string;
+  academicYear: number;
+  semester: Semester;
+  section: string;
+}
+
+/** A rubric item that recurs as a low score across courses. */
+export interface RecurringWeakness {
+  key: keyof AssessmentDoc['scores'];
+  number: string;
+  labelTh: string;
+  lowCount: number; // # signed assessments scoring this item 1
+  scoredCount: number; // # signed assessments where the item is not N/A
+  lowRate: number; // 0–100, lowCount ÷ scoredCount
+  affectedCourses: WeaknessCourse[];
+}
+
 export interface ExecutiveDashboardData {
   availableAcademicYears: number[];
   trend: DashboardTrendPoint[];
+  recurringWeaknesses: RecurringWeakness[];
   summary: {
     totalPrograms: number;
     totalOfferings: number;
@@ -224,6 +247,46 @@ function buildTrend(
       (a, b) =>
         a.academicYear - b.academicYear || a.semester.localeCompare(b.semester),
     );
+}
+
+function buildRecurringWeaknesses(
+  offerings: OfferingWithId[],
+  assessmentByOffering: Map<string, AssessmentWithId | null>,
+): RecurringWeakness[] {
+  return RUBRIC_ITEMS.map((item) => {
+    let scoredCount = 0;
+    const affectedCourses: WeaknessCourse[] = [];
+    for (const offering of offerings) {
+      const assessment = assessmentByOffering.get(offering.id);
+      if (!assessment?.isLocked) continue;
+      const score = assessment.scores[item.key];
+      if (score === undefined || score === 'na') continue;
+      scoredCount += 1;
+      if (score === 1) {
+        affectedCourses.push({
+          offeringId: offering.id,
+          programId: offering.programId,
+          courseCode: offering.courseCode,
+          courseNameTh: offering.courseNameTh,
+          academicYear: offering.academicYear,
+          semester: offering.semester,
+          section: offering.section,
+        });
+      }
+    }
+    return {
+      ...item,
+      lowCount: affectedCourses.length,
+      scoredCount,
+      lowRate:
+        scoredCount === 0
+          ? 0
+          : Math.round((affectedCourses.length / scoredCount) * 1000) / 10,
+      affectedCourses,
+    };
+  })
+    .filter((weakness) => weakness.lowCount > 0)
+    .sort((a, b) => b.lowCount - a.lowCount || b.lowRate - a.lowRate);
 }
 
 function sortOfferings(a: OfferingWithId, b: OfferingWithId): number {
@@ -406,6 +469,7 @@ export async function getExecutiveDashboardData(
   return {
     availableAcademicYears,
     trend,
+    recurringWeaknesses: buildRecurringWeaknesses(offerings, assessmentByOffering),
     summary: {
       totalPrograms: visiblePrograms.length,
       totalOfferings: offerings.length,

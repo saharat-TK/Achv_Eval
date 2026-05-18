@@ -349,6 +349,49 @@ export default async function AdminDashboardPage({
       <section className="mt-6 rounded-lg border border-slate-200 bg-white">
         <div className="border-b border-slate-100 px-4 py-3">
           <h2 className="text-base font-semibold text-slate-800">
+            จุดอ่อนที่พบซ้ำ
+          </h2>
+          <p className="mt-0.5 text-xs text-slate-500">
+            หัวข้อการทวนสอบที่ได้คะแนนระดับ &ldquo;ควรปรับปรุง&rdquo; (1 คะแนน)
+            พร้อมรายวิชาที่เกี่ยวข้อง
+          </p>
+        </div>
+        {data.recurringWeaknesses.length === 0 ? (
+          <div className="p-6 text-sm text-slate-500">
+            ไม่พบหัวข้อที่ได้คะแนนระดับควรปรับปรุงในขอบเขตที่เลือก
+          </div>
+        ) : (
+          <div className="divide-y divide-slate-100">
+            {data.recurringWeaknesses.map((weakness) => (
+              <div key={weakness.key} className="px-4 py-3">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-sm font-medium text-slate-700">
+                    {weakness.number}. {weakness.labelTh}
+                  </span>
+                  <span className="shrink-0 text-sm font-semibold text-amber-700">
+                    {weakness.lowCount} รายวิชา · {weakness.lowRate}%
+                  </span>
+                </div>
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {weakness.affectedCourses.map((course) => (
+                    <Link
+                      key={course.offeringId}
+                      href={`/admin/programs/${course.programId}/offerings/${course.offeringId}`}
+                      className="rounded-md bg-slate-100 px-2 py-0.5 text-xs text-slate-600 hover:bg-slate-200"
+                    >
+                      {course.courseCode} ({course.academicYear}/{course.semester})
+                    </Link>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+
+      <section className="mt-6 rounded-lg border border-slate-200 bg-white">
+        <div className="border-b border-slate-100 px-4 py-3">
+          <h2 className="text-base font-semibold text-slate-800">
             รายการที่ควรติดตาม
           </h2>
         </div>
