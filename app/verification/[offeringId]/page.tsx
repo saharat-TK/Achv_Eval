@@ -8,6 +8,7 @@ import {
 import { SEMESTER_LABEL, VERIFICATION_DECISION } from '@/lib/constants';
 import StatusBadge from '@/components/StatusBadge';
 import FinalVerificationForm from '@/components/FinalVerificationForm';
+import FinalReportLink from '@/components/FinalReportLink';
 
 export const dynamic = 'force-dynamic';
 
@@ -92,6 +93,11 @@ export default async function VerificationDetailPage({
             <p className="text-xs text-slate-400">
               บันทึกโดย {latestVerification.verifierName}
             </p>
+            <FinalReportLink
+              offeringId={offering.id}
+              verificationId={latestVerification.id}
+              finalPdfUrl={latestVerification.finalPdfUrl}
+            />
           </div>
         ) : !assessment ? (
           <p className="mt-2 text-sm text-slate-500">

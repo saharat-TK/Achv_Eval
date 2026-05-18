@@ -2,12 +2,24 @@ import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import { getSessionUser } from '@/lib/firebase/auth-server';
 import { getOffering } from '@/lib/data/offerings';
+import { getLatestAssessment } from '@/lib/data/assessments';
 import StatusBadge from '@/components/StatusBadge';
 import AnalyzeCoursePanel from '@/components/AnalyzeCoursePanel';
 import AiReportsList from '@/components/AiReportsList';
 import { SEMESTER_LABEL } from '@/lib/constants';
+import type { OfferingStatus } from '@/lib/types/models';
 
 export const dynamic = 'force-dynamic';
+
+const ASSESSED_STATUSES: OfferingStatus[] = [
+  'assessed',
+  'verification_review',
+  'verified',
+  'needs_follow_up',
+  'pending_review_next_semester',
+  'implemented',
+  'not_implemented',
+];
 
 export default async function OfferingDetailPage({
   params,
@@ -23,6 +35,10 @@ export default async function OfferingDetailPage({
   if (!offering || offering.lecturerId !== user.uid) {
     notFound();
   }
+
+  const assessment = ASSESSED_STATUSES.includes(offering.status)
+    ? await getLatestAssessment(offering.id)
+    : null;
 
   return (
     <div>
@@ -60,11 +76,14 @@ export default async function OfferingDetailPage({
 
       {/* AI reports — live-updating */}
       <section className="mt-8">
-        <h2 className="text-sm font-semibold text-slate-700">รายงานการวิเคราะห์</h2>
-        <AiReportsList offeringId={offering.id} />
-        <p className="mt-2 text-xs text-slate-400">
-          การสร้างรายงาน PDF และจัดเก็บจะเปิดใช้งานใน Phase 1C
-        </p>
+        <h2 className="text-sm font-semibold text-slate-700">
+          รายงานการวิเคราะห์
+        </h2>
+        <AiReportsList
+          offeringId={offering.id}
+          combinedReportUrl={assessment?.signedPdfUrl ?? null}
+          combinedReportPending={Boolean(assessment && !assessment.signedPdfUrl)}
+        />
       </section>
     </div>
   );

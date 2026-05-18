@@ -2,8 +2,10 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { httpsCallable } from 'firebase/functions';
 import type { VerificationDecision } from '@/lib/types/models';
 import { VERIFICATION_DECISION } from '@/lib/constants';
+import { getFirebaseAuth, getFirebaseFunctions } from '@/lib/firebase/config';
 
 const DECISION_ORDER: VerificationDecision[] = ['verified', 'needs_follow_up'];
 
@@ -51,7 +53,25 @@ export default function FinalVerificationForm({
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || 'submission_failed');
-      setMessage({ type: 'ok', text: 'บันทึกผลรับรองเรียบร้อย' });
+
+      const verificationId = json.verificationId as string | undefined;
+      setMessage({
+        type: 'ok',
+        text: 'บันทึกผลรับรองเรียบร้อย กำลังสร้างรายงานฉบับสุดท้าย…',
+      });
+      if (verificationId) {
+        try {
+          await getFirebaseAuth().authStateReady();
+          const callable = httpsCallable(
+            getFirebaseFunctions(),
+            'generateFinalVerificationReport',
+            { timeout: 240_000 },
+          );
+          await callable({ offeringId, verificationId });
+        } catch {
+          // Non-fatal: the decision is saved; the report can be regenerated.
+        }
+      }
       router.refresh();
     } catch (e: any) {
       setMessage({ type: 'err', text: e.message || 'เกิดข้อผิดพลาด' });
