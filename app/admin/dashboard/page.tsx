@@ -91,6 +91,15 @@ export default async function AdminDashboardPage({
     (status) => (data.statusCounts[status] ?? 0) > 0,
   );
 
+  const exportParams = new URLSearchParams();
+  if (programFilter) exportParams.set('programId', programFilter);
+  if (selectedAcademicYear) {
+    exportParams.set('academicYear', String(selectedAcademicYear));
+  }
+  if (selectedSemester) exportParams.set('semester', selectedSemester);
+  const exportQuery = exportParams.toString();
+  const exportHref = `/api/dashboard/export${exportQuery ? `?${exportQuery}` : ''}`;
+
   return (
     <div>
       <div className="flex items-start justify-between gap-4">
@@ -102,12 +111,20 @@ export default async function AdminDashboardPage({
             ภาพรวมรายวิชา คะแนนทวนสอบ และรายการที่ควรติดตามในขอบเขตสิทธิ์ของคุณ
           </p>
         </div>
-        <Link
-          href="/verification"
-          className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
-        >
-          รายการรับรองผล
-        </Link>
+        <div className="flex shrink-0 gap-2">
+          <a
+            href={exportHref}
+            className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-mfu-primary hover:bg-slate-50"
+          >
+            ส่งออก CSV
+          </a>
+          <Link
+            href="/verification"
+            className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+          >
+            รายการรับรองผล
+          </Link>
+        </div>
       </div>
 
       <form
