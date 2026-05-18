@@ -285,7 +285,10 @@ export async function getExecutiveDashboardData(
   const programRows = visiblePrograms.map((program) => {
     const programOfferings = offerings.filter((o) => o.programId === program.id);
     const programScores = programOfferings
-      .map((offering) => assessmentByOffering.get(offering.id)?.percentScore)
+      .map((offering) => {
+        const assessment = assessmentByOffering.get(offering.id);
+        return assessment?.isLocked ? assessment.percentScore : undefined;
+      })
       .filter((score): score is number => typeof score === 'number');
 
     return {
