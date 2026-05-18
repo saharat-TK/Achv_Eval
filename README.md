@@ -23,7 +23,7 @@ See [`docs/FIRESTORE_MODEL.md`](docs/FIRESTORE_MODEL.md) for the data model and
 
 ## Project status
 
-Late Phase 3 (stabilization) — **in progress**
+Phase 5A (dashboard foundation) — **in progress**
 
 - [x] Firebase Auth with Google SSO + `@mfu.ac.th` enforcement
 - [x] Server session cookies + middleware gate
@@ -42,11 +42,12 @@ Late Phase 3 (stabilization) — **in progress**
 - [x] Phase 3B-1: course management & CSV batch upload
 - [x] Phase 3B-2: offering management — lecturer assignment & clone-from-previous
 - [x] Phase 3C: user & role management
-- [ ] Phase 3D: end-to-end validation, lint/build gate, deployment checklist ([docs/PHASE3_VALIDATION.md](docs/PHASE3_VALIDATION.md))
+- [ ] Phase 3D: end-to-end validation, lint/build gate, deployment checklist ([docs/PHASE3_VALIDATION.md](docs/PHASE3_VALIDATION.md)) — automated gate passed 2026-05-18
 - [x] Phase 4A: verification committee role, status model, read-only queue
 - [x] Phase 4B-1: verification decision form, final sign-off, status transition
 - [x] Phase 4B-2: final verification PDF
 - [ ] Phase 5: executive dashboard (school-wide analytics)
+  - [x] Phase 5A: dashboard foundation, role-scoped metrics, attention list
 - [ ] Phase 6: notifications (email & in-app alerts)
 - [ ] Phase 7: hardening & load testing
 

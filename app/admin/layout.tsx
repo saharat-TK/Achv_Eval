@@ -46,6 +46,12 @@ export default async function AdminLayout({
           <div className="mx-auto max-w-5xl px-6">
             <div className="flex gap-6 text-sm">
               <Link
+                href="/admin/dashboard"
+                className="border-b-2 border-transparent py-3 text-slate-600 hover:border-mfu-primary hover:text-mfu-primary"
+              >
+                แดชบอร์ด
+              </Link>
+              <Link
                 href="/admin"
                 className="border-b-2 border-transparent py-3 text-slate-600 hover:border-mfu-primary hover:text-mfu-primary"
               >
