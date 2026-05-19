@@ -23,7 +23,7 @@ See [`docs/FIRESTORE_MODEL.md`](docs/FIRESTORE_MODEL.md) for the data model and
 
 ## Project status
 
-Phase 5A (dashboard foundation) — **in progress**
+Phase 6 (notifications) — **next**. Phases 0–5 complete.
 
 - [x] Firebase Auth with Google SSO + `@mfu.ac.th` enforcement
 - [x] Server session cookies + middleware gate
@@ -32,9 +32,6 @@ Phase 5A (dashboard foundation) — **in progress**
 - [x] Phase 1A: lecturer workspace, dashboard, offering detail
 - [x] Phase 1B: Gemini analysis pipeline (`analyzeCourse` Cloud Function)
 - [x] Phase 1C: report PDF (`generateReportPdf`) → Firebase Storage + log Sheet
-- [x] Phase 2: assessor flow · Phase 3: admin
-- [x] Phase 4: verification — next-semester implementation review
-- [ ] Phase 5: dashboard · Phase 6: notifications · Phase 7: hardening
 - [x] Phase 2A: assessor workspace & inbox
 - [x] Phase 2B: 7-item rubric evaluation form & sign-off
 - [x] Phase 2C: combined report PDF (AI analysis + assessor form) on sign-off
@@ -50,7 +47,7 @@ Phase 5A (dashboard foundation) — **in progress**
   - [x] Phase 5A: dashboard foundation, role-scoped metrics, attention list
   - [x] Phase 5B: cross-semester trend charts (score, completion, band mix)
   - [x] Phase 5C: recurring-weakness analysis (rubric items low across courses)
-  - [x] Phase 5D: QA export of the dashboard (CSV, server PDF, print view)
+  - [x] Phase 5D: QA export of the dashboard (CSV, print-to-PDF view)
 - [ ] Phase 6: notifications (email & in-app alerts)
 - [ ] Phase 7: hardening & load testing
 
