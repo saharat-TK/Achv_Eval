@@ -19,10 +19,10 @@ export default async function AdminLayout({
 
   return (
     <div className="min-h-screen">
-      <div className="sticky top-0 z-50 bg-white shadow-sm">
+      <div className="sticky top-0 z-50 bg-white shadow-sm print:hidden">
         <header className="border-b border-slate-200">
           <div className="mx-auto max-w-5xl px-6 py-3 flex items-center justify-between">
-            <Link href="/admin" className="flex flex-col">
+            <Link href="/admin/dashboard" className="flex flex-col">
               <span className="text-sm font-semibold text-mfu-primary">
                 ระบบประเมินและทวนสอบรายวิชา
               </span>
@@ -45,6 +45,12 @@ export default async function AdminLayout({
         <nav className="border-b border-slate-200">
           <div className="mx-auto max-w-5xl px-6">
             <div className="flex gap-6 text-sm">
+              <Link
+                href="/admin/dashboard"
+                className="border-b-2 border-transparent py-3 text-slate-600 hover:border-mfu-primary hover:text-mfu-primary"
+              >
+                แดชบอร์ด
+              </Link>
               <Link
                 href="/admin"
                 className="border-b-2 border-transparent py-3 text-slate-600 hover:border-mfu-primary hover:text-mfu-primary"

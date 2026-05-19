@@ -5,13 +5,13 @@ import type { AnalysisResult } from './gemini';
 export const REPORT_STYLES = `
   * { box-sizing: border-box; }
   body { font-family: 'Sarabun', sans-serif; color: #1e293b; font-size: 12px; line-height: 1.6; margin: 0; }
-  h1 { font-size: 18px; color: #7c1f2e; margin: 0 0 4px; }
-  h2 { font-size: 14px; color: #7c1f2e; border-bottom: 2px solid #f0b323; padding-bottom: 3px; margin: 22px 0 8px; }
+  h1 { font-size: 18px; color: #00704A; margin: 0 0 4px; }
+  h2 { font-size: 14px; color: #00704A; border-bottom: 2px solid #1E3932; padding-bottom: 3px; margin: 22px 0 8px; }
   h3 { font-size: 12.5px; margin: 12px 0 4px; }
   table { border-collapse: collapse; width: 100%; font-size: 11px; margin: 6px 0; }
   th, td { border: 1px solid #cbd5e1; padding: 4px 6px; vertical-align: top; }
   th { background: #f1f5f9; text-align: left; }
-  .cover { border-bottom: 3px solid #7c1f2e; padding-bottom: 10px; margin-bottom: 8px; }
+  .cover { border-bottom: 3px solid #00704A; padding-bottom: 10px; margin-bottom: 8px; }
   .muted { color: #64748b; }
   .meta td { border: none; padding: 1px 0; }
   .score { text-align: center; width: 28px; font-size: 13px; }
@@ -20,7 +20,7 @@ export const REPORT_STYLES = `
   .result-box { border: 1px solid #cbd5e1; padding: 8px 12px; margin-top: 8px; }
   .sign td { height: 54px; vertical-align: bottom; text-align: center; font-size: 11px; }
   .section-body { page-break-inside: auto; }
-  .official { background: #fffbeb; border: 1px solid #f0b323; padding: 4px 10px; border-radius: 4px; display: inline-block; font-size: 11px; }
+  .official { background: #E3F1EA; border: 1px solid #00704A; padding: 4px 10px; border-radius: 4px; display: inline-block; font-size: 11px; }
 `;
 
 export const BAND_TH: Record<string, string> = {

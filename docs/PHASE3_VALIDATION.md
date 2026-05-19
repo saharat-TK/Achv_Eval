@@ -15,6 +15,9 @@ cd functions && npm run build
 
 All four commands should pass without warnings or TypeScript errors.
 
+Latest automated pass: 2026-05-18 on branch
+`codex/phase-5a-dashboard-foundation`.
+
 ## Role Setup
 
 Confirm at least three test users exist in `users/{uid}`:
