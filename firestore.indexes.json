@@ -70,6 +70,15 @@
       ]
     },
     {
+      "comment": "All notifications for a recipient, newest first (bell)",
+      "collectionGroup": "notifications",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "recipientId", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
       "comment": "Audit trail for one entity, newest first",
       "collectionGroup": "auditLog",
       "queryScope": "COLLECTION",

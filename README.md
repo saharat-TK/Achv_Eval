@@ -23,7 +23,8 @@ See [`docs/FIRESTORE_MODEL.md`](docs/FIRESTORE_MODEL.md) for the data model and
 
 ## Project status
 
-Phase 5A (dashboard foundation) — **in progress**
+Phase 7 (hardening & load testing) — **next**. Phases 0–5, 6A, and 3D
+complete; Phase 6B (notification email) deferred.
 
 - [x] Firebase Auth with Google SSO + `@mfu.ac.th` enforcement
 - [x] Server session cookies + middleware gate
@@ -32,9 +33,6 @@ Phase 5A (dashboard foundation) — **in progress**
 - [x] Phase 1A: lecturer workspace, dashboard, offering detail
 - [x] Phase 1B: Gemini analysis pipeline (`analyzeCourse` Cloud Function)
 - [x] Phase 1C: report PDF (`generateReportPdf`) → Firebase Storage + log Sheet
-- [x] Phase 2: assessor flow · Phase 3: admin
-- [x] Phase 4: verification — next-semester implementation review
-- [ ] Phase 5: dashboard · Phase 6: notifications · Phase 7: hardening
 - [x] Phase 2A: assessor workspace & inbox
 - [x] Phase 2B: 7-item rubric evaluation form & sign-off
 - [x] Phase 2C: combined report PDF (AI analysis + assessor form) on sign-off
@@ -42,7 +40,7 @@ Phase 5A (dashboard foundation) — **in progress**
 - [x] Phase 3B-1: course management & CSV batch upload
 - [x] Phase 3B-2: offering management — lecturer assignment & clone-from-previous
 - [x] Phase 3C: user & role management
-- [ ] Phase 3D: end-to-end validation, lint/build gate, deployment checklist ([docs/PHASE3_VALIDATION.md](docs/PHASE3_VALIDATION.md)) — automated gate passed 2026-05-18
+- [x] Phase 3D: end-to-end validation, lint/build gate, deployment checklist ([docs/PHASE3_VALIDATION.md](docs/PHASE3_VALIDATION.md)) — automated gate passed 2026-05-19
 - [x] Phase 4A: verification committee role, status model, read-only queue
 - [x] Phase 4B-1: verification decision form, final sign-off, status transition
 - [x] Phase 4B-2: final verification PDF
@@ -50,8 +48,10 @@ Phase 5A (dashboard foundation) — **in progress**
   - [x] Phase 5A: dashboard foundation, role-scoped metrics, attention list
   - [x] Phase 5B: cross-semester trend charts (score, completion, band mix)
   - [x] Phase 5C: recurring-weakness analysis (rubric items low across courses)
-  - [x] Phase 5D: QA export of the dashboard (CSV, server PDF, print view)
+  - [x] Phase 5D: QA export of the dashboard (CSV, print-to-PDF view)
 - [ ] Phase 6: notifications (email & in-app alerts)
+  - [x] Phase 6A: in-app notifications (triggers, header bell, inbox dropdown)
+  - [ ] Phase 6B: email delivery
 - [ ] Phase 7: hardening & load testing
 
 ## Prerequisites

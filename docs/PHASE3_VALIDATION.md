@@ -15,8 +15,8 @@ cd functions && npm run build
 
 All four commands should pass without warnings or TypeScript errors.
 
-Latest automated pass: 2026-05-18 on branch
-`codex/phase-5a-dashboard-foundation`.
+Latest automated pass: 2026-05-19 on branch `phase-6-notifications`
+(lint, typecheck, app build, functions build — all clean).
 
 ## Role Setup
 
