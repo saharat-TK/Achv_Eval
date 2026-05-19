@@ -315,30 +315,66 @@ async function getOfferingsForPrograms(programIds: string[]): Promise<OfferingWi
     .sort(sortOfferings);
 }
 
-async function getAssessmentForOffering(
-  offering: OfferingWithId,
-): Promise<AssessmentWithId | null> {
-  const db = getAdminDb();
-  const assessments = db
-    .collection('offerings')
-    .doc(offering.id)
-    .collection('assessments');
+function toMillis(value: unknown): number {
+  if (
+    value &&
+    typeof (value as { toMillis?: unknown }).toMillis === 'function'
+  ) {
+    return (value as { toMillis: () => number }).toMillis();
+  }
+  return 0;
+}
 
-  if (offering.assessmentId) {
-    const snap = await assessments.doc(offering.assessmentId).get();
-    if (snap.exists) {
-      return { id: snap.id, ...(snap.data() as AssessmentDoc) };
+/**
+ * Resolves the relevant assessment for every offering using one
+ * collection-group query per 30-id chunk — instead of a read per offering.
+ * The linked assessment (offering.assessmentId) wins; otherwise the latest
+ * assessment is used once the offering has reached an assessment stage.
+ */
+async function getAssessmentsByOffering(
+  offerings: OfferingWithId[],
+): Promise<Map<string, AssessmentWithId | null>> {
+  const result = new Map<string, AssessmentWithId | null>();
+  if (offerings.length === 0) return result;
+
+  const db = getAdminDb();
+  const snaps = await Promise.all(
+    chunks(
+      offerings.map((offering) => offering.id),
+      30,
+    ).map((ids) =>
+      db.collectionGroup('assessments').where('offeringId', 'in', ids).get(),
+    ),
+  );
+
+  const byOffering = new Map<string, AssessmentWithId[]>();
+  for (const snap of snaps) {
+    for (const doc of snap.docs) {
+      const data = doc.data() as AssessmentDoc;
+      const list = byOffering.get(data.offeringId) ?? [];
+      list.push({ id: doc.id, ...data });
+      byOffering.set(data.offeringId, list);
     }
   }
 
-  if (!['assessor_review', ...ASSESSED_STATUSES].includes(offering.status)) {
-    return null;
+  for (const offering of offerings) {
+    const list = byOffering.get(offering.id) ?? [];
+    let picked: AssessmentWithId | null = null;
+    if (offering.assessmentId) {
+      picked = list.find((a) => a.id === offering.assessmentId) ?? null;
+    }
+    if (
+      !picked &&
+      ['assessor_review', ...ASSESSED_STATUSES].includes(offering.status)
+    ) {
+      picked =
+        [...list].sort(
+          (a, b) => toMillis(b.createdAt) - toMillis(a.createdAt),
+        )[0] ?? null;
+    }
+    result.set(offering.id, picked);
   }
-
-  const latest = await assessments.orderBy('createdAt', 'desc').limit(1).get();
-  if (latest.empty) return null;
-  const doc = latest.docs[0];
-  return { id: doc.id, ...(doc.data() as AssessmentDoc) };
+  return result;
 }
 
 export async function getExecutiveDashboardData(
@@ -368,14 +404,8 @@ export async function getExecutiveDashboardData(
     if (filters.semester && offering.semester !== filters.semester) return false;
     return true;
   });
-  const scopedAssessments = await Promise.all(
-    programScopedOfferings.map(getAssessmentForOffering),
-  );
-  const assessmentByOffering = new Map(
-    programScopedOfferings.map((offering, index) => [
-      offering.id,
-      scopedAssessments[index],
-    ]),
+  const assessmentByOffering = await getAssessmentsByOffering(
+    programScopedOfferings,
   );
   const trend = buildTrend(programScopedOfferings, assessmentByOffering);
 
