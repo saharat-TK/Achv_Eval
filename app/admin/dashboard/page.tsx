@@ -7,7 +7,6 @@ import { OFFERING_STATUS, SEMESTER_LABEL } from '@/lib/constants';
 import type { AssessmentBand, OfferingStatus, Semester } from '@/lib/types/models';
 import StatusBadge from '@/components/StatusBadge';
 import DashboardTrends from '@/components/DashboardTrends';
-import DashboardPdfButton from '@/components/DashboardPdfButton';
 
 export const dynamic = 'force-dynamic';
 
@@ -102,17 +101,6 @@ export default async function AdminDashboardPage({
   const exportHref = `/api/dashboard/export${exportQuery ? `?${exportQuery}` : ''}`;
   const printHref = `/admin/dashboard/print${exportQuery ? `?${exportQuery}` : ''}`;
 
-  const reportContext = {
-    programLabel: programFilter
-      ? (programs.find((program) => program.id === programFilter)?.nameTh ??
-        programFilter)
-      : 'ทุกหลักสูตร',
-    yearLabel: selectedAcademicYear ? String(selectedAcademicYear) : 'ทุกปี',
-    semesterLabel: selectedSemester
-      ? SEMESTER_LABEL[selectedSemester]
-      : 'ทุกภาค',
-  };
-
   return (
     <div>
       <div className="flex items-start justify-between gap-4">
@@ -125,7 +113,6 @@ export default async function AdminDashboardPage({
           </p>
         </div>
         <div className="flex shrink-0 items-start gap-2">
-          <DashboardPdfButton data={data} context={reportContext} />
           <a
             href={exportHref}
             className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-mfu-primary hover:bg-slate-50"
@@ -136,7 +123,7 @@ export default async function AdminDashboardPage({
             href={printHref}
             className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-mfu-primary hover:bg-slate-50"
           >
-            พิมพ์ Dashboard
+            ดาวน์โหลด PDF
           </Link>
           <Link
             href="/verification"
