@@ -122,6 +122,7 @@ export const REPORT_STATUS_TH: Record<AiReportStatus, string> = {
 /** In-app notification categories (NotificationDoc.type). */
 export const NOTIFICATION_TYPE = {
   ai_analysis_ready: 'ผลวิเคราะห์ AI',
+  course_ready_for_review: 'รอการทวนสอบ',
   course_assessed: 'ผลการทวนสอบ',
   verification_ready: 'รอการรับรองผล',
   verification_completed: 'รับรองผลแล้ว',

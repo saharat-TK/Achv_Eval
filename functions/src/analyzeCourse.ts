@@ -5,7 +5,11 @@ import { readFileSync } from 'fs';
 import { join } from 'path';
 import { runAnalysis, type InputFile } from './gemini';
 import { generateAndStoreReport } from './reportPdf';
-import { createNotification } from './notifications';
+import {
+  createNotification,
+  createNotifications,
+  getProgramAssessorIds,
+} from './notifications';
 
 const GEMINI_API_KEY = defineSecret('GEMINI_API_KEY');
 const LOG_SHEET_ID = defineString('GOOGLE_LOG_SHEET_ID', { default: '' });
@@ -154,9 +158,9 @@ export const analyzeCourse = onCall(
       });
       await writeAudit(db, uid, actorEmail, 'ai_analysis_succeeded', reportRef.id);
 
-      // Notify the lecturer that the analysis is ready. Non-fatal.
-      if (offering.lecturerId) {
-        try {
+      // Notify the lecturer and the program's assessors. Non-fatal.
+      try {
+        if (offering.lecturerId) {
           await createNotification({
             recipientId: offering.lecturerId,
             type: 'ai_analysis_ready',
@@ -164,9 +168,16 @@ export const analyzeCourse = onCall(
             body: `รายวิชา ${offering.courseCode ?? ''} ได้รับการวิเคราะห์เรียบร้อยแล้ว`.trim(),
             relatedOfferingId: offeringId,
           });
-        } catch (notifyErr) {
-          console.error('notification failed (non-fatal)', notifyErr);
         }
+        const assessorIds = await getProgramAssessorIds(offering.programId);
+        await createNotifications(assessorIds, {
+          type: 'course_ready_for_review',
+          title: 'มีรายวิชารอการทวนสอบ',
+          body: `รายวิชา ${offering.courseCode ?? ''} พร้อมให้ทวนสอบแล้ว`.trim(),
+          relatedOfferingId: offeringId,
+        });
+      } catch (notifyErr) {
+        console.error('notification failed (non-fatal)', notifyErr);
       }
 
       // Generate the PDF report inline. Non-fatal: the analysis is already
