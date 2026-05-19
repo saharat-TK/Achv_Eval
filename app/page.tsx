@@ -9,12 +9,12 @@ export default async function RootPage() {
   const profile = await getCurrentProfile();
   if (!profile) redirect('/login');
 
-  // Admins and program directors go to the admin workspace.
+  // Admins and program directors land on the dashboard.
   if (
     profile.roles.isAdmin ||
     (profile.roles.directorOf && profile.roles.directorOf.length > 0)
   ) {
-    redirect('/admin');
+    redirect('/admin/dashboard');
   }
 
   // Verification committee members go to the final verification queue.
