@@ -1,9 +1,16 @@
 'use client';
 
 import { useState } from 'react';
+import Image from 'next/image';
 import { getFirebaseAuth } from '@/lib/firebase/config';
 import { GoogleAuthProvider, signInWithPopup, signOut } from 'firebase/auth';
 import { useRouter } from 'next/navigation';
+
+const FEATURES = [
+  'วิเคราะห์ มคอ.3 ด้วย AI ตามแนวทางการประกันคุณภาพการศึกษา',
+  'ทวนสอบผลลัพธ์การเรียนรู้ด้วยแบบประเมิน 7 หัวข้อ พร้อมลงนามรับรอง',
+  'แดชบอร์ดและรายงานสำหรับการประกันคุณภาพ AUN-QA',
+];
 
 export default function LoginPage() {
   const [loading, setLoading] = useState(false);
@@ -37,7 +44,9 @@ export default function LoginPage() {
 
       if (!res.ok) {
         await signOut(auth);
-        const { error: serverError } = await res.json().catch(() => ({ error: 'session_failed' }));
+        const { error: serverError } = await res
+          .json()
+          .catch(() => ({ error: 'session_failed' }));
         throw new Error(serverError ?? 'session_failed');
       }
 
@@ -58,31 +67,81 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="min-h-screen flex items-center justify-center px-6 bg-gradient-to-br from-slate-50 to-slate-100">
-      <div className="max-w-md w-full bg-white rounded-2xl shadow-md border border-slate-200 p-8">
-        <h1 className="text-xl font-semibold text-mfu-primary">
+    <main
+      className="flex min-h-screen flex-col items-center justify-center px-6 py-12"
+      style={{
+        background:
+          'linear-gradient(180deg, #f1f6f3 0%, #e3f1ea 55%, #f1f6f3 100%)',
+      }}
+    >
+      <div className="w-full max-w-md text-center">
+        <div className="flex justify-center">
+          <div className="rounded-2xl bg-white p-3 shadow-sm ring-1 ring-mfu-primary/15">
+            <Image
+              src="/logoSHS.png"
+              alt="สำนักวิชาวิทยาศาสตร์สุขภาพ"
+              width={88}
+              height={88}
+              priority
+            />
+          </div>
+        </div>
+
+        <h1 className="mt-6 text-2xl font-bold text-mfu-accent">
           ระบบประเมินและทวนสอบรายวิชา
         </h1>
-        <p className="mt-1 text-sm text-slate-600">
-          สำนักวิชาวิทยาศาสตร์สุขภาพ มฟล.
+        <p className="mt-1 text-sm font-medium text-mfu-primary">
+          Course Evaluation &amp; Verification System
+        </p>
+        <p className="mt-2 text-sm text-slate-600">
+          สำนักวิชาวิทยาศาสตร์สุขภาพ มหาวิทยาลัยแม่ฟ้าหลวง
         </p>
 
-        <button
-          onClick={signInWithGoogle}
-          disabled={loading}
-          className="mt-8 w-full flex items-center justify-center gap-3 rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50 transition"
-        >
-          <GoogleIcon />
-          {loading ? 'กำลังเข้าสู่ระบบ…' : 'เข้าสู่ระบบด้วยบัญชี @mfu.ac.th'}
-        </button>
+        <ul className="mx-auto mt-6 max-w-sm space-y-2 text-left">
+          {FEATURES.map((feature) => (
+            <li key={feature} className="flex items-start gap-2 text-sm text-slate-600">
+              <CheckIcon />
+              <span>{feature}</span>
+            </li>
+          ))}
+        </ul>
 
-        {error && <p className="mt-4 text-sm text-red-600">{error}</p>}
+        <div className="mt-8 rounded-2xl border border-mfu-primary/15 bg-white p-6 shadow-md">
+          <button
+            onClick={signInWithGoogle}
+            disabled={loading}
+            className="flex w-full items-center justify-center gap-3 rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:opacity-50"
+          >
+            <GoogleIcon />
+            {loading ? 'กำลังเข้าสู่ระบบ…' : 'เข้าสู่ระบบด้วยบัญชี @mfu.ac.th'}
+          </button>
 
-        <p className="mt-8 text-xs text-slate-400">
-          เฉพาะบัญชีอีเมล @mfu.ac.th เท่านั้น
-        </p>
+          {error && <p className="mt-4 text-sm text-red-600">{error}</p>}
+
+          <p className="mt-4 text-xs text-slate-400">
+            เฉพาะบัญชีอีเมล @mfu.ac.th เท่านั้น
+          </p>
+        </div>
       </div>
     </main>
+  );
+}
+
+function CheckIcon() {
+  return (
+    <svg
+      className="mt-0.5 shrink-0 text-mfu-primary"
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M20 6 9 17l-5-5" />
+    </svg>
   );
 }
 
