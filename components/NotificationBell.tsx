@@ -124,7 +124,7 @@ export default function NotificationBell({ basePath }: { basePath?: string }) {
           <path d="M13.73 21a2 2 0 0 1-3.46 0" />
         </svg>
         {unread.length > 0 && (
-          <span className="absolute right-0.5 top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-mfu-primary px-1 text-[10px] font-semibold text-white">
+          <span className="absolute right-0.5 top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-semibold text-white">
             {unread.length > 9 ? '9+' : unread.length}
           </span>
         )}
@@ -156,12 +156,12 @@ export default function NotificationBell({ basePath }: { basePath?: string }) {
                   type="button"
                   onClick={() => openItem(item)}
                   className={`block w-full border-b border-slate-50 px-3 py-2.5 text-left hover:bg-slate-50 ${
-                    item.readAt ? '' : 'bg-mfu-primary/5'
+                    item.readAt ? '' : 'bg-red-50'
                   }`}
                 >
                   <div className="flex items-start gap-2">
                     {!item.readAt && (
-                      <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-mfu-primary" />
+                      <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-red-500" />
                     )}
                     <div className={item.readAt ? 'pl-4' : ''}>
                       <p className="text-sm font-medium text-slate-700">
