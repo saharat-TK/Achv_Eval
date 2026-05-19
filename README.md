@@ -23,7 +23,8 @@ See [`docs/FIRESTORE_MODEL.md`](docs/FIRESTORE_MODEL.md) for the data model and
 
 ## Project status
 
-Phase 6B (notification email) — **next**. Phases 0–5 and 6A complete.
+Phase 7 (hardening & load testing) — **next**. Phases 0–5, 6A, and 3D
+complete; Phase 6B (notification email) deferred.
 
 - [x] Firebase Auth with Google SSO + `@mfu.ac.th` enforcement
 - [x] Server session cookies + middleware gate
@@ -39,7 +40,7 @@ Phase 6B (notification email) — **next**. Phases 0–5 and 6A complete.
 - [x] Phase 3B-1: course management & CSV batch upload
 - [x] Phase 3B-2: offering management — lecturer assignment & clone-from-previous
 - [x] Phase 3C: user & role management
-- [ ] Phase 3D: end-to-end validation, lint/build gate, deployment checklist ([docs/PHASE3_VALIDATION.md](docs/PHASE3_VALIDATION.md)) — automated gate passed 2026-05-18
+- [x] Phase 3D: end-to-end validation, lint/build gate, deployment checklist ([docs/PHASE3_VALIDATION.md](docs/PHASE3_VALIDATION.md)) — automated gate passed 2026-05-19
 - [x] Phase 4A: verification committee role, status model, read-only queue
 - [x] Phase 4B-1: verification decision form, final sign-off, status transition
 - [x] Phase 4B-2: final verification PDF
