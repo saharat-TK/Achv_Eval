@@ -119,6 +119,17 @@ export const REPORT_STATUS_TH: Record<AiReportStatus, string> = {
   failed: 'วิเคราะห์ล้มเหลว',
 };
 
+/** In-app notification categories (NotificationDoc.type). */
+export const NOTIFICATION_TYPE = {
+  ai_analysis_ready: 'ผลวิเคราะห์ AI',
+  course_assessed: 'ผลการทวนสอบ',
+  verification_ready: 'รอการรับรองผล',
+  verification_completed: 'รับรองผลแล้ว',
+  verification_follow_up: 'ต้องติดตามผล',
+} as const;
+
+export type NotificationType = keyof typeof NOTIFICATION_TYPE;
+
 export const PROGRAM_LEVEL_LABEL: Record<ProgramLevel, string> = {
   undergraduate: 'ปริญญาตรี',
   master: 'ปริญญาโท',

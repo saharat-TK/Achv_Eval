@@ -23,7 +23,7 @@ See [`docs/FIRESTORE_MODEL.md`](docs/FIRESTORE_MODEL.md) for the data model and
 
 ## Project status
 
-Phase 6 (notifications) — **next**. Phases 0–5 complete.
+Phase 6B (notification email) — **next**. Phases 0–5 and 6A complete.
 
 - [x] Firebase Auth with Google SSO + `@mfu.ac.th` enforcement
 - [x] Server session cookies + middleware gate
@@ -49,6 +49,8 @@ Phase 6 (notifications) — **next**. Phases 0–5 complete.
   - [x] Phase 5C: recurring-weakness analysis (rubric items low across courses)
   - [x] Phase 5D: QA export of the dashboard (CSV, print-to-PDF view)
 - [ ] Phase 6: notifications (email & in-app alerts)
+  - [x] Phase 6A: in-app notifications (triggers, header bell, inbox dropdown)
+  - [ ] Phase 6B: email delivery
 - [ ] Phase 7: hardening & load testing
 
 ## Prerequisites

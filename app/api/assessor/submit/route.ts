@@ -4,6 +4,12 @@ import { getAdminDb } from '@/lib/firebase/admin';
 import { getSessionUser, getCurrentProfile } from '@/lib/firebase/auth-server';
 import { computeRubricResult } from '@/lib/types/models';
 import type { AssessmentDoc } from '@/lib/types/models';
+import {
+  createNotification,
+  createNotifications,
+  getProgramVerifierIds,
+  notifySafely,
+} from '@/lib/data/notifications';
 
 export const runtime = 'nodejs';
 
@@ -149,6 +155,32 @@ export async function POST(request: NextRequest) {
       before: null,
       after: { offeringId, lock, totalScore: result.totalScore },
     });
+
+    // 9. On sign-off, notify the lecturer and the program's verifiers.
+    if (lock) {
+      const courseCode = (offering.courseCode as string | undefined) ?? '';
+      await notifySafely(
+        Promise.all([
+          offering.lecturerId
+            ? createNotification({
+                recipientId: offering.lecturerId,
+                type: 'course_assessed',
+                title: 'รายวิชาได้รับการทวนสอบแล้ว',
+                body: `รายวิชา ${courseCode} ได้รับการประเมินจากผู้ทวนสอบ`.trim(),
+                relatedOfferingId: offeringId,
+              })
+            : Promise.resolve(),
+          getProgramVerifierIds(offering.programId).then((ids) =>
+            createNotifications(ids, {
+              type: 'verification_ready',
+              title: 'มีรายวิชารอการรับรองผล',
+              body: `รายวิชา ${courseCode} พร้อมรับรองผลขั้นสุดท้าย`.trim(),
+              relatedOfferingId: offeringId,
+            }),
+          ),
+        ]),
+      );
+    }
   } catch (err: any) {
     console.error('assessment submit error', err);
     return NextResponse.json(

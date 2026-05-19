@@ -3,6 +3,7 @@ import { FieldValue } from 'firebase-admin/firestore';
 import { getAdminDb } from '@/lib/firebase/admin';
 import { getCurrentProfile, getSessionUser } from '@/lib/firebase/auth-server';
 import type { OfferingStatus, VerificationDecision, VerificationDoc } from '@/lib/types/models';
+import { createNotification, notifySafely } from '@/lib/data/notifications';
 
 export const runtime = 'nodejs';
 
@@ -142,6 +143,26 @@ export async function POST(request: NextRequest) {
         requiredActions,
       },
     });
+
+    // Notify the lecturer of the committee's decision (non-fatal).
+    if (offering.lecturerId) {
+      const courseCode = (offering.courseCode as string | undefined) ?? '';
+      await notifySafely(
+        createNotification({
+          recipientId: offering.lecturerId,
+          type: decision === 'verified' ? 'verification_completed' : 'verification_follow_up',
+          title:
+            decision === 'verified'
+              ? 'ผลการทวนสอบได้รับการรับรอง'
+              : 'ผลการทวนสอบ — ต้องติดตาม',
+          body:
+            decision === 'verified'
+              ? `รายวิชา ${courseCode} ได้รับการรับรองผลขั้นสุดท้าย`.trim()
+              : `รายวิชา ${courseCode}: ${requiredActions ?? 'มีรายการที่ต้องติดตาม'}`.trim(),
+          relatedOfferingId: offeringId,
+        }),
+      );
+    }
 
     return NextResponse.json({ ok: true, verificationId });
   } catch (err: any) {

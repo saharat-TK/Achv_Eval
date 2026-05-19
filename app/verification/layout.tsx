@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import { getCurrentProfile } from '@/lib/firebase/auth-server';
 import SignOutButton from '@/components/SignOutButton';
+import NotificationBell from '@/components/NotificationBell';
 
 export default async function VerificationLayout({
   children,
@@ -49,6 +50,7 @@ export default async function VerificationLayout({
                 </Link>
               ) : null}
             </nav>
+            <NotificationBell basePath="/verification" />
             <div className="text-right">
               <div className="text-sm text-slate-700">{profile.nameTh}</div>
               <div className="text-xs text-slate-400">{profile.email}</div>

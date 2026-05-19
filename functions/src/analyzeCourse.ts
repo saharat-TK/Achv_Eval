@@ -5,6 +5,7 @@ import { readFileSync } from 'fs';
 import { join } from 'path';
 import { runAnalysis, type InputFile } from './gemini';
 import { generateAndStoreReport } from './reportPdf';
+import { createNotification } from './notifications';
 
 const GEMINI_API_KEY = defineSecret('GEMINI_API_KEY');
 const LOG_SHEET_ID = defineString('GOOGLE_LOG_SHEET_ID', { default: '' });
@@ -66,6 +67,7 @@ export const analyzeCourse = onCall(
     const offering = offeringSnap.data() as {
       programId: string;
       lecturerId: string | null;
+      courseCode?: string;
     };
     if (offering.lecturerId !== uid) {
       throw new HttpsError('permission-denied', 'ท่านไม่ใช่ผู้รับผิดชอบรายวิชานี้');
@@ -151,6 +153,21 @@ export const analyzeCourse = onCall(
         updatedBy: uid,
       });
       await writeAudit(db, uid, actorEmail, 'ai_analysis_succeeded', reportRef.id);
+
+      // Notify the lecturer that the analysis is ready. Non-fatal.
+      if (offering.lecturerId) {
+        try {
+          await createNotification({
+            recipientId: offering.lecturerId,
+            type: 'ai_analysis_ready',
+            title: 'ผลวิเคราะห์ AI พร้อมแล้ว',
+            body: `รายวิชา ${offering.courseCode ?? ''} ได้รับการวิเคราะห์เรียบร้อยแล้ว`.trim(),
+            relatedOfferingId: offeringId,
+          });
+        } catch (notifyErr) {
+          console.error('notification failed (non-fatal)', notifyErr);
+        }
+      }
 
       // Generate the PDF report inline. Non-fatal: the analysis is already
       // marked 'succeeded' and visible to the lecturer; a PDF failure only
