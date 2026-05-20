@@ -68,17 +68,13 @@ export const generateFinalVerificationReport = onCall(
       latestAiReportId: string | null;
     };
 
-    // Authorize: caller must be admin, director, or verifier of the program.
+    // Authorize: signing a verification is committee-only. Mirrors the
+    // /api/verification/submit route.
     const userSnap = await db.collection('users').doc(uid).get();
     const roles = (userSnap.data()?.roles ?? {}) as {
-      isAdmin?: boolean;
-      directorOf?: string[];
       verifierOf?: string[];
     };
-    const allowed =
-      roles.isAdmin === true ||
-      (roles.directorOf ?? []).includes(offering.programId) ||
-      (roles.verifierOf ?? []).includes(offering.programId);
+    const allowed = (roles.verifierOf ?? []).includes(offering.programId);
     if (!allowed) {
       throw new HttpsError('permission-denied', 'ท่านไม่มีสิทธิ์รับรองผลของหลักสูตรนี้');
     }
