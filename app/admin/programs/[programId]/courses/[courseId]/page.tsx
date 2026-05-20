@@ -49,6 +49,8 @@ export default async function EditCoursePage({
     offeringsCount = offeringsSnap.size;
   }
 
+  const isAdmin = profile.roles.isAdmin;
+
   return (
     <div>
       <Link
@@ -57,21 +59,34 @@ export default async function EditCoursePage({
       >
         ← กลับไปหน้ารายวิชา
       </Link>
-      <h1 className="mt-3 text-xl font-semibold text-slate-800">
-        แก้ไขรายวิชา {course.code}
-      </h1>
-      <p className="mt-1 text-sm text-slate-500">{course.nameTh}</p>
-      <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
-        <div>
-          <CourseForm
-            mode="edit"
-            programId={program.id}
-            courseId={course.id}
-            initial={initial}
-          />
-        </div>
-        {profile.roles.isAdmin && (
-          <aside className="lg:sticky lg:top-24 lg:self-start">
+
+      {isAdmin ? (
+        <div className="mt-3 grid gap-x-6 lg:grid-cols-[minmax(0,1fr)_256px]">
+          {/* Header — left */}
+          <div>
+            <h1 className="text-xl font-semibold text-slate-800">
+              แก้ไขรายวิชา {course.code}
+            </h1>
+            <p className="mt-1 text-sm text-slate-500">{course.nameTh}</p>
+          </div>
+          {/* Header — right (lg+); on smaller screens the panel shows its own title */}
+          <div className="hidden lg:block">
+            <h2 className="text-sm font-semibold text-slate-700">
+              จัดการสถานะรายวิชา
+            </h2>
+          </div>
+
+          {/* Body — left */}
+          <div className="mt-6">
+            <CourseForm
+              mode="edit"
+              programId={program.id}
+              courseId={course.id}
+              initial={initial}
+            />
+          </div>
+          {/* Body — right */}
+          <aside className="mt-6 lg:sticky lg:top-24 lg:self-start">
             <CourseLifecyclePanel
               programId={program.id}
               courseId={course.id}
@@ -80,8 +95,23 @@ export default async function EditCoursePage({
               blockers={{ offeringsCount }}
             />
           </aside>
-        )}
-      </div>
+        </div>
+      ) : (
+        <>
+          <h1 className="mt-3 text-xl font-semibold text-slate-800">
+            แก้ไขรายวิชา {course.code}
+          </h1>
+          <p className="mt-1 text-sm text-slate-500">{course.nameTh}</p>
+          <div className="mt-6">
+            <CourseForm
+              mode="edit"
+              programId={program.id}
+              courseId={course.id}
+              initial={initial}
+            />
+          </div>
+        </>
+      )}
     </div>
   );
 }

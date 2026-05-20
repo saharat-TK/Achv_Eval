@@ -141,7 +141,7 @@ export default function CourseLifecyclePanel({
 
   return (
     <section className="space-y-3">
-      <h2 className="text-sm font-semibold text-slate-700">
+      <h2 className="text-sm font-semibold text-slate-700 lg:hidden">
         จัดการสถานะรายวิชา
       </h2>
 
@@ -157,11 +157,11 @@ export default function CourseLifecyclePanel({
       )}
 
       {/* Mode 1: Soft-delete / Restore */}
-      <div className="rounded-lg border border-slate-200 bg-white p-4">
-        <h3 className="text-sm font-semibold text-slate-700">
+      <div className="rounded-lg border border-slate-200 bg-white p-3">
+        <h3 className="text-xs font-semibold text-slate-700">
           {isActive ? 'ปิดใช้งานรายวิชา' : 'เปิดใช้งานรายวิชา'}
         </h3>
-        <p className="mt-1 text-xs text-slate-500">
+        <p className="mt-1 text-[11px] leading-snug text-slate-500">
           {isActive
             ? 'รายวิชาจะถูกปิดใช้งาน แต่ประวัติทั้งหมดยังคงอยู่และสามารถเปิดใช้งานใหม่ได้'
             : 'รายวิชานี้ถูกปิดใช้งานอยู่ — กดเพื่อเปิดใช้งานอีกครั้ง'}
@@ -170,7 +170,7 @@ export default function CourseLifecyclePanel({
           type="button"
           onClick={isActive ? handleSoftDelete : handleRestore}
           disabled={busy}
-          className={`mt-3 rounded-lg px-4 py-2 text-sm font-medium text-white disabled:opacity-60 ${
+          className={`mt-2 rounded-lg px-3 py-1.5 text-xs font-medium text-white disabled:opacity-60 ${
             isActive
               ? 'bg-amber-600 hover:bg-amber-700'
               : 'bg-mfu-primary hover:opacity-90'
@@ -181,9 +181,9 @@ export default function CourseLifecyclePanel({
       </div>
 
       {/* Mode 2: Hard delete */}
-      <div className="rounded-lg border border-slate-200 bg-white p-4">
-        <h3 className="text-sm font-semibold text-slate-700">ลบรายวิชา</h3>
-        <p className="mt-1 text-xs text-slate-500">
+      <div className="rounded-lg border border-slate-200 bg-white p-3">
+        <h3 className="text-xs font-semibold text-slate-700">ลบรายวิชา</h3>
+        <p className="mt-1 text-[11px] leading-snug text-slate-500">
           {hasBlockers
             ? `ไม่สามารถลบได้ — รายวิชานี้ยังมี ${blockers.offeringsCount} ครั้งที่เปิดสอน กรุณาใช้ "ปิดใช้งาน" หรือ "ลบทั้งหมดถาวร" แทน`
             : 'ลบรายวิชานี้ออกจากระบบ (ทำได้เฉพาะรายวิชาที่ไม่เคยเปิดสอน)'}
@@ -192,35 +192,35 @@ export default function CourseLifecyclePanel({
           type="button"
           onClick={handleHardDelete}
           disabled={busy || hasBlockers}
-          className="mt-3 rounded-lg bg-slate-700 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-60"
+          className="mt-2 rounded-lg bg-slate-700 px-3 py-1.5 text-xs font-medium text-white hover:bg-slate-800 disabled:opacity-60"
         >
           ลบรายวิชา
         </button>
       </div>
 
       {/* Mode 3: Purge (Danger zone) */}
-      <div className="rounded-lg border border-red-200 bg-red-50/40 p-4">
+      <div className="rounded-lg border border-red-200 bg-red-50/40 p-3">
         <button
           type="button"
           onClick={() => setShowDangerZone((v) => !v)}
-          className="flex w-full items-center justify-between text-left"
+          className="flex w-full items-center justify-between gap-2 text-left"
         >
-          <span className="text-sm font-semibold text-red-700">
+          <span className="text-xs font-semibold leading-snug text-red-700">
             ⚠ พื้นที่อันตราย — ลบรายวิชาและข้อมูลทั้งหมดถาวร
           </span>
-          <span className="text-xs text-red-600">
+          <span className="shrink-0 text-[11px] text-red-600">
             {showDangerZone ? 'ซ่อน' : 'แสดง'}
           </span>
         </button>
 
         {showDangerZone && (
-          <div className="mt-4 space-y-3 border-t border-red-200 pt-4">
-            <p className="text-xs text-red-700">
+          <div className="mt-3 space-y-2.5 border-t border-red-200 pt-3">
+            <p className="text-[11px] leading-snug text-red-700">
               การกระทำนี้จะลบรายวิชา รวมถึงครั้งที่เปิดสอน รายงาน AI
               ผลทวนสอบ ผลรับรอง การแจ้งเตือนที่เกี่ยวข้อง และไฟล์ PDF
               ใน Storage ทั้งหมด <strong>ไม่สามารถย้อนกลับได้</strong>
             </p>
-            <label className="flex items-start gap-2 text-xs text-red-700">
+            <label className="flex items-start gap-2 text-[11px] leading-snug text-red-700">
               <input
                 type="checkbox"
                 checked={agreedToPurge}
@@ -232,7 +232,7 @@ export default function CourseLifecyclePanel({
                 และจะลบประวัติการทวนสอบทั้งหมดของรายวิชานี้
               </span>
             </label>
-            <label className="block text-xs text-red-700">
+            <label className="block text-[11px] leading-snug text-red-700">
               พิมพ์รหัสรายวิชา <strong>{courseCode}</strong>{' '}
               เพื่อยืนยัน:
               <input
@@ -240,14 +240,14 @@ export default function CourseLifecyclePanel({
                 value={typedCode}
                 onChange={(e) => setTypedCode(e.target.value)}
                 placeholder={courseCode}
-                className="mt-1 w-full rounded border border-red-300 px-2 py-1 text-sm text-slate-800 focus:border-red-500 focus:outline-none"
+                className="mt-1 w-full rounded border border-red-300 px-2 py-1 text-xs text-slate-800 focus:border-red-500 focus:outline-none"
               />
             </label>
             <button
               type="button"
               onClick={handlePurge}
               disabled={busy || !agreedToPurge || typedCode !== courseCode}
-              className="w-full rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-50"
+              className="w-full rounded-lg bg-red-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-700 disabled:opacity-50"
             >
               ลบทั้งหมดถาวร
             </button>
