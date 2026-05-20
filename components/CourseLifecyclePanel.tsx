@@ -156,6 +156,7 @@ export default function CourseLifecyclePanel({
         </p>
       )}
 
+      <div className="grid items-start gap-4 md:grid-cols-3">
       {/* Mode 1: Soft-delete / Restore */}
       <div className="rounded-lg border border-slate-200 bg-white p-4">
         <h3 className="text-sm font-semibold text-slate-700">
@@ -253,6 +254,7 @@ export default function CourseLifecyclePanel({
             </button>
           </div>
         )}
+      </div>
       </div>
     </section>
   );
