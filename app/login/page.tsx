@@ -2,14 +2,34 @@
 
 import { useState } from 'react';
 import Image from 'next/image';
-import { getFirebaseAuth } from '@/lib/firebase/config';
 import { GoogleAuthProvider, signInWithPopup, signOut } from 'firebase/auth';
 import { useRouter } from 'next/navigation';
+import { getFirebaseAuth } from '@/lib/firebase/config';
+import ConfettiBackground from '@/components/ConfettiBackground';
 
 const FEATURES = [
-  'วิเคราะห์ มคอ.3 ด้วย AI ตามแนวทางการประกันคุณภาพการศึกษา',
-  'ทวนสอบผลลัพธ์การเรียนรู้ด้วยแบบประเมิน 7 หัวข้อ พร้อมลงนามรับรอง',
-  'แดชบอร์ดและรายงานสำหรับการประกันคุณภาพ AUN-QA',
+  {
+    title: 'วิเคราะห์ มคอ.3 ด้วย AI',
+    body: 'Gemini วิเคราะห์เอกสาร มคอ.3 ตามแนวทาง AUN-QA ระบุจุดเด่น ช่องว่าง และร่างฉบับปรับปรุง',
+    icon: 'sparkle' as const,
+  },
+  {
+    title: 'ทวนสอบ 7 หัวข้อมาตรฐาน',
+    body: 'แบบประเมินทางการ 7 หัวข้อ พร้อมการลงนามรับรองจากผู้ทวนสอบและคณะกรรมการ',
+    icon: 'check' as const,
+  },
+  {
+    title: 'แดชบอร์ดและรายงาน AUN-QA',
+    body: 'ภาพรวมคุณภาพข้ามภาคการศึกษา จุดอ่อนที่พบซ้ำ ส่งออก CSV และพิมพ์เป็น PDF',
+    icon: 'chart' as const,
+  },
+];
+
+const STEPS = [
+  { n: 1, label: 'อัปโหลด มคอ.3', body: 'อาจารย์ส่งเอกสารและข้อมูลรายวิชา' },
+  { n: 2, label: 'AI วิเคราะห์', body: 'Gemini ตรวจตามเกณฑ์ AUN-QA' },
+  { n: 3, label: 'ทวนสอบ 7 หัวข้อ', body: 'ผู้ทวนสอบประเมินและลงนาม' },
+  { n: 4, label: 'รับรองผล', body: 'คณะกรรมการรับรองและออกรายงาน' },
 ];
 
 export default function LoginPage() {
@@ -26,15 +46,11 @@ export default function LoginPage() {
       provider.setCustomParameters({ hd: 'mfu.ac.th', prompt: 'consent' });
       const result = await signInWithPopup(auth, provider);
 
-      // Client-side domain check (fast feedback). The server re-verifies
-      // it in /api/auth/session before issuing the session cookie.
       if (!result.user.email?.endsWith('@mfu.ac.th')) {
         await signOut(auth);
         throw new Error('domain_not_allowed');
       }
 
-      // Exchange the Firebase ID token for an httpOnly session cookie so the
-      // server (middleware + route handlers) can authorize requests.
       const idToken = await result.user.getIdToken();
       const res = await fetch('/api/auth/session', {
         method: 'POST',
@@ -67,80 +83,176 @@ export default function LoginPage() {
   }
 
   return (
-    <main
-      className="flex min-h-screen flex-col items-center justify-center px-6 py-12"
-      style={{
-        background:
-          'linear-gradient(180deg, #f1f6f3 0%, #e3f1ea 55%, #f1f6f3 100%)',
-      }}
-    >
-      <div className="w-full max-w-md text-center">
-        <div className="flex justify-center">
-          <div className="rounded-2xl bg-white p-3 shadow-sm ring-1 ring-mfu-primary/15">
+    <div className="bg-white text-slate-900">
+      {/* Hero with animated confetti */}
+      <section className="relative min-h-screen overflow-hidden">
+        <ConfettiBackground />
+        <div className="relative z-10 flex min-h-screen flex-col items-center justify-center px-6 py-16">
+          <div className="flex items-center gap-2">
             <Image
               src="/logoSHS.png"
-              alt="สำนักวิชาวิทยาศาสตร์สุขภาพ"
-              width={88}
-              height={88}
+              alt=""
+              width={28}
+              height={28}
               priority
             />
+            <span className="text-sm font-medium text-slate-700">
+              School of Health Science · MFU
+            </span>
           </div>
-        </div>
 
-        <h1 className="mt-6 text-2xl font-bold text-mfu-accent">
-          ระบบประเมินและทวนสอบรายวิชา
-        </h1>
-        <p className="mt-1 text-sm font-medium text-mfu-primary">
-          Course Evaluation &amp; Verification System
-        </p>
-        <p className="mt-2 text-sm text-slate-600">
-          สำนักวิชาวิทยาศาสตร์สุขภาพ มหาวิทยาลัยแม่ฟ้าหลวง
-        </p>
+          <h1 className="mt-10 max-w-4xl text-center text-5xl font-bold leading-[1.05] tracking-tight text-slate-900 md:text-6xl lg:text-7xl">
+            ระบบประเมินและทวนสอบ
+            <br />
+            รายวิชา
+          </h1>
+          <p className="mt-5 text-center text-lg text-slate-500 md:text-xl">
+            Course Evaluation &amp; Verification System
+          </p>
 
-        <ul className="mx-auto mt-6 max-w-sm space-y-2 text-left">
-          {FEATURES.map((feature) => (
-            <li key={feature} className="flex items-start gap-2 text-sm text-slate-600">
-              <CheckIcon />
-              <span>{feature}</span>
-            </li>
-          ))}
-        </ul>
+          <div className="mt-10 flex flex-wrap items-center justify-center gap-3">
+            <button
+              type="button"
+              onClick={signInWithGoogle}
+              disabled={loading}
+              className="flex items-center gap-2.5 rounded-full bg-mfu-accent px-6 py-3 text-sm font-medium text-white shadow-sm transition hover:opacity-95 disabled:opacity-60"
+            >
+              <GoogleIcon />
+              {loading ? 'กำลังเข้าสู่ระบบ…' : 'เข้าสู่ระบบด้วย @mfu.ac.th'}
+            </button>
+            <a
+              href="#features"
+              className="rounded-full border border-slate-200 bg-white px-6 py-3 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+            >
+              ดูฟีเจอร์ของระบบ
+            </a>
+          </div>
 
-        <div className="mt-8 rounded-2xl border border-mfu-primary/15 bg-white p-6 shadow-md">
-          <button
-            onClick={signInWithGoogle}
-            disabled={loading}
-            className="flex w-full items-center justify-center gap-3 rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:opacity-50"
-          >
-            <GoogleIcon />
-            {loading ? 'กำลังเข้าสู่ระบบ…' : 'เข้าสู่ระบบด้วยบัญชี @mfu.ac.th'}
-          </button>
-
-          {error && <p className="mt-4 text-sm text-red-600">{error}</p>}
-
-          <p className="mt-4 text-xs text-slate-400">
+          {error && (
+            <p className="mt-4 text-sm font-medium text-red-600">{error}</p>
+          )}
+          <p className="mt-3 text-xs text-slate-400">
             เฉพาะบัญชีอีเมล @mfu.ac.th เท่านั้น
           </p>
         </div>
-      </div>
-    </main>
+      </section>
+
+      {/* Features */}
+      <section id="features" className="relative bg-white px-6 py-24">
+        <div className="mx-auto max-w-5xl">
+          <p className="text-center text-sm font-semibold uppercase tracking-wider text-mfu-primary">
+            ความสามารถของระบบ
+          </p>
+          <h2 className="mt-2 text-center text-3xl font-bold text-slate-900 md:text-4xl">
+            สิ่งที่ระบบช่วยคุณทำได้
+          </h2>
+          <div className="mt-12 grid gap-6 md:grid-cols-3">
+            {FEATURES.map((feature) => (
+              <div
+                key={feature.title}
+                className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm transition hover:shadow-md"
+              >
+                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-mfu-primary/10 text-mfu-primary">
+                  <FeatureIcon type={feature.icon} />
+                </div>
+                <h3 className="mt-4 text-lg font-semibold text-slate-900">
+                  {feature.title}
+                </h3>
+                <p className="mt-2 text-sm leading-6 text-slate-600">
+                  {feature.body}
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* How it works */}
+      <section className="relative bg-[#f1f6f3] px-6 py-24">
+        <div className="mx-auto max-w-5xl">
+          <p className="text-center text-sm font-semibold uppercase tracking-wider text-mfu-primary">
+            ขั้นตอนการใช้งาน
+          </p>
+          <h2 className="mt-2 text-center text-3xl font-bold text-slate-900 md:text-4xl">
+            การทำงานของระบบ
+          </h2>
+          <div className="mt-12 grid gap-8 md:grid-cols-4">
+            {STEPS.map((step) => (
+              <div key={step.n} className="flex flex-col items-center text-center">
+                <div className="flex h-14 w-14 items-center justify-center rounded-full bg-mfu-accent text-lg font-semibold text-white shadow-sm">
+                  {step.n}
+                </div>
+                <p className="mt-4 text-base font-semibold text-slate-800">
+                  {step.label}
+                </p>
+                <p className="mt-1 text-sm text-slate-500">{step.body}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Footer */}
+      <footer className="border-t border-slate-200 bg-white px-6 py-8">
+        <div className="mx-auto flex max-w-5xl flex-col items-center justify-between gap-2 text-sm text-slate-500 md:flex-row">
+          <p>สำนักวิชาวิทยาศาสตร์สุขภาพ มหาวิทยาลัยแม่ฟ้าหลวง</p>
+          <p>© 2026 School of Health Science, Mae Fah Luang University</p>
+        </div>
+      </footer>
+    </div>
   );
 }
 
-function CheckIcon() {
+function FeatureIcon({ type }: { type: 'sparkle' | 'check' | 'chart' }) {
+  if (type === 'sparkle') {
+    return (
+      <svg
+        width="22"
+        height="22"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <path d="M12 3l2.5 6 6.5 2.5-6.5 2.5L12 21l-2.5-7L3 11.5 9.5 9z" />
+        <path d="M19 3l1 2 2 1-2 1-1 2-1-2-2-1 2-1z" />
+      </svg>
+    );
+  }
+  if (type === 'check') {
+    return (
+      <svg
+        width="22"
+        height="22"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <path d="M9 11l3 3L22 4" />
+        <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
+      </svg>
+    );
+  }
   return (
     <svg
-      className="mt-0.5 shrink-0 text-mfu-primary"
-      width="16"
-      height="16"
+      width="22"
+      height="22"
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
-      strokeWidth="2.5"
+      strokeWidth="2"
       strokeLinecap="round"
       strokeLinejoin="round"
     >
-      <path d="M20 6 9 17l-5-5" />
+      <path d="M3 3v18h18" />
+      <rect x="7" y="11" width="3" height="7" rx="0.5" />
+      <rect x="12" y="7" width="3" height="11" rx="0.5" />
+      <rect x="17" y="14" width="3" height="4" rx="0.5" />
     </svg>
   );
 }
