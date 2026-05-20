@@ -24,7 +24,7 @@ export default async function VerificationLayout({
   return (
     <div className="min-h-screen">
       <header className="sticky top-0 z-50 border-b border-slate-200 bg-white shadow-sm">
-        <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-3">
+        <div className="mx-auto flex max-w-5xl items-center justify-between px-6 py-3">
           <Link href="/verification" className="flex flex-col">
             <span className="text-sm font-semibold text-mfu-primary">
               ระบบประเมินและทวนสอบรายวิชา
@@ -59,7 +59,7 @@ export default async function VerificationLayout({
           </div>
         </div>
       </header>
-      <main className="mx-auto max-w-7xl px-6 py-8">{children}</main>
+      <main className="mx-auto max-w-5xl px-6 py-8">{children}</main>
     </div>
   );
 }
