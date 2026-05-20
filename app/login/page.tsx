@@ -88,15 +88,15 @@ export default function LoginPage() {
       <section className="relative min-h-screen overflow-hidden">
         <ConfettiBackground />
         <div className="relative z-10 flex min-h-screen flex-col items-center justify-center px-6 py-16">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-4">
             <Image
               src="/logoSHS.png"
               alt=""
-              width={28}
-              height={28}
+              width={56}
+              height={56}
               priority
             />
-            <span className="text-sm font-medium text-slate-700">
+            <span className="text-xl font-semibold text-slate-800 md:text-2xl">
               School of Health Science · MFU
             </span>
           </div>
