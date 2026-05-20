@@ -148,50 +148,113 @@ client surface: reading the audit log and deleting a program.
 - New nav link "บันทึกการทำงาน" in `app/admin/layout.tsx` sub-nav,
   visible only to `isAdmin`.
 
-**B2. Program delete (with cascade guard).**
-- New server action `deleteProgram(programId)` in
-  `app/admin/programs/actions.ts` — admin-only.
-- **Cascade guard:** refuse delete if any `courses`, `offerings`, or
-  `users.directorOf/assessorOf/verifierOf` still reference the
-  program. Surface a clear error listing the blocking references.
-  (No hard delete with cascade — too easy to lose data.)
-- Delete button + confirm dialog on
-  `app/admin/programs/[programId]/page.tsx`, only for `isAdmin`.
-- `auditLog` entry on success.
+**B2. Program lifecycle — three modes, ordered safest to most destructive.**
 
-### A. Resolve the assessor/verifier sign-off asymmetry (decision + ½ day)
+All three are admin-only and live in
+`app/admin/programs/actions.ts`. Surfaced from
+`app/admin/programs/[programId]/page.tsx` with progressively stronger
+confirmations.
+
+**Mode 1 — Soft-delete (reversible).**
+- Server action `softDeleteProgram(programId)`.
+- Marks `programs/{id}.isActive = false`.
+- Cascades `isActive = false` to every `courses` doc with
+  `programId == id`.
+- **Untouched:** offerings (carry lifecycle `status`, not `isActive`;
+  changing them would corrupt the AUN-QA history); AI reports,
+  assessments, verifications, notifications, audit log, Storage
+  PDFs; user role arrays (`directorOf/assessorOf/verifierOf`) —
+  preserved so undelete restores the assignment graph cleanly.
+- Action `auditLog` entry: `program_soft_deleted`.
+- Symmetric `restoreProgram(programId)` action flips both back to
+  `true` and records `program_restored`.
+- This is the **default** path; the UI button labels it
+  "ปิดใช้งานหลักสูตร".
+
+**Mode 2 — Hard delete (cascade-guarded).**
+- Server action `deleteProgram(programId)`.
+- **Guard:** refuses if any of these reference the program — returns
+  a structured error listing the blockers:
+  - any `courses` with `programId == id`
+  - any `offerings` with `programId == id`
+  - any user whose `roles.{directorOf, assessorOf, verifierOf}`
+    contains the program id
+  - any `implementationReviews` with `programId == id`
+- If the guard passes the program doc has no related records, so
+  deleting just the program doc is enough — no cascade required.
+- Action `auditLog` entry: `program_hard_deleted`.
+- UI: confirm dialog. Labelled "ลบหลักสูตร" — only enabled when
+  the guard would pass (the page can pre-check and grey out
+  otherwise).
+
+**Mode 3 — Purge (destructive cascading, danger zone).**
+- Server action `purgeProgram(programId)`.
+- **Irreversible.** Wipes every record tied to the program. The
+  AUN-QA audit trail for those courses is lost — only the purge
+  receipt in `auditLog` remains.
+- Order of operations (Admin SDK, batched where possible):
+  1. List every `offerings/{oid}` with `programId == id`.
+  2. For each offering, delete every doc in its subcollections —
+     `aiReports`, `assessments`, `verifications` — and delete any
+     Storage objects referenced by those docs
+     (`reportStoragePath`, `signedPdfStoragePath`,
+     `finalPdfStoragePath`).
+  3. Delete every `notifications` with `relatedOfferingId` in the
+     offering set.
+  4. Delete the offering docs themselves.
+  5. Delete every `courses` with `programId == id`.
+  6. Delete every `implementationReviews` with `programId == id`.
+  7. For every user whose `roles.{directorOf, assessorOf,
+     verifierOf}` contains the program id, remove it from those
+     arrays.
+  8. Delete the program doc.
+  9. Write a single `auditLog` entry `program_purged` summarizing
+     counts removed.
+- This is heavy enough that it belongs in a Cloud Function callable
+  (`purgeProgram`) rather than a Next route — Firestore needs
+  per-doc deletes and Storage cleanup, and a callable can run
+  longer than a serverless route. The callable verifies `isAdmin`
+  via the Admin SDK + user doc.
+- UI: a separate "ลบทั้งหมดถาวร" button in a red danger panel,
+  hidden behind a disclosure. Two confirmations:
+  - Typed: admin must type the program code exactly to enable
+    the button.
+  - Checkbox: "ฉันเข้าใจว่าการกระทำนี้ไม่สามารถย้อนกลับได้
+    และจะลบประวัติการทวนสอบทั้งหมดของหลักสูตรนี้".
+- The button only appears for `isAdmin`.
+
+**UI hierarchy on the program detail page:**
+1. Soft-delete button (calm, primary action).
+2. Hard delete button (visible only if guard would pass, otherwise
+   greyed with an explanation pointing to soft-delete).
+3. Danger zone collapsible at the bottom containing the purge.
+
+### A. Resolve the assessor/verifier sign-off asymmetry — strict (½ day)
 
 The two signed acts authorize different role-sets today:
 
-| Action | Allowed callers (server route) |
+| Action | Current allowed callers (server route) |
 |---|---|
 | Sign assessment (`/api/assessor/submit`) | `assessorOf` only |
 | Sign verification (`/api/verification/submit`) | `isAdmin` OR `directorOf` OR `verifierOf` |
 
-This is asymmetric. Either both should be strictly role-bound, or
-both should let `isAdmin` act on behalf.
+**Decision: strict (Option 1).** A signed record carries the signer's
+name and date; admins shouldn't sign on behalf of a committee.
+Tighten verification submit to **`verifierOf` only** to match the
+assessment path. Resolves finding D too.
 
-**Option 1 — Strict (recommended for AUN-QA integrity).** A signed
-record carries the signer's name and date; admins shouldn't sign on
-behalf of a committee. Tighten verification submit to **`verifierOf`
-only** to match the assessment path. Resolves finding D too.
-
-- `app/api/verification/submit/route.ts`: change `allowed` to
-  `(verifierOf ?? []).includes(programId)`. Remove the
+- `app/api/verification/submit/route.ts`: change the `allowed` check
+  to `(verifierOf ?? []).includes(programId)`. Remove the
   `isAdmin || directorOf` paths.
 - `functions/src/generateFinalVerificationReport.ts`: same tightening
-  (admin can no longer regenerate someone else's verification PDF).
+  (admin/director can no longer regenerate someone else's
+  verification PDF).
 - `app/verification/layout.tsx`: keep admin/director **read** access
   to the queue (visibility, no signing).
 - Drop the explicit `isAdmin` short-circuit; document via the
   ROLE_MATRIX.md (finding D).
-
-**Option 2 — Permissive.** Add `isAdmin` bypass to assessor submit so
-both routes are symmetric.
-
-- `app/api/assessor/submit/route.ts:61`: allow `isAdmin` in addition
-  to `assessorOf`. Same in `firestore.rules` if we want client writes.
-- Not recommended — undermines audit integrity.
+- Test by hand: an admin who isn't a verifier of the program attempts
+  to sign — expect `not_authorized` (403).
 
 Either option is a one-file edit on the server route plus the
 matching Cloud Function. Tests by hand: attempt sign-off as the
@@ -206,7 +269,7 @@ non-role-holding admin; confirm 403.
 | E. Admin → `/assessor` | low | layout + page widening |
 | D. ROLE_MATRIX.md | trivial | docs only |
 | B1. Audit log UI | medium | new index + page |
-| B2. Program delete | medium | cascade guard is the careful bit |
+| B2. Program lifecycle (soft + hard + purge) | medium → high | the purge needs careful UI gating and Storage cleanup |
 | A. Sign-off symmetry | medium | policy decision; touches sign-off paths |
 
 ## Prerequisites
