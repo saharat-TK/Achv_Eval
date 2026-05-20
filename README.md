@@ -272,6 +272,128 @@ non-role-holding admin; confirm 403.
 | B2. Program lifecycle (soft + hard + purge) | medium → high | the purge needs careful UI gating and Storage cleanup |
 | A. Sign-off symmetry | medium | policy decision; touches sign-off paths |
 
+## Course Lifecycle — Implementation Plan
+
+Mirrors the program-lifecycle pattern (B2 above) one level down.
+Audit findings on courses showed the admin/director gating is solid
+across UI + actions + rules, but **no delete UI** exists, **no
+per-course soft-delete**, and **no purge** for retiring a course and
+all its history. This section adds those three modes plus the
+smaller-but-related improvements found in the audit.
+
+All three lifecycle modes are admin-only (mirroring program
+lifecycle) and live in
+`app/admin/programs/[programId]/courses/actions.ts`. The UI surface
+is a new `components/CourseLifecyclePanel.tsx` mounted on
+`app/admin/programs/[programId]/courses/[courseId]/page.tsx`.
+
+### Mode 1 — Soft-delete (reversible)
+
+- `softDeleteCourse(courseId)` server action.
+- Marks `courses/{id}.isActive = false`.
+- **Untouched:** offerings (they carry lifecycle `status`, not
+  `isActive`; touching them would corrupt AUN-QA history), all
+  subcollections (aiReports/assessments/verifications), Storage,
+  notifications, audit log.
+- Symmetric `restoreCourse(courseId)` flips it back.
+- Audit entries: `course_soft_deleted`, `course_restored`.
+- UI button label: "ปิดใช้งานรายวิชา" / "กู้คืนรายวิชา".
+- This is the **default** path — preserves AUN-QA history.
+
+### Mode 2 — Hard delete (cascade-guarded)
+
+- `deleteCourse(courseId)` server action.
+- **Guard:** refuses if any `offerings` doc has `courseId == id`.
+  Returns a structured error with the offering count and a hint to
+  use soft-delete or purge.
+- If the guard passes the course has no offerings, so deleting the
+  course doc is sufficient — no cascade required.
+- Audit: `course_hard_deleted`.
+- UI: confirm dialog. Greyed out by `checkCourseBlockers` when
+  offerings exist; tooltip points to soft-delete.
+
+### Mode 3 — Purge (destructive cascading, danger zone)
+
+Deletes the course and every record tied to its offerings.
+**Irreversible** — the AUN-QA audit trail for this course is lost
+(only the purge receipt in `auditLog` remains).
+
+- `purgeCourse(courseId)` **Cloud Function callable** (heavy work +
+  Storage cleanup, same pattern as `purgeProgram`).
+- Order of operations (Admin SDK):
+  1. List every `offerings/{oid}` with `courseId == id`.
+  2. For each offering:
+     - Delete every doc in its subcollections — `aiReports`,
+       `assessments`, `verifications` — and delete any Storage
+       objects they reference (`reportStoragePath`,
+       `signedPdfStoragePath`, `finalPdfStoragePath`).
+     - Delete `notifications` where `relatedOfferingId == oid`.
+     - Delete `implementationReviews` where `previousOfferingId`
+       or `newOfferingId == oid`.
+     - Delete the offering doc.
+  3. Delete the course doc.
+  4. Write a single `auditLog` entry `course_purged` with counts.
+- Auth: admin only (callable verifies `roles.isAdmin === true`
+  server-side).
+- UI: red danger panel behind a disclosure. Two confirmations to
+  enable the button:
+  - Typed: admin must type the course code exactly.
+  - Checkbox: "ฉันเข้าใจว่าการกระทำนี้ไม่สามารถย้อนกลับได้
+    และจะลบประวัติการทวนสอบทั้งหมดของรายวิชานี้".
+
+### Smaller fixes alongside the lifecycle (audit findings C3–C6)
+
+These are independent of the lifecycle work but worth bundling:
+
+- **C3** — `batchUploadCourses`: emit a per-row `course_created`
+  audit entry inside the loop (in addition to the existing
+  `courses_batch_uploaded` summary), so individual courses are
+  traceable.
+- **C4** — uniqueness validation: in `validate()` and inside the
+  CSV loop, refuse if a course with the same `code` already exists
+  in the program. Pre-fetch the program's existing codes once for
+  the CSV pass.
+- **C5** — let the CSV import set `isActive` from an optional
+  column (default `true` when missing).
+- **C6** — replace the CSV per-doc loop with `db.batch()` chunks of
+  500 ops for atomicity + speed (still works with the per-row audit
+  if the audit writes use the same batch).
+
+### Files touched
+
+- `app/admin/programs/[programId]/courses/actions.ts` — add
+  `softDeleteCourse`, `restoreCourse`, `deleteCourse`,
+  `checkCourseBlockers`; tighten `validate()` for C4; adjust CSV
+  loop for C3/C5/C6.
+- `components/CourseLifecyclePanel.tsx` — new, modelled on
+  `ProgramLifecyclePanel.tsx`.
+- `app/admin/programs/[programId]/courses/[courseId]/page.tsx` —
+  mount the lifecycle panel for admins.
+- `functions/src/purgeCourse.ts` — new callable.
+- `functions/src/index.ts` — export `purgeCourse`.
+- `docs/ROLE_MATRIX.md` — extend the courses row to cover
+  soft-delete / hard-delete / purge.
+
+### UI hierarchy on the course detail page
+
+1. Calm soft-delete / restore button (primary action).
+2. Hard-delete button — visible only when guard would pass,
+   otherwise greyed with an explanation pointing to soft-delete.
+3. Danger zone collapsible at the bottom containing the purge.
+
+### Sequence & risk
+
+| Step | Risk | Notes |
+|---|---|---|
+| Soft-delete + restore | low | mirrors program softDelete |
+| Hard delete (guarded) | low | one query + one delete |
+| C4 uniqueness | low | cheap query before write |
+| C5 CSV isActive column | low | parser tweak |
+| C6 batched CSV writes | low | one-time refactor |
+| C3 per-row CSV audit | low | inside the loop |
+| **Purge callable** | medium | careful with Storage cleanup; matches purgeProgram |
+| **Lifecycle panel UI** | medium | typed-code + checkbox gating must match purgeProgram safety |
+
 ## Prerequisites
 
 - Node.js 20.6+ (the `seed` script uses `--env-file`)
