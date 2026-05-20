@@ -469,3 +469,6 @@ cd functions && npm run logs     # Tail function logs
 - Server code (Admin SDK) bypasses rules — keep Admin SDK imports out of any
   `'use client'` file.
 - The audit log is server-write-only and admin-read-only by rule.
+- The role × capability matrix lives in
+  [`docs/ROLE_MATRIX.md`](docs/ROLE_MATRIX.md) — update it whenever a
+  role check changes.
