@@ -73,6 +73,14 @@ export default async function AdminLayout({
                   ผู้ใช้งานและสิทธิ์
                 </Link>
               )}
+              {profile.roles.isAdmin && (
+                <Link
+                  href="/admin/audit-log"
+                  className="border-b-2 border-transparent py-3 text-slate-600 hover:border-mfu-primary hover:text-mfu-primary"
+                >
+                  บันทึกการทำงาน
+                </Link>
+              )}
             </div>
           </div>
         </nav>
