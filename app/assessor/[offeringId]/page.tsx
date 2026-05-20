@@ -19,10 +19,12 @@ export default async function AssessorOfferingPage({
 
   const offering = await getOffering(params.offeringId);
 
-  // Assessor must be assigned to the offering's program.
+  // Assessor must be assigned to the offering's program. Admins may view
+  // any offering read-only — the sign-off API still checks assessorOf.
   if (
     !offering ||
-    !profile.roles.assessorOf.includes(offering.programId)
+    (!profile.roles.isAdmin &&
+      !profile.roles.assessorOf.includes(offering.programId))
   ) {
     notFound();
   }

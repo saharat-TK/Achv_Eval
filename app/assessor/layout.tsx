@@ -12,8 +12,10 @@ export default async function AssessorLayout({
   const profile = await getCurrentProfile();
   if (!profile) redirect('/login');
 
-  // Must have assessor role for at least one program.
-  if (!profile.roles.assessorOf || profile.roles.assessorOf.length === 0) {
+  // Must be an assessor of at least one program, or an admin viewing
+  // read-only. The sign-off route still gates strictly on assessorOf.
+  const hasAssessor = (profile.roles.assessorOf ?? []).length > 0;
+  if (!profile.roles.isAdmin && !hasAssessor) {
     redirect('/login');
   }
 
