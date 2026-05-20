@@ -3,7 +3,8 @@ import { notFound, redirect } from 'next/navigation';
 import { getCurrentProfile } from '@/lib/firebase/auth-server';
 import { getProgram } from '@/lib/data/programs';
 import ProgramForm from '@/components/ProgramForm';
-import type { ProgramFormData } from '@/app/admin/programs/actions';
+import ProgramLifecyclePanel from '@/components/ProgramLifecyclePanel';
+import { checkProgramBlockers, type ProgramFormData } from '@/app/admin/programs/actions';
 
 export const dynamic = 'force-dynamic';
 
@@ -41,6 +42,21 @@ export default async function EditProgramPage({
     })),
   };
 
+  const isAdmin = profile.roles.isAdmin === true;
+  let blockers = {
+    coursesCount: 0,
+    offeringsCount: 0,
+    reviewsCount: 0,
+    assignedUsers: [] as string[],
+  };
+
+  if (isAdmin) {
+    const blockersRes = await checkProgramBlockers(program.id);
+    if (blockersRes.ok) {
+      blockers = blockersRes.blockers;
+    }
+  }
+
   return (
     <div>
       <Link href="/admin" className="text-sm text-slate-500 hover:underline">
@@ -71,6 +87,16 @@ export default async function EditProgramPage({
       <div className="mt-6">
         <ProgramForm mode="edit" programId={program.id} initial={initial} />
       </div>
+
+      {isAdmin && (
+        <ProgramLifecyclePanel
+          programId={program.id}
+          programCode={program.code}
+          isActive={program.isActive}
+          blockers={blockers}
+        />
+      )}
     </div>
   );
 }
+

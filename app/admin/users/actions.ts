@@ -15,6 +15,22 @@ export interface UserRolesData {
 export type RolesActionResult = { ok: true } | { ok: false; error: string };
 
 /**
+ * Counts other admins (excluding the given uid) who would still be admins
+ * and active after a hypothetical change. Used to guard against the system
+ * being left with zero active admins.
+ */
+async function countOtherActiveAdmins(excludeUid: string): Promise<number> {
+  const db = getAdminDb();
+  const snap = await db
+    .collection('users')
+    .where('roles.isAdmin', '==', true)
+    .get();
+  return snap.docs.filter(
+    (doc) => doc.id !== excludeUid && doc.data().isActive !== false,
+  ).length;
+}
+
+/**
  * Updates a user's role assignments. Admin only.
  *
  * Guards against an admin removing their own admin rights (which would
@@ -35,8 +51,23 @@ export async function updateUserRoles(
 
   const db = getAdminDb();
   const userRef = db.collection('users').doc(userId);
-  if (!(await userRef.get()).exists) {
+  const userSnap = await userRef.get();
+  if (!userSnap.exists) {
     return { ok: false, error: 'ไม่พบผู้ใช้' };
+  }
+
+  // Last-admin safeguard: refuse if this change would demote the only
+  // remaining active admin in the system.
+  const targetWasAdmin = userSnap.data()?.roles?.isAdmin === true;
+  if (targetWasAdmin && !roles.isAdmin) {
+    const others = await countOtherActiveAdmins(userId);
+    if (others === 0) {
+      return {
+        ok: false,
+        error:
+          'ไม่สามารถถอนสิทธิ์ได้ — บัญชีนี้เป็นผู้ดูแลระบบที่ยังใช้งานอยู่คนเดียว',
+      };
+    }
   }
 
   await userRef.update({
@@ -90,8 +121,22 @@ export async function setUserActive(
 
   const db = getAdminDb();
   const userRef = db.collection('users').doc(userId);
-  if (!(await userRef.get()).exists) {
+  const userSnap = await userRef.get();
+  if (!userSnap.exists) {
     return { ok: false, error: 'ไม่พบผู้ใช้' };
+  }
+
+  // Last-admin safeguard: refuse if deactivating the only remaining active
+  // admin in the system.
+  if (!isActive && userSnap.data()?.roles?.isAdmin === true) {
+    const others = await countOtherActiveAdmins(userId);
+    if (others === 0) {
+      return {
+        ok: false,
+        error:
+          'ไม่สามารถปิดใช้งานได้ — บัญชีนี้เป็นผู้ดูแลระบบที่ยังใช้งานอยู่คนเดียว',
+      };
+    }
   }
 
   await userRef.update({ isActive, updatedAt: FieldValue.serverTimestamp() });

@@ -123,6 +123,10 @@ service cloud.firestore {
         allow update, delete: if isAdmin(); // status updates are server-driven
       }
 
+      // Sign-off writes (assessments, verifications) intentionally go through
+      // server actions — /api/assessor/submit, /api/verification/submit. The
+      // client rules below deliberately exclude isAdmin() so an admin cannot
+      // fabricate a signed record by writing directly from the client.
       match /assessments/{assessmentId} {
         allow read: if canReadOffering(offeringId);
         allow create: if assessesProgram(offering(offeringId).programId)

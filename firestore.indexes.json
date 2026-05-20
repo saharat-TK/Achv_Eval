@@ -79,6 +79,15 @@
       ]
     },
     {
+      "comment": "Audit log filtered by entityType, newest first (admin viewer)",
+      "collectionGroup": "auditLog",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "entityType", "order": "ASCENDING" },
+        { "fieldPath": "occurredAt", "order": "DESCENDING" }
+      ]
+    },
+    {
       "comment": "Audit trail for one entity, newest first",
       "collectionGroup": "auditLog",
       "queryScope": "COLLECTION",

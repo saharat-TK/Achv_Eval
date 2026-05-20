@@ -118,3 +118,211 @@ export async function updateProgram(
   revalidatePath(`/admin/programs/${programId}`);
   return { ok: true, id: programId };
 }
+
+/** Soft-delete a program. Marks the program and its courses as inactive. Admin only. */
+export async function softDeleteProgram(programId: string): Promise<ActionResult> {
+  const user = await getSessionUser();
+  const profile = await getCurrentProfile();
+  if (!user || !profile?.roles.isAdmin) {
+    return { ok: false, error: 'เฉพาะผู้ดูแลระบบเท่านั้นที่สามารถดำเนินการนี้ได้' };
+  }
+
+  const db = getAdminDb();
+  
+  // Update program doc
+  await db.collection('programs').doc(programId).update({
+    isActive: false,
+    updatedAt: FieldValue.serverTimestamp(),
+  });
+
+  // Cascade to courses
+  const coursesSnap = await db
+    .collection('courses')
+    .where('programId', '==', programId)
+    .get();
+
+  if (coursesSnap.size > 0) {
+    const batch = db.batch();
+    coursesSnap.docs.forEach((doc) => {
+      batch.update(doc.ref, {
+        isActive: false,
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+    });
+    await batch.commit();
+  }
+
+  await writeAudit('program_soft_deleted', programId, user.uid, user.email ?? null);
+  
+  revalidatePath('/admin');
+  revalidatePath(`/admin/programs/${programId}`);
+  return { ok: true, id: programId };
+}
+
+/** Restore a soft-deleted program. Marks the program and its courses as active. Admin only. */
+export async function restoreProgram(programId: string): Promise<ActionResult> {
+  const user = await getSessionUser();
+  const profile = await getCurrentProfile();
+  if (!user || !profile?.roles.isAdmin) {
+    return { ok: false, error: 'เฉพาะผู้ดูแลระบบเท่านั้นที่สามารถดำเนินการนี้ได้' };
+  }
+
+  const db = getAdminDb();
+  
+  // Update program doc
+  await db.collection('programs').doc(programId).update({
+    isActive: true,
+    updatedAt: FieldValue.serverTimestamp(),
+  });
+
+  // Cascade to courses
+  const coursesSnap = await db
+    .collection('courses')
+    .where('programId', '==', programId)
+    .get();
+
+  if (coursesSnap.size > 0) {
+    const batch = db.batch();
+    coursesSnap.docs.forEach((doc) => {
+      batch.update(doc.ref, {
+        isActive: true,
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+    });
+    await batch.commit();
+  }
+
+  await writeAudit('program_restored', programId, user.uid, user.email ?? null);
+  
+  revalidatePath('/admin');
+  revalidatePath(`/admin/programs/${programId}`);
+  return { ok: true, id: programId };
+}
+
+export interface BlockerDetails {
+  coursesCount: number;
+  offeringsCount: number;
+  reviewsCount: number;
+  assignedUsers: string[];
+}
+
+export type DeleteResult =
+  | { ok: true; id: string }
+  | { ok: false; error: string; blockers?: BlockerDetails };
+
+/** Hard-delete a program. Must pass safety guards. Admin only. */
+export async function deleteProgram(programId: string): Promise<DeleteResult> {
+  const user = await getSessionUser();
+  const profile = await getCurrentProfile();
+  if (!user || !profile?.roles.isAdmin) {
+    return { ok: false, error: 'เฉพาะผู้ดูแลระบบเท่านั้นที่สามารถดำเนินการนี้ได้' };
+  }
+
+  const db = getAdminDb();
+
+  // 1. Guard checks
+  const coursesSnap = await db
+    .collection('courses')
+    .where('programId', '==', programId)
+    .get();
+
+  const offeringsSnap = await db
+    .collection('offerings')
+    .where('programId', '==', programId)
+    .get();
+
+  const reviewsSnap = await db
+    .collection('implementationReviews')
+    .where('programId', '==', programId)
+    .get();
+
+  const usersSnap = await db.collection('users').get();
+  const assignedUsers: string[] = [];
+  usersSnap.docs.forEach((doc) => {
+    const data = doc.data();
+    const roles = data.roles || {};
+    const d = roles.directorOf || [];
+    const a = roles.assessorOf || [];
+    const v = roles.verifierOf || [];
+    if (d.includes(programId) || a.includes(programId) || v.includes(programId)) {
+      assignedUsers.push(data.email || data.nameTh || doc.id);
+    }
+  });
+
+  const coursesCount = coursesSnap.size;
+  const offeringsCount = offeringsSnap.size;
+  const reviewsCount = reviewsSnap.size;
+
+  if (coursesCount > 0 || offeringsCount > 0 || reviewsCount > 0 || assignedUsers.length > 0) {
+    return {
+      ok: false,
+      error: 'blockers_exist',
+      blockers: {
+        coursesCount,
+        offeringsCount,
+        reviewsCount,
+        assignedUsers,
+      },
+    };
+  }
+
+  // 2. No blockers: proceed with simple delete of the program doc
+  await db.collection('programs').doc(programId).delete();
+
+  await writeAudit('program_hard_deleted', programId, user.uid, user.email ?? null);
+
+  revalidatePath('/admin');
+  return { ok: true, id: programId };
+}
+
+/** Pre-check if a program has any blocker relations preventing hard-delete. Admin only. */
+export async function checkProgramBlockers(
+  programId: string
+): Promise<{ ok: true; blockers: BlockerDetails } | { ok: false; error: string }> {
+  const user = await getSessionUser();
+  const profile = await getCurrentProfile();
+  if (!user || !profile?.roles.isAdmin) {
+    return { ok: false, error: 'เฉพาะผู้ดูแลระบบเท่านั้นที่ตรวจสอบสิทธิ์นี้ได้' };
+  }
+
+  const db = getAdminDb();
+
+  const coursesSnap = await db
+    .collection('courses')
+    .where('programId', '==', programId)
+    .get();
+
+  const offeringsSnap = await db
+    .collection('offerings')
+    .where('programId', '==', programId)
+    .get();
+
+  const reviewsSnap = await db
+    .collection('implementationReviews')
+    .where('programId', '==', programId)
+    .get();
+
+  const usersSnap = await db.collection('users').get();
+  const assignedUsers: string[] = [];
+  usersSnap.docs.forEach((doc) => {
+    const data = doc.data();
+    const roles = data.roles || {};
+    const d = roles.directorOf || [];
+    const a = roles.assessorOf || [];
+    const v = roles.verifierOf || [];
+    if (d.includes(programId) || a.includes(programId) || v.includes(programId)) {
+      assignedUsers.push(data.email || data.nameTh || doc.id);
+    }
+  });
+
+  return {
+    ok: true,
+    blockers: {
+      coursesCount: coursesSnap.size,
+      offeringsCount: offeringsSnap.size,
+      reviewsCount: reviewsSnap.size,
+      assignedUsers,
+    },
+  };
+}
+

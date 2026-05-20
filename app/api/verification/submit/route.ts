@@ -59,10 +59,9 @@ export async function POST(request: NextRequest) {
   }
 
   const offering = offeringSnap.data()!;
-  const canVerify =
-    profile.roles.isAdmin ||
-    (profile.roles.directorOf ?? []).includes(offering.programId) ||
-    (profile.roles.verifierOf ?? []).includes(offering.programId);
+  // Strict role-binding: signing a verification is committee-only. Admins
+  // and directors who need to sign must be added to verifierOf.
+  const canVerify = (profile.roles.verifierOf ?? []).includes(offering.programId);
   if (!canVerify) {
     return NextResponse.json({ error: 'not_authorized' }, { status: 403 });
   }
