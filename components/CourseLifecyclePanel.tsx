@@ -140,8 +140,8 @@ export default function CourseLifecyclePanel({
   }
 
   return (
-    <section className="mt-8 space-y-4">
-      <h2 className="text-base font-semibold text-slate-800">
+    <section className="space-y-3">
+      <h2 className="text-sm font-semibold text-slate-700">
         จัดการสถานะรายวิชา
       </h2>
 
@@ -156,7 +156,6 @@ export default function CourseLifecyclePanel({
         </p>
       )}
 
-      <div className="grid items-start gap-4 md:grid-cols-3">
       {/* Mode 1: Soft-delete / Restore */}
       <div className="rounded-lg border border-slate-200 bg-white p-4">
         <h3 className="text-sm font-semibold text-slate-700">
@@ -254,7 +253,6 @@ export default function CourseLifecyclePanel({
             </button>
           </div>
         )}
-      </div>
       </div>
     </section>
   );

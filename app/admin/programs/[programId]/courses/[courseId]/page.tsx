@@ -61,23 +61,27 @@ export default async function EditCoursePage({
         แก้ไขรายวิชา {course.code}
       </h1>
       <p className="mt-1 text-sm text-slate-500">{course.nameTh}</p>
-      <div className="mt-6">
-        <CourseForm
-          mode="edit"
-          programId={program.id}
-          courseId={course.id}
-          initial={initial}
-        />
+      <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
+        <div>
+          <CourseForm
+            mode="edit"
+            programId={program.id}
+            courseId={course.id}
+            initial={initial}
+          />
+        </div>
+        {profile.roles.isAdmin && (
+          <aside className="lg:sticky lg:top-24 lg:self-start">
+            <CourseLifecyclePanel
+              programId={program.id}
+              courseId={course.id}
+              courseCode={course.code}
+              isActive={course.isActive}
+              blockers={{ offeringsCount }}
+            />
+          </aside>
+        )}
       </div>
-      {profile.roles.isAdmin && (
-        <CourseLifecyclePanel
-          programId={program.id}
-          courseId={course.id}
-          courseCode={course.code}
-          isActive={course.isActive}
-          blockers={{ offeringsCount }}
-        />
-      )}
     </div>
   );
 }
