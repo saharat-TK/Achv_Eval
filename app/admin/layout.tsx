@@ -21,25 +21,25 @@ export default async function AdminLayout({
   return (
     <div className="min-h-screen">
       <div className="sticky top-0 z-50 bg-white shadow-sm print:hidden">
-        <header className="border-b border-slate-200">
+        <header className="bg-mfu-primary">
           <div className="mx-auto max-w-5xl px-6 py-3 flex items-center justify-between">
             <Link href="/admin/dashboard" className="flex flex-col">
-              <span className="text-sm font-semibold text-mfu-primary">
+              <span className="text-sm font-semibold text-white">
                 ระบบประเมินและทวนสอบรายวิชา
               </span>
-              <span className="text-xs text-slate-500">
+              <span className="text-xs text-white/70">
                 พื้นที่ทำงานผู้ดูแลระบบ / ประธานหลักสูตร
               </span>
             </Link>
             <div className="flex items-center gap-4">
-              <NotificationBell />
+              <NotificationBell tone="dark" />
               <div className="text-right">
-                <div className="text-sm text-slate-700">{profile.nameTh}</div>
-                <div className="text-xs text-slate-400">
+                <div className="text-sm text-white">{profile.nameTh}</div>
+                <div className="text-xs text-white/70">
                   {profile.roles.isAdmin ? 'ผู้ดูแลระบบ' : 'ประธานหลักสูตร'}
                 </div>
               </div>
-              <SignOutButton />
+              <SignOutButton tone="dark" />
             </div>
           </div>
         </header>

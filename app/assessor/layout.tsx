@@ -19,40 +19,48 @@ export default async function AssessorLayout({
 
   return (
     <div className="min-h-screen">
-      <header className="sticky top-0 z-50 border-b border-slate-200 bg-white shadow-sm">
-        <div className="mx-auto max-w-5xl px-6 py-3 flex items-center justify-between">
-          <Link href="/assessor" className="flex flex-col">
-            <span className="text-sm font-semibold text-mfu-primary">
-              ระบบประเมินและทวนสอบรายวิชา
-            </span>
-            <span className="text-xs text-slate-500">
-              พื้นที่ทำงานผู้ทวนสอบ
-            </span>
-          </Link>
-          <div className="flex items-center gap-4">
-            <nav className="flex items-center gap-4 text-sm">
+      <div className="sticky top-0 z-50 bg-white shadow-sm">
+        <header className="bg-mfu-primary">
+          <div className="mx-auto max-w-5xl px-6 py-3 flex items-center justify-between">
+            <Link href="/assessor" className="flex flex-col">
+              <span className="text-sm font-semibold text-white">
+                ระบบประเมินและทวนสอบรายวิชา
+              </span>
+              <span className="text-xs text-white/70">
+                พื้นที่ทำงานผู้ทวนสอบ
+              </span>
+            </Link>
+            <div className="flex items-center gap-4">
+              <NotificationBell basePath="/assessor" tone="dark" />
+              <div className="text-right">
+                <div className="text-sm text-white">{profile.nameTh}</div>
+                <div className="text-xs text-white/70">{profile.email}</div>
+              </div>
+              <SignOutButton tone="dark" />
+            </div>
+          </div>
+        </header>
+
+        <nav className="border-b border-slate-200">
+          <div className="mx-auto max-w-5xl px-6">
+            <div className="flex gap-6 text-sm">
               <Link
                 href="/assessor"
-                className="text-slate-600 hover:text-mfu-primary"
+                className="border-b-2 border-transparent py-3 text-slate-600 hover:border-mfu-primary hover:text-mfu-primary"
               >
                 รายการทวนสอบ
               </Link>
               <Link
                 href="/assessor/verification"
-                className="text-slate-600 hover:text-mfu-primary"
+                className="border-b-2 border-transparent py-3 text-slate-600 hover:border-mfu-primary hover:text-mfu-primary"
               >
                 การนำไปปฏิบัติ
               </Link>
-            </nav>
-            <NotificationBell basePath="/assessor" />
-            <div className="text-right">
-              <div className="text-sm text-slate-700">{profile.nameTh}</div>
-              <div className="text-xs text-slate-400">{profile.email}</div>
             </div>
-            <SignOutButton />
           </div>
-        </div>
-      </header>
+        </nav>
+      </div>
+
       <main className="mx-auto max-w-5xl px-6 py-8">{children}</main>
     </div>
   );
