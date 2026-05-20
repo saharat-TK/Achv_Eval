@@ -43,7 +43,19 @@ async function authorize(programId: string) {
   return user && allowed ? user : null;
 }
 
-async function audit(action: string, courseId: string, uid: string, email: string | null) {
+async function authorizeAdmin() {
+  const user = await getSessionUser();
+  const profile = await getCurrentProfile();
+  return user && profile?.roles.isAdmin ? user : null;
+}
+
+async function audit(
+  action: string,
+  courseId: string,
+  uid: string,
+  email: string | null,
+  after: Record<string, unknown> | null = null,
+) {
   await getAdminDb().collection('auditLog').add({
     occurredAt: FieldValue.serverTimestamp(),
     actorId: uid,
@@ -52,7 +64,7 @@ async function audit(action: string, courseId: string, uid: string, email: strin
     entityType: 'courses',
     entityId: courseId,
     before: null,
-    after: null,
+    after,
   });
 }
 
@@ -64,6 +76,28 @@ function validate(data: CourseFormData): string | null {
   if (parseCredits(data.creditStructure) <= 0)
     return 'โครงสร้างหน่วยกิตไม่ถูกต้อง (เช่น 2(2-0-4))';
   return null;
+}
+
+/**
+ * Returns the set of course codes already used in a program (lowercased).
+ * One query per call; used to enforce code uniqueness within a program
+ * (audit finding C4).
+ */
+async function existingCodesForProgram(
+  programId: string,
+  excludeCourseId?: string,
+): Promise<Set<string>> {
+  const snap = await getAdminDb()
+    .collection('courses')
+    .where('programId', '==', programId)
+    .get();
+  const codes = new Set<string>();
+  for (const doc of snap.docs) {
+    if (doc.id === excludeCourseId) continue;
+    const code = (doc.data().code as string | undefined)?.trim().toLowerCase();
+    if (code) codes.add(code);
+  }
+  return codes;
 }
 
 function toDoc(programId: string, data: CourseFormData) {
@@ -91,6 +125,12 @@ export async function createCourse(
   const err = validate(data);
   if (err) return { ok: false, error: err };
 
+  // C4: uniqueness check
+  const existing = await existingCodesForProgram(programId);
+  if (existing.has(data.code.trim().toLowerCase())) {
+    return { ok: false, error: `รหัสวิชา ${data.code.trim()} มีอยู่ในหลักสูตรนี้แล้ว` };
+  }
+
   const now = FieldValue.serverTimestamp();
   const ref = await getAdminDb()
     .collection('courses')
@@ -112,6 +152,12 @@ export async function updateCourse(
   const err = validate(data);
   if (err) return { ok: false, error: err };
 
+  // C4: uniqueness check (excluding the course being edited)
+  const existing = await existingCodesForProgram(programId, courseId);
+  if (existing.has(data.code.trim().toLowerCase())) {
+    return { ok: false, error: `รหัสวิชา ${data.code.trim()} มีอยู่ในหลักสูตรนี้แล้ว` };
+  }
+
   await getAdminDb()
     .collection('courses')
     .doc(courseId)
@@ -123,8 +169,11 @@ export async function updateCourse(
 }
 
 /**
- * Batch-creates courses from parsed CSV rows. Each row that fails validation
- * is reported but does not stop the others.
+ * Batch-creates courses from parsed CSV rows. Findings C3–C6:
+ * - per-row `course_created` audit entries
+ * - code-uniqueness check (existing + within-batch)
+ * - optional `isActive` column (default true)
+ * - chunked batched writes
  */
 export async function batchUploadCourses(
   programId: string,
@@ -135,13 +184,17 @@ export async function batchUploadCourses(
 
   const db = getAdminDb();
   const errors: string[] = [];
-  let created = 0;
+  const existing = await existingCodesForProgram(programId);
+  const seenInBatch = new Set<string>();
+  const toCreate: { tempId: string; doc: Record<string, unknown>; lineRow: number }[] = [];
 
-  for (let i = 0; i < rows.length; i++) {
+  for (let i = 0; i < rows.length; i += 1) {
     const r = rows[i];
     const line = i + 2; // +1 header, +1 for 1-based
     const typeRaw = (r.type ?? '').trim() as CourseType;
     const semRaw = (r.semester ?? '').trim();
+    const isActiveRaw = (r.isActive ?? '').trim().toLowerCase();
+    const isActive = !['false', '0', 'no', 'n'].includes(isActiveRaw);
     const data: CourseFormData = {
       code: r.code ?? '',
       nameTh: r.nameTh ?? '',
@@ -152,26 +205,182 @@ export async function batchUploadCourses(
       semester: (['1', '2', '3'] as string[]).includes(semRaw)
         ? (semRaw as Semester)
         : null,
-      isActive: true,
+      isActive,
     };
+
     const err = validate(data);
     if (err) {
       errors.push(`แถว ${line}: ${err}`);
       continue;
     }
-    if (!COURSE_TYPES.includes(typeRaw)) {
-      errors.push(`แถว ${line}: ประเภทวิชา "${r.type}" ไม่ถูกต้อง — ใช้ค่าเริ่มต้น theory`);
+    const normalizedCode = data.code.trim().toLowerCase();
+    if (existing.has(normalizedCode)) {
+      errors.push(
+        `แถว ${line}: รหัสวิชา ${data.code.trim()} มีอยู่ในหลักสูตรนี้แล้ว`,
+      );
+      continue;
     }
-    const now = FieldValue.serverTimestamp();
-    await db
-      .collection('courses')
-      .add({ ...toDoc(programId, data), createdAt: now, updatedAt: now });
-    created++;
+    if (seenInBatch.has(normalizedCode)) {
+      errors.push(`แถว ${line}: รหัสวิชา ${data.code.trim()} ซ้ำในไฟล์`);
+      continue;
+    }
+    if ((r.type ?? '').trim() && !COURSE_TYPES.includes(typeRaw)) {
+      errors.push(
+        `แถว ${line}: ประเภทวิชา "${r.type}" ไม่ถูกต้อง — ใช้ค่าเริ่มต้น theory`,
+      );
+    }
+    seenInBatch.add(normalizedCode);
+    const ref = db.collection('courses').doc();
+    toCreate.push({
+      tempId: ref.id,
+      doc: {
+        ...toDoc(programId, data),
+        createdAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      },
+      lineRow: line,
+    });
+  }
+
+  // C6: chunked Firestore batch writes (≤ 200 courses per batch → 400 ops
+  // total with audit, well under the 500-op limit). C3: per-row audit
+  // entry inside the same batch keeps the writes atomic per chunk.
+  let created = 0;
+  for (let start = 0; start < toCreate.length; start += 200) {
+    const chunk = toCreate.slice(start, start + 200);
+    const batch = db.batch();
+    for (const item of chunk) {
+      batch.set(db.collection('courses').doc(item.tempId), item.doc);
+      batch.set(db.collection('auditLog').doc(), {
+        occurredAt: FieldValue.serverTimestamp(),
+        actorId: user.uid,
+        actorEmail: user.email ?? null,
+        action: 'course_created',
+        entityType: 'courses',
+        entityId: item.tempId,
+        before: null,
+        after: { via: 'csv_batch', programId, line: item.lineRow },
+      });
+    }
+    await batch.commit();
+    created += chunk.length;
   }
 
   if (created > 0) {
-    await audit('courses_batch_uploaded', programId, user.uid, user.email ?? null);
+    await audit(
+      'courses_batch_uploaded',
+      programId,
+      user.uid,
+      user.email ?? null,
+      { created, errors: errors.length },
+    );
     revalidatePath(`/admin/programs/${programId}/courses`);
   }
   return { created, errors };
+}
+
+// ----- Course lifecycle ---------------------------------------------------
+
+/** Soft-delete a course. Flips isActive=false. Reversible via restoreCourse. */
+export async function softDeleteCourse(
+  courseId: string,
+): Promise<CourseActionResult> {
+  const user = await authorizeAdmin();
+  if (!user) {
+    return { ok: false, error: 'เฉพาะผู้ดูแลระบบเท่านั้นที่สามารถดำเนินการนี้ได้' };
+  }
+  const db = getAdminDb();
+  const ref = db.collection('courses').doc(courseId);
+  const snap = await ref.get();
+  if (!snap.exists) return { ok: false, error: 'ไม่พบรายวิชา' };
+  const programId = (snap.data()?.programId as string | undefined) ?? '';
+
+  await ref.update({ isActive: false, updatedAt: FieldValue.serverTimestamp() });
+  await audit('course_soft_deleted', courseId, user.uid, user.email ?? null);
+  revalidatePath(`/admin/programs/${programId}/courses`);
+  revalidatePath(`/admin/programs/${programId}/courses/${courseId}`);
+  return { ok: true, id: courseId };
+}
+
+/** Restore a soft-deleted course. */
+export async function restoreCourse(
+  courseId: string,
+): Promise<CourseActionResult> {
+  const user = await authorizeAdmin();
+  if (!user) {
+    return { ok: false, error: 'เฉพาะผู้ดูแลระบบเท่านั้นที่สามารถดำเนินการนี้ได้' };
+  }
+  const db = getAdminDb();
+  const ref = db.collection('courses').doc(courseId);
+  const snap = await ref.get();
+  if (!snap.exists) return { ok: false, error: 'ไม่พบรายวิชา' };
+  const programId = (snap.data()?.programId as string | undefined) ?? '';
+
+  await ref.update({ isActive: true, updatedAt: FieldValue.serverTimestamp() });
+  await audit('course_restored', courseId, user.uid, user.email ?? null);
+  revalidatePath(`/admin/programs/${programId}/courses`);
+  revalidatePath(`/admin/programs/${programId}/courses/${courseId}`);
+  return { ok: true, id: courseId };
+}
+
+export interface CourseBlockerDetails {
+  offeringsCount: number;
+}
+
+export type CourseDeleteResult =
+  | { ok: true; id: string }
+  | { ok: false; error: string; blockers?: CourseBlockerDetails };
+
+/**
+ * Hard-delete a course. Refuses if any offering references it.
+ * Use purgeCourse (Cloud Function) for the destructive cascade.
+ */
+export async function deleteCourse(
+  courseId: string,
+): Promise<CourseDeleteResult> {
+  const user = await authorizeAdmin();
+  if (!user) {
+    return { ok: false, error: 'เฉพาะผู้ดูแลระบบเท่านั้นที่สามารถดำเนินการนี้ได้' };
+  }
+  const db = getAdminDb();
+  const ref = db.collection('courses').doc(courseId);
+  const snap = await ref.get();
+  if (!snap.exists) return { ok: false, error: 'ไม่พบรายวิชา' };
+  const programId = (snap.data()?.programId as string | undefined) ?? '';
+
+  const offeringsSnap = await db
+    .collection('offerings')
+    .where('courseId', '==', courseId)
+    .get();
+  if (offeringsSnap.size > 0) {
+    return {
+      ok: false,
+      error: 'blockers_exist',
+      blockers: { offeringsCount: offeringsSnap.size },
+    };
+  }
+
+  await ref.delete();
+  await audit('course_hard_deleted', courseId, user.uid, user.email ?? null);
+  revalidatePath(`/admin/programs/${programId}/courses`);
+  return { ok: true, id: courseId };
+}
+
+/** Pre-check for the UI: how many offerings would block a hard-delete. */
+export async function checkCourseBlockers(
+  courseId: string,
+): Promise<
+  | { ok: true; blockers: CourseBlockerDetails }
+  | { ok: false; error: string }
+> {
+  const user = await authorizeAdmin();
+  if (!user) {
+    return { ok: false, error: 'เฉพาะผู้ดูแลระบบเท่านั้นที่ตรวจสอบสิทธิ์นี้ได้' };
+  }
+  const db = getAdminDb();
+  const offeringsSnap = await db
+    .collection('offerings')
+    .where('courseId', '==', courseId)
+    .get();
+  return { ok: true, blockers: { offeringsCount: offeringsSnap.size } };
 }
