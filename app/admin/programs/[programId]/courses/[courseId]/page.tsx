@@ -3,7 +3,9 @@ import { notFound, redirect } from 'next/navigation';
 import { getCurrentProfile } from '@/lib/firebase/auth-server';
 import { getProgram } from '@/lib/data/programs';
 import { getCourse } from '@/lib/data/courses';
+import { getAdminDb } from '@/lib/firebase/admin';
 import CourseForm from '@/components/CourseForm';
+import CourseLifecyclePanel from '@/components/CourseLifecyclePanel';
 import type { CourseFormData } from '@/app/admin/programs/[programId]/courses/actions';
 
 export const dynamic = 'force-dynamic';
@@ -36,6 +38,17 @@ export default async function EditCoursePage({
     isActive: course.isActive,
   };
 
+  // Count offerings referencing this course — drives the hard-delete
+  // button's enabled state in the lifecycle panel.
+  let offeringsCount = 0;
+  if (profile.roles.isAdmin) {
+    const offeringsSnap = await getAdminDb()
+      .collection('offerings')
+      .where('courseId', '==', course.id)
+      .get();
+    offeringsCount = offeringsSnap.size;
+  }
+
   return (
     <div>
       <Link
@@ -56,6 +69,15 @@ export default async function EditCoursePage({
           initial={initial}
         />
       </div>
+      {profile.roles.isAdmin && (
+        <CourseLifecyclePanel
+          programId={program.id}
+          courseId={course.id}
+          courseCode={course.code}
+          isActive={course.isActive}
+          blockers={{ offeringsCount }}
+        />
+      )}
     </div>
   );
 }
