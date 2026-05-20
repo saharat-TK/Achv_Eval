@@ -39,7 +39,13 @@ function timeAgo(date: Date | null): string {
  * in real time, shows an unread badge, and opens a dropdown of recent items.
  * When `basePath` is set, clicking an item deep-links to the related offering.
  */
-export default function NotificationBell({ basePath }: { basePath?: string }) {
+export default function NotificationBell({
+  basePath,
+  tone = 'light',
+}: {
+  basePath?: string;
+  tone?: 'light' | 'dark';
+}) {
   const router = useRouter();
   const [items, setItems] = useState<NotificationItem[]>([]);
   const [open, setOpen] = useState(false);
@@ -108,7 +114,11 @@ export default function NotificationBell({ basePath }: { basePath?: string }) {
         type="button"
         onClick={() => setOpen((value) => !value)}
         aria-label="การแจ้งเตือน"
-        className="relative rounded-full p-2 text-slate-500 hover:bg-slate-100"
+        className={
+          tone === 'dark'
+            ? 'relative rounded-full p-2 text-white hover:bg-white/10'
+            : 'relative rounded-full p-2 text-slate-500 hover:bg-slate-100'
+        }
       >
         <svg
           width="20"

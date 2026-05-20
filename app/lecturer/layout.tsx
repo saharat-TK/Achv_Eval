@@ -14,23 +14,23 @@ export default async function LecturerLayout({
 
   return (
     <div className="min-h-screen">
-      <header className="sticky top-0 z-50 border-b border-slate-200 bg-white shadow-sm">
+      <header className="sticky top-0 z-50 bg-mfu-primary shadow-sm">
         <div className="mx-auto max-w-5xl px-6 py-3 flex items-center justify-between">
           <Link href="/lecturer" className="flex flex-col">
-            <span className="text-sm font-semibold text-mfu-primary">
+            <span className="text-sm font-semibold text-white">
               ระบบประเมินและทวนสอบรายวิชา
             </span>
-            <span className="text-xs text-slate-500">
+            <span className="text-xs text-white/70">
               พื้นที่ทำงานอาจารย์ผู้รับผิดชอบรายวิชา
             </span>
           </Link>
           <div className="flex items-center gap-4">
-            <NotificationBell basePath="/lecturer" />
+            <NotificationBell basePath="/lecturer" tone="dark" />
             <div className="text-right">
-              <div className="text-sm text-slate-700">{profile.nameTh}</div>
-              <div className="text-xs text-slate-400">{profile.email}</div>
+              <div className="text-sm text-white">{profile.nameTh}</div>
+              <div className="text-xs text-white/70">{profile.email}</div>
             </div>
-            <SignOutButton />
+            <SignOutButton tone="dark" />
           </div>
         </div>
       </header>
