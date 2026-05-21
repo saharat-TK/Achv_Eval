@@ -35,12 +35,28 @@ export default async function AdminUsersPage() {
         (สิทธิ์อาจารย์ผู้รับผิดชอบรายวิชากำหนดที่หน้ารายวิชาที่เปิดสอน)
       </p>
 
+      {/* Sub-nav */}
+      <div className="mt-4 flex gap-4 border-b border-slate-200 text-sm">
+        <Link
+          href="/admin/users"
+          className="border-b-2 border-mfu-primary pb-2 font-medium text-mfu-primary"
+        >
+          ผู้ใช้งานปัจจุบัน
+        </Link>
+        <Link
+          href="/admin/users/allowlist"
+          className="border-b-2 border-transparent pb-2 text-slate-600 hover:border-mfu-primary hover:text-mfu-primary"
+        >
+          ทะเบียนรายชื่อ
+        </Link>
+      </div>
+
       {users.length === 0 ? (
-        <div className="mt-8 rounded-xl border border-dashed border-slate-300 p-10 text-center text-sm text-slate-500">
+        <div className="mt-4 rounded-xl border border-dashed border-slate-300 p-10 text-center text-sm text-slate-500">
           ยังไม่มีผู้ใช้ — ผู้ใช้จะปรากฏหลังเข้าสู่ระบบครั้งแรก
         </div>
       ) : (
-        <div className="mt-6 overflow-hidden rounded-xl border border-slate-200 bg-white">
+        <div className="mt-4 overflow-hidden rounded-xl border border-slate-200 bg-white">
           <table className="w-full text-sm">
             <thead className="bg-slate-50 text-left text-xs text-slate-500">
               <tr>
