@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation';
 import { getCurrentProfile } from '@/lib/firebase/auth-server';
 import { getAllPrograms, getProgramsByIds } from '@/lib/data/programs';
 import { getCourseCountsByProgram } from '@/lib/data/courses';
+import { getDepartmentMap } from '@/lib/data/departments';
 import { PROGRAM_LEVEL_LABEL, PLO_SCHEMA_LABEL } from '@/lib/constants';
 
 export const dynamic = 'force-dynamic';
@@ -16,6 +17,9 @@ export default async function AdminProgramsPage() {
     ? await getAllPrograms()
     : await getProgramsByIds(profile.roles.directorOf ?? []);
   const courseCounts = await getCourseCountsByProgram(programs.map((p) => p.id));
+  const deptMap = await getDepartmentMap(
+    programs.map((p) => p.departmentId).filter((id): id is string => !!id),
+  );
 
   return (
     <div>
@@ -49,6 +53,7 @@ export default async function AdminProgramsPage() {
               <tr>
                 <th className="px-4 py-3 font-medium">รหัส</th>
                 <th className="px-4 py-3 font-medium">ชื่อหลักสูตร</th>
+                <th className="px-4 py-3 font-medium">สาขาวิชา</th>
                 <th className="px-4 py-3 font-medium">ระดับ</th>
                 <th className="px-4 py-3 font-medium">โครงสร้าง PLO</th>
                 <th className="px-4 py-3 font-medium">จำนวน PLO</th>
@@ -68,6 +73,17 @@ export default async function AdminProgramsPage() {
                     </Link>
                   </td>
                   <td className="px-4 py-3 text-slate-700">{p.nameTh}</td>
+                  <td className="px-4 py-3 text-slate-600">
+                    {p.departmentId ? (
+                      deptMap[p.departmentId] ? (
+                        deptMap[p.departmentId].nameTh
+                      ) : (
+                        <span className="text-red-500">(ลบแล้ว)</span>
+                      )
+                    ) : (
+                      <span className="text-slate-400">ไม่ระบุ</span>
+                    )}
+                  </td>
                   <td className="px-4 py-3 text-slate-600">
                     {PROGRAM_LEVEL_LABEL[p.level]}
                   </td>

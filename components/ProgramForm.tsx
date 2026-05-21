@@ -14,6 +14,12 @@ import {
 } from '@/lib/constants';
 import type { ProgramLevel, PloSchema, PloDomain } from '@/lib/types/models';
 
+export interface DepartmentOption {
+  id: string;
+  nameTh: string;
+  isActive: boolean;
+}
+
 const DOMAINS = Object.keys(PLO_DOMAIN_LABEL) as PloDomain[];
 
 const EMPTY: ProgramFormData = {
@@ -24,6 +30,7 @@ const EMPTY: ProgramFormData = {
   level: 'undergraduate',
   ploDomainSchema: '6_domain_tqf',
   isActive: true,
+  departmentId: null,
   plos: [],
 };
 
@@ -34,10 +41,16 @@ export default function ProgramForm({
   mode,
   programId,
   initial,
+  departments = [],
+  canEditDepartment = true,
 }: {
   mode: 'create' | 'edit';
   programId?: string;
   initial?: ProgramFormData;
+  /** Department options for the dropdown. Empty list → field is hidden. */
+  departments?: DepartmentOption[];
+  /** When false, the dropdown renders disabled (director view). */
+  canEditDepartment?: boolean;
 }) {
   const router = useRouter();
   const [form, setForm] = useState<ProgramFormData>(initial ?? EMPTY);
@@ -142,6 +155,33 @@ export default function ProgramForm({
               ))}
             </select>
           </label>
+          {departments.length > 0 && (
+            <label className="text-sm text-slate-600">
+              สาขาวิชา
+              <select
+                className={inputCls}
+                disabled={!canEditDepartment}
+                value={form.departmentId ?? ''}
+                onChange={(e) =>
+                  set('departmentId', e.target.value ? e.target.value : null)
+                }
+              >
+                <option value="">— ไม่ระบุ —</option>
+                {departments.map((d) => (
+                  <option key={d.id} value={d.id}>
+                    {d.nameTh}
+                    {d.isActive ? '' : ' (ปิดใช้งาน)'}
+                  </option>
+                ))}
+                {form.departmentId &&
+                  !departments.some((d) => d.id === form.departmentId) && (
+                    <option value={form.departmentId}>
+                      (ลบแล้ว)
+                    </option>
+                  )}
+              </select>
+            </label>
+          )}
           <label className="text-sm text-slate-600">
             โครงสร้าง PLO
             <select
