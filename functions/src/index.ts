@@ -7,3 +7,4 @@ export { generateCombinedReport } from './generateCombinedReport';
 export { generateFinalVerificationReport } from './generateFinalVerificationReport';
 export { purgeProgram } from './purgeProgram';
 export { purgeCourse } from './purgeCourse';
+export { purgeDepartment } from './purgeDepartment';

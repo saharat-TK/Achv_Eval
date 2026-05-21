@@ -26,9 +26,19 @@ const db = admin.firestore();
 const now = admin.firestore.Timestamp.now();
 
 const PROGRAM_ID = 'ohs-bsc';
+const DEPARTMENT_ID = 'dept-ohs';
 
 async function seed() {
-  console.log('Seeding OHS program…');
+  console.log('Seeding OHS department + program…');
+
+  // ----- Department ---------------------------------------------------
+  await db.collection('departments').doc(DEPARTMENT_ID).set({
+    nameTh: 'อาชีวอนามัยและความปลอดภัย',
+    nameEn: 'Occupational Health and Safety',
+    isActive: true,
+    createdAt: now,
+    updatedAt: now,
+  });
 
   // ----- Program (PLOs embedded) -------------------------------------
   await db.collection('programs').doc(PROGRAM_ID).set({
@@ -39,6 +49,7 @@ async function seed() {
     level: 'undergraduate',
     ploDomainSchema: '6_domain_tqf',
     isActive: true,
+    departmentId: DEPARTMENT_ID,
     plos: [
       {
         ploNumber: 1,
