@@ -12,6 +12,10 @@ import {
   type BulkFailure,
   type BulkResult,
 } from '@/app/admin/programs/[programId]/courses/actions';
+import {
+  bulkCreateOfferingsFromCourses,
+  type BulkCreateOfferingsResult,
+} from '@/app/admin/programs/[programId]/offerings/actions';
 import { useConfirm } from '@/components/ConfirmDialogProvider';
 import { COURSE_TYPE_LABEL, SEMESTER_LABEL } from '@/lib/constants';
 import type { CourseType, Semester } from '@/lib/types/models';
@@ -73,6 +77,14 @@ export default function CoursesTable({
   const [purgeKeyword, setPurgeKeyword] = useState('');
   const PURGE_KEYWORD = 'ยืนยัน';
 
+  // Open-offering state — defaults to the current Buddhist academic year.
+  const currentBuddhistYear = new Date().getFullYear() + 543;
+  const [offerOpen, setOfferOpen] = useState(false);
+  const [offerYear, setOfferYear] = useState<number>(currentBuddhistYear);
+  const [offerSemester, setOfferSemester] = useState<Semester>('1');
+  const [offerSection, setOfferSection] = useState('01');
+  const [offerHasExam, setOfferHasExam] = useState(true);
+
   const selectedRows = useMemo(
     () => courses.filter((c) => selected.has(c.id)),
     [courses, selected],
@@ -100,6 +112,7 @@ export default function CoursesTable({
     setPurgeOpen(false);
     setPurgeAgreed(false);
     setPurgeKeyword('');
+    setOfferOpen(false);
   }
 
   async function runBulk(
@@ -153,6 +166,53 @@ export default function CoursesTable({
     });
     if (!ok) return;
     await runBulk('ลบรายวิชา', () => bulkHardDeleteCourses(programId, ids));
+  }
+
+  async function handleBulkCreateOfferings() {
+    const ids = selectedRows.map((c) => c.id);
+    if (ids.length === 0) return;
+    if (!offerSection.trim()) return;
+
+    const ok = await confirm({
+      title: `เปิดสอน ${ids.length} รายวิชา`,
+      message: `ปีการศึกษา ${offerYear} ภาค ${SEMESTER_LABEL[offerSemester]} · ตอนเรียน ${offerSection.trim()}\n\nรายวิชาที่เปิดใช้งานจะถูกสร้างเป็นการเปิดสอนใหม่ — อาจารย์ผู้รับผิดชอบและ PLO สามารถเพิ่มภายหลังจากหน้ารายวิชาที่เปิดสอน`,
+      confirmLabel: 'เปิดสอน',
+    });
+    if (!ok) return;
+
+    setBusy(true);
+    setResult(null);
+    try {
+      const res: BulkCreateOfferingsResult =
+        await bulkCreateOfferingsFromCourses(programId, ids, {
+          academicYear: offerYear,
+          semester: offerSemester,
+          section: offerSection.trim(),
+          hasExamAssessment: offerHasExam,
+        });
+      if (!res.ok) {
+        setResult({ type: 'err', text: res.error });
+      } else {
+        setResult(
+          summarize('เปิดสอน', {
+            ok: true,
+            succeeded: res.created,
+            failed: res.failed.map((f) => ({
+              id: f.courseId,
+              code: f.code,
+              reason: f.reason,
+            })),
+          }),
+        );
+        if (res.failed.length === 0) clearSelection();
+      }
+      router.refresh();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'unknown';
+      setResult({ type: 'err', text: `เปิดสอนล้มเหลว — ${message}` });
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function handleBulkPurge() {
@@ -225,6 +285,14 @@ export default function CoursesTable({
               {selected.size} รายวิชาที่เลือก
             </span>
             <div className="ml-auto flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => setOfferOpen((v) => !v)}
+                disabled={busy}
+                className="rounded-lg bg-mfu-primary px-3 py-1.5 text-xs font-medium text-white hover:opacity-90 disabled:opacity-50"
+              >
+                เปิดสอนที่เลือก
+              </button>
               {selectedActiveCount > 0 && (
                 <button
                   type="button"
@@ -271,6 +339,70 @@ export default function CoursesTable({
               </button>
             </div>
           </div>
+
+          {offerOpen && (
+            <div className="mt-3 space-y-2.5 rounded-lg border border-mfu-primary/30 bg-white p-3">
+              <p className="text-[11px] leading-snug text-slate-600">
+                สร้างการเปิดสอนสำหรับ {selected.size} รายวิชาที่เลือก
+                (รายวิชาที่ปิดใช้งานจะถูกข้าม) — อาจารย์ผู้รับผิดชอบและ PLO
+                สามารถเพิ่มภายหลังจากหน้ารายวิชาที่เปิดสอน
+              </p>
+              <div className="grid gap-2 sm:grid-cols-[120px_140px_120px_1fr]">
+                <label className="text-[11px] text-slate-600">
+                  ปีการศึกษา (พ.ศ.)
+                  <input
+                    type="number"
+                    min={2500}
+                    value={offerYear}
+                    onChange={(e) =>
+                      setOfferYear(Number(e.target.value) || currentBuddhistYear)
+                    }
+                    className="mt-1 w-full rounded border border-slate-300 px-2 py-1 text-xs focus:border-mfu-primary focus:outline-none"
+                  />
+                </label>
+                <label className="text-[11px] text-slate-600">
+                  ภาคการศึกษา
+                  <select
+                    value={offerSemester}
+                    onChange={(e) =>
+                      setOfferSemester(e.target.value as Semester)
+                    }
+                    className="mt-1 w-full rounded border border-slate-300 px-2 py-1 text-xs focus:border-mfu-primary focus:outline-none"
+                  >
+                    <option value="1">{SEMESTER_LABEL['1']}</option>
+                    <option value="2">{SEMESTER_LABEL['2']}</option>
+                    <option value="3">{SEMESTER_LABEL['3']}</option>
+                  </select>
+                </label>
+                <label className="text-[11px] text-slate-600">
+                  ตอนเรียน
+                  <input
+                    type="text"
+                    value={offerSection}
+                    onChange={(e) => setOfferSection(e.target.value)}
+                    className="mt-1 w-full rounded border border-slate-300 px-2 py-1 text-xs focus:border-mfu-primary focus:outline-none"
+                  />
+                </label>
+                <label className="flex items-end gap-2 text-[11px] text-slate-600">
+                  <input
+                    type="checkbox"
+                    checked={offerHasExam}
+                    onChange={(e) => setOfferHasExam(e.target.checked)}
+                    className="mb-1.5"
+                  />
+                  <span className="mb-1">มีการประเมินจากการสอบ</span>
+                </label>
+              </div>
+              <button
+                type="button"
+                onClick={handleBulkCreateOfferings}
+                disabled={busy || !offerSection.trim()}
+                className="rounded-lg bg-mfu-primary px-3 py-1.5 text-xs font-medium text-white hover:opacity-90 disabled:opacity-50"
+              >
+                สร้างการเปิดสอน ({selected.size})
+              </button>
+            </div>
+          )}
 
           {purgeOpen && (
             <div className="mt-3 space-y-2.5 rounded-lg border border-red-200 bg-red-50/60 p-3">
