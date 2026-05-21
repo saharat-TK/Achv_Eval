@@ -63,17 +63,11 @@ export default async function EditCoursePage({
       {isAdmin ? (
         <div className="mt-3 grid gap-x-6 lg:grid-cols-[minmax(0,1fr)_256px]">
           {/* Header — left */}
-          <div>
+          <div className="lg:col-span-2">
             <h1 className="text-xl font-semibold text-slate-800">
               แก้ไขรายวิชา {course.code}
             </h1>
             <p className="mt-1 text-sm text-slate-500">{course.nameTh}</p>
-          </div>
-          {/* Header — right (lg+); on smaller screens the panel shows its own title */}
-          <div className="hidden lg:block">
-            <h2 className="text-sm font-semibold text-slate-700">
-              จัดการสถานะรายวิชา
-            </h2>
           </div>
 
           {/* Body — left */}

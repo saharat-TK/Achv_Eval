@@ -26,7 +26,9 @@ export async function getOfferingsForAssessor(
     .orderBy('semester', 'desc')
     .get();
 
-  return snap.docs.map((d) => ({ id: d.id, ...(d.data() as OfferingDoc) }));
+  return snap.docs
+    .map((d) => ({ id: d.id, ...(d.data() as OfferingDoc) }))
+    .filter((o) => o.isActive !== false);
 }
 
 /**

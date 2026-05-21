@@ -70,6 +70,7 @@ export async function getOfferingsPendingVerification(
 
   const offerings = snap.docs
     .map((d) => ({ id: d.id, ...(d.data() as OfferingDoc) }))
+    .filter((o) => o.isActive !== false)
     .sort(
       (a, b) =>
         b.academicYear - a.academicYear ||

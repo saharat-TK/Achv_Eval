@@ -32,7 +32,7 @@ export default async function OfferingDetailPage({
   const offering = await getOffering(params.offeringId);
   // Lecturer may only view their own offering. Admin/director/assessor views
   // arrive in later phases through their own workspaces.
-  if (!offering || offering.lecturerId !== user.uid) {
+  if (!offering || offering.lecturerId !== user.uid || offering.isActive === false) {
     notFound();
   }
 

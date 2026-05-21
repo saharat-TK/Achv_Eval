@@ -20,6 +20,7 @@ import type {
   RubricItemComment,
 } from '@/lib/types/models';
 import { computeRubricResult } from '@/lib/types/models';
+import { useConfirm } from '@/components/ConfirmDialogProvider';
 
 // ── Rubric item definitions ─────────────────────────────────────────
 type ScoreKey = keyof AssessmentDoc['scores'];
@@ -120,6 +121,7 @@ export default function AssessmentForm({
   hasExamAssessment: boolean;
   scrollBody?: boolean;
 }) {
+  const confirm = useConfirm();
   const [assessmentId, setAssessmentId] = useState<string | null>(null);
   const [scores, setScores] = useState<AssessmentDoc['scores']>({
     ...DEFAULT_SCORES,
@@ -467,14 +469,13 @@ export default function AssessmentForm({
             {saving ? 'กำลังบันทึก…' : 'บันทึกร่าง'}
           </button>
           <button
-            onClick={() => {
-              if (
-                window.confirm(
-                  'เมื่อลงนามแล้วจะไม่สามารถแก้ไขได้อีก ต้องการลงนามหรือไม่?',
-                )
-              ) {
-                handleSubmit(true);
-              }
+            onClick={async () => {
+              const ok = await confirm({
+                title: 'ยืนยันการลงนามทวนสอบ',
+                message: 'เมื่อลงนามแล้วจะไม่สามารถแก้ไขได้อีก',
+                confirmLabel: 'ลงนามทวนสอบ',
+              });
+              if (ok) handleSubmit(true);
             }}
             disabled={saving}
             className="rounded-lg bg-mfu-primary px-4 py-2 text-sm font-medium text-white hover:bg-mfu-primary/90 disabled:opacity-50 transition"

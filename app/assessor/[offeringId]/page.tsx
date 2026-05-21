@@ -24,7 +24,8 @@ export default async function AssessorOfferingPage({
   if (
     !offering ||
     (!profile.roles.isAdmin &&
-      !profile.roles.assessorOf.includes(offering.programId))
+      (!profile.roles.assessorOf.includes(offering.programId) ||
+        offering.isActive === false))
   ) {
     notFound();
   }

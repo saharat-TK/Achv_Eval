@@ -10,6 +10,7 @@ import {
   deleteCourse,
   type CourseBlockerDetails,
 } from '@/app/admin/programs/[programId]/courses/actions';
+import { useConfirm } from '@/components/ConfirmDialogProvider';
 
 interface CourseLifecyclePanelProps {
   programId: string;
@@ -32,6 +33,7 @@ export default function CourseLifecyclePanel({
   blockers,
 }: CourseLifecyclePanelProps) {
   const router = useRouter();
+  const confirm = useConfirm();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
@@ -43,7 +45,13 @@ export default function CourseLifecyclePanel({
   const hasBlockers = blockers.offeringsCount > 0;
 
   async function handleSoftDelete() {
-    if (!confirm('ยืนยันที่จะปิดใช้งานรายวิชานี้ใช่หรือไม่?')) return;
+    const ok = await confirm({
+      title: 'ปิดใช้งานรายวิชา',
+      message: 'รายวิชาจะถูกปิดใช้งาน แต่ประวัติทั้งหมดยังคงอยู่และสามารถเปิดใช้งานใหม่ได้',
+      confirmLabel: 'ปิดใช้งานรายวิชา',
+      variant: 'danger',
+    });
+    if (!ok) return;
     setBusy(true);
     setError(null);
     setSuccessMsg(null);
@@ -82,7 +90,13 @@ export default function CourseLifecyclePanel({
   }
 
   async function handleHardDelete() {
-    if (!confirm(`ยืนยันที่จะลบรายวิชา ${courseCode} ออกจากระบบใช่หรือไม่?`)) return;
+    const ok = await confirm({
+      title: `ลบรายวิชา ${courseCode}`,
+      message: 'ลบรายวิชานี้ออกจากระบบอย่างถาวร — การกระทำนี้ไม่สามารถย้อนกลับได้',
+      confirmLabel: 'ลบรายวิชา',
+      variant: 'danger',
+    });
+    if (!ok) return;
     setBusy(true);
     setError(null);
     setSuccessMsg(null);
@@ -108,13 +122,14 @@ export default function CourseLifecyclePanel({
   async function handlePurge() {
     if (typedCode !== courseCode) return;
     if (!agreedToPurge) return;
-    if (
-      !confirm(
-        `ยืนยันการลบรายวิชา ${courseCode} และข้อมูลทั้งหมดถาวร ไม่สามารถย้อนกลับได้`,
-      )
-    ) {
-      return;
-    }
+    const ok = await confirm({
+      title: `ลบทั้งหมดถาวร — ${courseCode}`,
+      message:
+        'ลบรายวิชาและข้อมูลทั้งหมดอย่างถาวร รวมถึงครั้งที่เปิดสอน รายงาน AI ผลทวนสอบ และไฟล์ PDF ทั้งหมด\n\nการกระทำนี้ไม่สามารถย้อนกลับได้',
+      confirmLabel: 'ลบทั้งหมดถาวร',
+      variant: 'danger',
+    });
+    if (!ok) return;
     setBusy(true);
     setError(null);
     setSuccessMsg(null);
@@ -141,10 +156,6 @@ export default function CourseLifecyclePanel({
 
   return (
     <section className="space-y-3">
-      <h2 className="text-sm font-semibold text-slate-700 lg:hidden">
-        จัดการสถานะรายวิชา
-      </h2>
-
       {successMsg && (
         <p className="rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-700">
           {successMsg}

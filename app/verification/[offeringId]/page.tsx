@@ -21,7 +21,11 @@ export default async function VerificationDetailPage({
   if (!profile) redirect('/login');
 
   const item = await getVerificationQueueItem(params.offeringId);
-  if (!item || !canAccessVerificationProgram(profile, item.offering.programId)) {
+  if (
+    !item ||
+    !canAccessVerificationProgram(profile, item.offering.programId) ||
+    item.offering.isActive === false
+  ) {
     notFound();
   }
 

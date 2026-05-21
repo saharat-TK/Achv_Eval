@@ -152,6 +152,23 @@ export async function softDeleteProgram(programId: string): Promise<ActionResult
     await batch.commit();
   }
 
+  // Cascade to offerings — hides them from lecturer + assessor workspaces.
+  const offeringsSnap = await db
+    .collection('offerings')
+    .where('programId', '==', programId)
+    .get();
+
+  if (offeringsSnap.size > 0) {
+    const batch = db.batch();
+    offeringsSnap.docs.forEach((doc) => {
+      batch.update(doc.ref, {
+        isActive: false,
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+    });
+    await batch.commit();
+  }
+
   await writeAudit('program_soft_deleted', programId, user.uid, user.email ?? null);
   
   revalidatePath('/admin');
@@ -184,6 +201,23 @@ export async function restoreProgram(programId: string): Promise<ActionResult> {
   if (coursesSnap.size > 0) {
     const batch = db.batch();
     coursesSnap.docs.forEach((doc) => {
+      batch.update(doc.ref, {
+        isActive: true,
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+    });
+    await batch.commit();
+  }
+
+  // Cascade to offerings — re-exposes them in lecturer + assessor workspaces.
+  const offeringsSnap = await db
+    .collection('offerings')
+    .where('programId', '==', programId)
+    .get();
+
+  if (offeringsSnap.size > 0) {
+    const batch = db.batch();
+    offeringsSnap.docs.forEach((doc) => {
       batch.update(doc.ref, {
         isActive: true,
         updatedAt: FieldValue.serverTimestamp(),

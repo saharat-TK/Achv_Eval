@@ -279,6 +279,30 @@ export async function batchUploadCourses(
   return { created, errors };
 }
 
+/**
+ * Mirror a course's isActive flag onto all of its offerings so the lecturer
+ * and assessor workspaces (which read offerings, not courses) hide them.
+ */
+async function cascadeOfferingsActive(
+  db: FirebaseFirestore.Firestore,
+  courseId: string,
+  isActive: boolean,
+): Promise<void> {
+  const offeringsSnap = await db
+    .collection('offerings')
+    .where('courseId', '==', courseId)
+    .get();
+  if (offeringsSnap.size === 0) return;
+  const batch = db.batch();
+  offeringsSnap.docs.forEach((doc) => {
+    batch.update(doc.ref, {
+      isActive,
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+  });
+  await batch.commit();
+}
+
 // ----- Course lifecycle ---------------------------------------------------
 
 /** Soft-delete a course. Flips isActive=false. Reversible via restoreCourse. */
@@ -296,6 +320,7 @@ export async function softDeleteCourse(
   const programId = (snap.data()?.programId as string | undefined) ?? '';
 
   await ref.update({ isActive: false, updatedAt: FieldValue.serverTimestamp() });
+  await cascadeOfferingsActive(db, courseId, false);
   await audit('course_soft_deleted', courseId, user.uid, user.email ?? null);
   revalidatePath(`/admin/programs/${programId}/courses`);
   revalidatePath(`/admin/programs/${programId}/courses/${courseId}`);
@@ -317,6 +342,7 @@ export async function restoreCourse(
   const programId = (snap.data()?.programId as string | undefined) ?? '';
 
   await ref.update({ isActive: true, updatedAt: FieldValue.serverTimestamp() });
+  await cascadeOfferingsActive(db, courseId, true);
   await audit('course_restored', courseId, user.uid, user.email ?? null);
   revalidatePath(`/admin/programs/${programId}/courses`);
   revalidatePath(`/admin/programs/${programId}/courses/${courseId}`);

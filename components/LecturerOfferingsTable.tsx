@@ -40,7 +40,9 @@ export default function LecturerOfferingsTable({ uid }: { uid: string }) {
         q,
         (snap) => {
           setOfferings(
-            snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<Offering, 'id'>) })),
+            snap.docs
+              .map((d) => ({ id: d.id, ...(d.data() as Omit<Offering, 'id'>) }))
+              .filter((o) => (o as { isActive?: boolean }).isActive !== false),
           );
         },
         (err) => {

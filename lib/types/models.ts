@@ -148,6 +148,12 @@ export interface OfferingDoc {
   previousOfferingId: string | null; // carry-forward link
   latestAiReportId: string | null;
   assessmentId: string | null;
+  /**
+   * Visibility flag. Cascaded from the parent program/course's lifecycle —
+   * when set to false, the offering is hidden from lecturer and assessor
+   * workspaces. Reversible (program/course restore re-activates).
+   */
+  isActive?: boolean;
   createdAt: Ts;
   updatedAt: Ts;
   createdBy: string;

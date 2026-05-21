@@ -50,6 +50,7 @@ export default async function AdminProgramsPage() {
                 <th className="px-4 py-3 font-medium">ระดับ</th>
                 <th className="px-4 py-3 font-medium">โครงสร้าง PLO</th>
                 <th className="px-4 py-3 font-medium">จำนวน PLO</th>
+                <th className="px-4 py-3 font-medium">สถานะ</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -72,6 +73,17 @@ export default async function AdminProgramsPage() {
                   </td>
                   <td className="px-4 py-3 text-slate-600">
                     {p.plos?.length ?? 0}
+                  </td>
+                  <td className="px-4 py-3">
+                    {p.isActive ? (
+                      <span className="rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-semibold text-green-800">
+                        กำลังใช้งาน
+                      </span>
+                    ) : (
+                      <span className="rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-semibold text-amber-800">
+                        ปิดใช้งาน
+                      </span>
+                    )}
                   </td>
                 </tr>
               ))}
