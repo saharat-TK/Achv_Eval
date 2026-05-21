@@ -83,6 +83,14 @@ service cloud.firestore {
       allow create, update, delete: if isAdmin();
     }
 
+    // ----- allowlist -------------------------------------------------
+    // Pre-provisioned sign-in invitations. Only admins manage entries;
+    // the auth route reads via Admin SDK (bypasses rules).
+    match /allowlist/{emailId} {
+      allow read: if isAdmin();
+      allow create, update, delete: if isAdmin();
+    }
+
     // ----- departments -----------------------------------------------
     // Managed org-chart layer above programs. Any signed-in MFU user
     // can read (so the program form dropdown renders for everyone);

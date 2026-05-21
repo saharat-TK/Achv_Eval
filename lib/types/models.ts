@@ -120,6 +120,25 @@ export interface ProgramDoc {
   updatedAt: Ts;
 }
 
+// ----- allowlist/{normalizedEmail} -----------------------------------
+/**
+ * Pre-provisioned user invitation. Doc ID is the lowercased email.
+ * Created by admin (single or CSV); consumed on first Google sign-in,
+ * at which point the auth route bootstraps a `users/{uid}` doc from
+ * these fields. The allowlist entry is kept (with `consumedAt`/`consumedUid`
+ * stamped) as a permanent audit trail.
+ */
+export interface AllowlistDoc {
+  email: string;
+  nameTh: string;
+  nameEn: string;
+  notes?: string;
+  addedBy: string; // admin uid
+  addedAt: Ts;
+  consumedAt?: Ts | null;
+  consumedUid?: string | null;
+}
+
 // ----- departments/{deptId} ------------------------------------------
 export interface DepartmentDoc {
   nameTh: string;
