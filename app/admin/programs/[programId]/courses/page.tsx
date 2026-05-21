@@ -4,7 +4,7 @@ import { getCurrentProfile } from '@/lib/firebase/auth-server';
 import { getProgram } from '@/lib/data/programs';
 import { getCoursesForProgram } from '@/lib/data/courses';
 import CourseCsvUpload from '@/components/CourseCsvUpload';
-import { COURSE_TYPE_LABEL, SEMESTER_LABEL } from '@/lib/constants';
+import CoursesTable, { type CourseRow } from '@/components/CoursesTable';
 
 export const dynamic = 'force-dynamic';
 
@@ -24,6 +24,16 @@ export default async function ProgramCoursesPage({
 
   const courses = await getCoursesForProgram(program.id);
   const base = `/admin/programs/${program.id}/courses`;
+  const rows: CourseRow[] = courses.map((c) => ({
+    id: c.id,
+    code: c.code,
+    nameTh: c.nameTh,
+    creditStructure: c.creditStructure,
+    type: c.type,
+    yearOfStudy: c.yearOfStudy ?? null,
+    semester: c.semester ?? null,
+    isActive: c.isActive,
+  }));
 
   return (
     <div>
@@ -58,52 +68,12 @@ export default async function ProgramCoursesPage({
           ยังไม่มีรายวิชาในหลักสูตรนี้
         </div>
       ) : (
-        <div className="mt-6 overflow-hidden rounded-xl border border-slate-200 bg-white">
-          <table className="w-full text-sm">
-            <thead className="bg-slate-50 text-left text-xs text-slate-500">
-              <tr>
-                <th className="px-4 py-3 font-medium">รหัสวิชา</th>
-                <th className="px-4 py-3 font-medium">ชื่อวิชา</th>
-                <th className="px-4 py-3 font-medium">หน่วยกิต</th>
-                <th className="px-4 py-3 font-medium">ประเภท</th>
-                <th className="px-4 py-3 font-medium">ชั้นปี</th>
-                <th className="px-4 py-3 font-medium">ภาค</th>
-                <th className="px-4 py-3 font-medium">สถานะ</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {courses.map((c) => (
-                <tr key={c.id} className="hover:bg-slate-50">
-                  <td className="px-4 py-3">
-                    <Link
-                      href={`${base}/${c.id}`}
-                      className="font-medium text-mfu-primary hover:underline"
-                    >
-                      {c.code}
-                    </Link>
-                  </td>
-                  <td className="px-4 py-3 text-slate-700">{c.nameTh}</td>
-                  <td className="px-4 py-3 text-slate-600">{c.creditStructure}</td>
-                  <td className="px-4 py-3 text-slate-600">
-                    {COURSE_TYPE_LABEL[c.type]}
-                  </td>
-                  <td className="px-4 py-3 text-slate-600">
-                    {c.yearOfStudy ? `ปี ${c.yearOfStudy}` : '—'}
-                  </td>
-                  <td className="px-4 py-3 text-slate-600">
-                    {c.semester ? SEMESTER_LABEL[c.semester] : '—'}
-                  </td>
-                  <td className="px-4 py-3 text-xs">
-                    {c.isActive ? (
-                      <span className="text-green-700">เปิดใช้งาน</span>
-                    ) : (
-                      <span className="text-slate-400">ปิดใช้งาน</span>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div className="mt-6">
+          <CoursesTable
+            courses={rows}
+            programId={program.id}
+            showBulkActions={profile.roles.isAdmin}
+          />
         </div>
       )}
     </div>

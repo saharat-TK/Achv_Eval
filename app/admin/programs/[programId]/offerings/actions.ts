@@ -247,3 +247,184 @@ export async function cloneOfferings(
   }
   return { ok: true, created, skipped };
 }
+
+// ----- Bulk create from selected courses ---------------------------------
+
+export interface BulkCreateOfferingsInput {
+  academicYear: number;
+  semester: Semester;
+  section: string;
+  hasExamAssessment: boolean;
+}
+
+export interface BulkOfferingFailure {
+  courseId: string;
+  code: string;
+  reason: string;
+}
+
+export type BulkCreateOfferingsResult =
+  | {
+      ok: true;
+      created: number;
+      failed: BulkOfferingFailure[];
+    }
+  | { ok: false; error: string };
+
+/**
+ * Create one offering per selected course at the same (year, semester,
+ * section). Skips any course that already has an offering for that
+ * triple, or that is inactive. Lecturer + PLOs are left unassigned —
+ * the offering opens in `draft` status and an admin picks those up
+ * from the offerings page.
+ */
+export async function bulkCreateOfferingsFromCourses(
+  programId: string,
+  courseIds: string[],
+  input: BulkCreateOfferingsInput,
+): Promise<BulkCreateOfferingsResult> {
+  const user = await authorize(programId);
+  if (!user) {
+    return { ok: false, error: 'ท่านไม่มีสิทธิ์จัดการรายวิชาที่เปิดสอนของหลักสูตรนี้' };
+  }
+
+  if (courseIds.length === 0) {
+    return { ok: true, created: 0, failed: [] };
+  }
+  if (!input.academicYear || input.academicYear < 2500) {
+    return { ok: false, error: 'ปีการศึกษาไม่ถูกต้อง (พ.ศ.)' };
+  }
+  if (!['1', '2', '3'].includes(input.semester)) {
+    return { ok: false, error: 'ภาคการศึกษาไม่ถูกต้อง' };
+  }
+  const section = input.section.trim();
+  if (!section) {
+    return { ok: false, error: 'กรุณาระบุตอนเรียน' };
+  }
+
+  const db = getAdminDb();
+  const failed: BulkOfferingFailure[] = [];
+
+  // Resolve each course doc.
+  const courseSnaps = await Promise.all(
+    courseIds.map((id) => db.collection('courses').doc(id).get()),
+  );
+  const validCourses: Array<{
+    id: string;
+    code: string;
+    nameTh: string;
+    nameEn: string;
+  }> = [];
+
+  courseSnaps.forEach((snap, i) => {
+    const id = courseIds[i];
+    if (!snap.exists) {
+      failed.push({ courseId: id, code: id, reason: 'ไม่พบรายวิชา' });
+      return;
+    }
+    const data = snap.data() as {
+      programId?: string;
+      code?: string;
+      nameTh?: string;
+      nameEn?: string;
+      isActive?: boolean;
+    };
+    const code = data.code ?? id;
+    if (data.programId !== programId) {
+      failed.push({
+        courseId: id,
+        code,
+        reason: 'รายวิชาไม่ได้อยู่ในหลักสูตรนี้',
+      });
+      return;
+    }
+    if (data.isActive === false) {
+      failed.push({
+        courseId: id,
+        code,
+        reason: 'รายวิชาปิดใช้งานอยู่ — เปิดใช้งานก่อน',
+      });
+      return;
+    }
+    validCourses.push({
+      id,
+      code,
+      nameTh: data.nameTh ?? '',
+      nameEn: data.nameEn ?? '',
+    });
+  });
+
+  // Dedupe against existing offerings at the same (year, semester, section).
+  const dedupeChecks = await Promise.all(
+    validCourses.map((c) =>
+      db
+        .collection('offerings')
+        .where('courseId', '==', c.id)
+        .where('academicYear', '==', input.academicYear)
+        .where('semester', '==', input.semester)
+        .where('section', '==', section)
+        .limit(1)
+        .get(),
+    ),
+  );
+
+  const status: OfferingStatus = 'draft';
+  const now = FieldValue.serverTimestamp();
+  const createdIds: string[] = [];
+
+  for (let i = 0; i < validCourses.length; i++) {
+    const c = validCourses[i];
+    if (!dedupeChecks[i].empty) {
+      failed.push({
+        courseId: c.id,
+        code: c.code,
+        reason: 'ซ้ำกับการเปิดสอนเดิม',
+      });
+      continue;
+    }
+    const ref = await db.collection('offerings').add({
+      courseId: c.id,
+      programId,
+      courseCode: c.code,
+      courseNameTh: c.nameTh,
+      courseNameEn: c.nameEn,
+      academicYear: input.academicYear,
+      semester: input.semester,
+      section,
+      lecturerId: null,
+      lecturerEmail: null,
+      hasExamAssessment: input.hasExamAssessment,
+      assignedPloNumbers: [],
+      status,
+      previousOfferingId: null,
+      latestAiReportId: null,
+      assessmentId: null,
+      isActive: true,
+      createdAt: now,
+      updatedAt: now,
+      createdBy: user.uid,
+      updatedBy: user.uid,
+    });
+    createdIds.push(ref.id);
+  }
+
+  if (createdIds.length > 0) {
+    await getAdminDb().collection('auditLog').add({
+      occurredAt: FieldValue.serverTimestamp(),
+      actorId: user.uid,
+      actorEmail: user.email ?? null,
+      action: 'offerings_bulk_created',
+      entityType: 'offerings',
+      entityId: programId,
+      after: {
+        offeringIds: createdIds,
+        academicYear: input.academicYear,
+        semester: input.semester,
+        section,
+      },
+    });
+    revalidatePath(`/admin/programs/${programId}/offerings`);
+  }
+
+  return { ok: true, created: createdIds.length, failed };
+}

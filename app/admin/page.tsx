@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { getCurrentProfile } from '@/lib/firebase/auth-server';
 import { getAllPrograms, getProgramsByIds } from '@/lib/data/programs';
+import { getCourseCountsByProgram } from '@/lib/data/courses';
 import { PROGRAM_LEVEL_LABEL, PLO_SCHEMA_LABEL } from '@/lib/constants';
 
 export const dynamic = 'force-dynamic';
@@ -14,6 +15,7 @@ export default async function AdminProgramsPage() {
   const programs = isAdmin
     ? await getAllPrograms()
     : await getProgramsByIds(profile.roles.directorOf ?? []);
+  const courseCounts = await getCourseCountsByProgram(programs.map((p) => p.id));
 
   return (
     <div>
@@ -50,6 +52,7 @@ export default async function AdminProgramsPage() {
                 <th className="px-4 py-3 font-medium">ระดับ</th>
                 <th className="px-4 py-3 font-medium">โครงสร้าง PLO</th>
                 <th className="px-4 py-3 font-medium">จำนวน PLO</th>
+                <th className="px-4 py-3 font-medium">จำนวนรายวิชา</th>
                 <th className="px-4 py-3 font-medium">สถานะ</th>
               </tr>
             </thead>
@@ -73,6 +76,9 @@ export default async function AdminProgramsPage() {
                   </td>
                   <td className="px-4 py-3 text-slate-600">
                     {p.plos?.length ?? 0}
+                  </td>
+                  <td className="px-4 py-3 text-slate-600">
+                    {courseCounts[p.id] ?? 0}
                   </td>
                   <td className="px-4 py-3">
                     {p.isActive ? (

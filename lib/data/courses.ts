@@ -21,3 +21,26 @@ export async function getCourse(courseId: string): Promise<CourseWithId | null> 
   if (!snap.exists) return null;
   return { id: snap.id, ...(snap.data() as CourseDoc) };
 }
+
+/**
+ * Count of courses per program, used by the admin programs list. Returns
+ * a map keyed by programId; missing keys mean 0 courses. Uses Firestore
+ * count() aggregation so it doesn't pull every course doc.
+ */
+export async function getCourseCountsByProgram(
+  programIds: string[],
+): Promise<Record<string, number>> {
+  if (programIds.length === 0) return {};
+  const db = getAdminDb();
+  const counts = await Promise.all(
+    programIds.map(async (programId) => {
+      const agg = await db
+        .collection('courses')
+        .where('programId', '==', programId)
+        .count()
+        .get();
+      return [programId, agg.data().count] as const;
+    }),
+  );
+  return Object.fromEntries(counts);
+}
