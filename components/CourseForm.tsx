@@ -24,7 +24,7 @@ const EMPTY: CourseFormData = {
 const SEMESTERS: Semester[] = ['1', '2', '3'];
 
 const inputCls =
-  'mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-mfu-primary focus:outline-none';
+  'mt-1 w-full rounded-lg border border-slate-300 px-2.5 py-1.5 text-sm focus:border-mfu-primary focus:outline-none';
 
 export default function CourseForm({
   mode,
@@ -65,10 +65,10 @@ export default function CourseForm({
   const backHref = `/admin/programs/${programId}/courses`;
 
   return (
-    <div className="space-y-5">
-      <section className="rounded-xl border border-slate-200 bg-white p-5">
-        <div className="grid gap-4 sm:grid-cols-2">
-          <label className="text-sm text-slate-600">
+    <div className="space-y-4">
+      <section className="rounded-xl border border-slate-200 bg-white p-4">
+        <div className="grid gap-3 sm:grid-cols-2">
+          <label className="text-xs text-slate-600">
             รหัสวิชา
             <input
               className={inputCls}
@@ -76,7 +76,7 @@ export default function CourseForm({
               onChange={(e) => set('code', e.target.value)}
             />
           </label>
-          <label className="text-sm text-slate-600">
+          <label className="text-xs text-slate-600">
             โครงสร้างหน่วยกิต (เช่น 2(2-0-4))
             <input
               className={inputCls}
@@ -84,7 +84,7 @@ export default function CourseForm({
               onChange={(e) => set('creditStructure', e.target.value)}
             />
           </label>
-          <label className="text-sm text-slate-600">
+          <label className="text-xs text-slate-600">
             ชื่อวิชา (ไทย)
             <input
               className={inputCls}
@@ -92,7 +92,7 @@ export default function CourseForm({
               onChange={(e) => set('nameTh', e.target.value)}
             />
           </label>
-          <label className="text-sm text-slate-600">
+          <label className="text-xs text-slate-600">
             ชื่อวิชา (อังกฤษ)
             <input
               className={inputCls}
@@ -100,7 +100,7 @@ export default function CourseForm({
               onChange={(e) => set('nameEn', e.target.value)}
             />
           </label>
-          <label className="text-sm text-slate-600">
+          <label className="text-xs text-slate-600">
             ประเภทวิชา
             <select
               className={inputCls}
@@ -114,7 +114,7 @@ export default function CourseForm({
               ))}
             </select>
           </label>
-          <label className="text-sm text-slate-600">
+          <label className="text-xs text-slate-600">
             ชั้นปี (แผนการเรียน)
             <select
               className={inputCls}
@@ -131,7 +131,7 @@ export default function CourseForm({
               ))}
             </select>
           </label>
-          <label className="text-sm text-slate-600">
+          <label className="text-xs text-slate-600">
             ภาคการศึกษา (แผนการเรียน)
             <select
               className={inputCls}
@@ -149,7 +149,7 @@ export default function CourseForm({
             </select>
           </label>
         </div>
-        <label className="mt-3 flex items-center gap-2 text-sm text-slate-600">
+        <label className="mt-3 flex items-center gap-2 text-xs text-slate-600">
           <input
             type="checkbox"
             checked={form.isActive}

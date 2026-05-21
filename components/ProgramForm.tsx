@@ -157,14 +157,16 @@ export default function ProgramForm({
             </select>
           </label>
         </div>
-        <label className="mt-3 flex items-center gap-2 text-sm text-slate-600">
-          <input
-            type="checkbox"
-            checked={form.isActive}
-            onChange={(e) => set('isActive', e.target.checked)}
-          />
-          เปิดใช้งานหลักสูตร
-        </label>
+        {mode === 'create' && (
+          <label className="mt-3 flex items-center gap-2 text-sm text-slate-600">
+            <input
+              type="checkbox"
+              checked={form.isActive}
+              onChange={(e) => set('isActive', e.target.checked)}
+            />
+            เปิดใช้งานหลักสูตร
+          </label>
+        )}
       </section>
 
       {/* PLOs */}
