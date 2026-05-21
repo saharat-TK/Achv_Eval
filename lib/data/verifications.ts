@@ -122,6 +122,7 @@ export async function getVerificationQueue(
   const snap = await query.get();
   const offerings = snap.docs
     .map((d) => ({ id: d.id, ...(d.data() as OfferingDoc) }))
+    .filter((o) => o.isActive !== false)
     .sort(
       (a, b) =>
         STATUS_SORT[a.status] - STATUS_SORT[b.status] ||

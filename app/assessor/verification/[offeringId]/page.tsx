@@ -33,7 +33,11 @@ export default async function VerificationDetailPage({
   if (!profile) redirect('/login');
 
   const context = await getVerificationContext(params.offeringId);
-  if (!context || !profile.roles.assessorOf.includes(context.offering.programId)) {
+  if (
+    !context ||
+    !profile.roles.assessorOf.includes(context.offering.programId) ||
+    context.offering.isActive === false
+  ) {
     notFound();
   }
 
