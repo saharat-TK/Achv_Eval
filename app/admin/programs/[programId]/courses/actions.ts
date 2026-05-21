@@ -392,6 +392,200 @@ export async function deleteCourse(
   return { ok: true, id: courseId };
 }
 
+// ----- Bulk lifecycle ------------------------------------------------------
+
+export interface BulkFailure {
+  id: string;
+  code: string;
+  reason: string;
+}
+
+export type BulkResult =
+  | { ok: true; succeeded: number; failed: BulkFailure[] }
+  | { ok: false; error: string };
+
+/**
+ * Resolve a list of course IDs into `{ id, programId, code }` triples,
+ * skipping any that don't exist. Used by the bulk endpoints to validate
+ * ownership and to fetch codes for failure reporting.
+ */
+async function resolveBulkCourses(
+  db: FirebaseFirestore.Firestore,
+  courseIds: string[],
+): Promise<Array<{ id: string; programId: string; code: string }>> {
+  const reads = await Promise.all(
+    courseIds.map((id) => db.collection('courses').doc(id).get()),
+  );
+  return reads
+    .filter((s) => s.exists)
+    .map((s) => {
+      const data = s.data() as { programId?: string; code?: string };
+      return {
+        id: s.id,
+        programId: data.programId ?? '',
+        code: data.code ?? s.id,
+      };
+    });
+}
+
+/** Bulk soft-delete: flips isActive=false on each course + cascades to offerings. */
+export async function bulkSoftDeleteCourses(
+  programId: string,
+  courseIds: string[],
+): Promise<BulkResult> {
+  const user = await authorizeAdmin();
+  if (!user) {
+    return { ok: false, error: 'เฉพาะผู้ดูแลระบบเท่านั้นที่สามารถดำเนินการนี้ได้' };
+  }
+  if (courseIds.length === 0) return { ok: true, succeeded: 0, failed: [] };
+
+  const db = getAdminDb();
+  const resolved = await resolveBulkCourses(db, courseIds);
+  const failed: BulkFailure[] = courseIds
+    .filter((id) => !resolved.some((r) => r.id === id))
+    .map((id) => ({ id, code: id, reason: 'ไม่พบรายวิชา' }));
+
+  if (resolved.length > 0) {
+    const batch = db.batch();
+    resolved.forEach(({ id }) => {
+      batch.update(db.collection('courses').doc(id), {
+        isActive: false,
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+    });
+    await batch.commit();
+    await Promise.all(
+      resolved.map(({ id }) => cascadeOfferingsActive(db, id, false)),
+    );
+  }
+
+  await getAdminDb().collection('auditLog').add({
+    occurredAt: FieldValue.serverTimestamp(),
+    actorId: user.uid,
+    actorEmail: user.email ?? null,
+    action: 'courses_bulk_soft_deleted',
+    entityType: 'courses',
+    entityId: programId,
+    after: { courseIds: resolved.map((r) => r.id) },
+  });
+
+  revalidatePath(`/admin/programs/${programId}/courses`);
+  return { ok: true, succeeded: resolved.length, failed };
+}
+
+/** Bulk restore: flips isActive=true on each course + cascades to offerings. */
+export async function bulkRestoreCourses(
+  programId: string,
+  courseIds: string[],
+): Promise<BulkResult> {
+  const user = await authorizeAdmin();
+  if (!user) {
+    return { ok: false, error: 'เฉพาะผู้ดูแลระบบเท่านั้นที่สามารถดำเนินการนี้ได้' };
+  }
+  if (courseIds.length === 0) return { ok: true, succeeded: 0, failed: [] };
+
+  const db = getAdminDb();
+  const resolved = await resolveBulkCourses(db, courseIds);
+  const failed: BulkFailure[] = courseIds
+    .filter((id) => !resolved.some((r) => r.id === id))
+    .map((id) => ({ id, code: id, reason: 'ไม่พบรายวิชา' }));
+
+  if (resolved.length > 0) {
+    const batch = db.batch();
+    resolved.forEach(({ id }) => {
+      batch.update(db.collection('courses').doc(id), {
+        isActive: true,
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+    });
+    await batch.commit();
+    await Promise.all(
+      resolved.map(({ id }) => cascadeOfferingsActive(db, id, true)),
+    );
+  }
+
+  await getAdminDb().collection('auditLog').add({
+    occurredAt: FieldValue.serverTimestamp(),
+    actorId: user.uid,
+    actorEmail: user.email ?? null,
+    action: 'courses_bulk_restored',
+    entityType: 'courses',
+    entityId: programId,
+    after: { courseIds: resolved.map((r) => r.id) },
+  });
+
+  revalidatePath(`/admin/programs/${programId}/courses`);
+  return { ok: true, succeeded: resolved.length, failed };
+}
+
+/**
+ * Bulk guarded hard-delete: removes courses with no offerings. Each course
+ * is checked individually — courses that still have offerings are returned
+ * in `failed` with a human-readable reason, the rest are deleted.
+ */
+export async function bulkHardDeleteCourses(
+  programId: string,
+  courseIds: string[],
+): Promise<BulkResult> {
+  const user = await authorizeAdmin();
+  if (!user) {
+    return { ok: false, error: 'เฉพาะผู้ดูแลระบบเท่านั้นที่สามารถดำเนินการนี้ได้' };
+  }
+  if (courseIds.length === 0) return { ok: true, succeeded: 0, failed: [] };
+
+  const db = getAdminDb();
+  const resolved = await resolveBulkCourses(db, courseIds);
+  const failed: BulkFailure[] = courseIds
+    .filter((id) => !resolved.some((r) => r.id === id))
+    .map((id) => ({ id, code: id, reason: 'ไม่พบรายวิชา' }));
+
+  const offeringCounts = await Promise.all(
+    resolved.map(async ({ id }) => {
+      const snap = await db
+        .collection('offerings')
+        .where('courseId', '==', id)
+        .get();
+      return { id, count: snap.size };
+    }),
+  );
+
+  const deletableIds = new Set<string>();
+  for (const { id, count } of offeringCounts) {
+    if (count > 0) {
+      const c = resolved.find((r) => r.id === id);
+      failed.push({
+        id,
+        code: c?.code ?? id,
+        reason: `ยังมีรายวิชาที่เปิดสอน ${count} รายการ`,
+      });
+    } else {
+      deletableIds.add(id);
+    }
+  }
+
+  if (deletableIds.size > 0) {
+    const batch = db.batch();
+    deletableIds.forEach((id) => batch.delete(db.collection('courses').doc(id)));
+    await batch.commit();
+  }
+
+  await getAdminDb().collection('auditLog').add({
+    occurredAt: FieldValue.serverTimestamp(),
+    actorId: user.uid,
+    actorEmail: user.email ?? null,
+    action: 'courses_bulk_hard_deleted',
+    entityType: 'courses',
+    entityId: programId,
+    after: {
+      courseIds: Array.from(deletableIds),
+      skipped: failed.map((f) => ({ id: f.id, reason: f.reason })),
+    },
+  });
+
+  revalidatePath(`/admin/programs/${programId}/courses`);
+  return { ok: true, succeeded: deletableIds.size, failed };
+}
+
 /** Pre-check for the UI: how many offerings would block a hard-delete. */
 export async function checkCourseBlockers(
   courseId: string,
