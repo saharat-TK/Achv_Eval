@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { setUserActive } from '@/app/admin/users/actions';
+import { useConfirm } from '@/components/ConfirmDialogProvider';
 
 export default function UserActiveToggle({
   userId,
@@ -14,13 +15,21 @@ export default function UserActiveToggle({
   initialActive: boolean;
 }) {
   const router = useRouter();
+  const confirm = useConfirm();
   const [active, setActive] = useState(initialActive);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function apply(next: boolean) {
-    if (!next && !window.confirm('ปิดใช้งานบัญชีนี้? ผู้ใช้จะเข้าสู่ระบบไม่ได้จนกว่าจะเปิดใช้งานอีกครั้ง'))
-      return;
+    if (!next) {
+      const ok = await confirm({
+        title: 'ปิดใช้งานบัญชี',
+        message: 'ผู้ใช้จะเข้าสู่ระบบไม่ได้จนกว่าจะเปิดใช้งานอีกครั้ง',
+        confirmLabel: 'ปิดใช้งานบัญชี',
+        variant: 'danger',
+      });
+      if (!ok) return;
+    }
     setBusy(true);
     setError(null);
     const res = await setUserActive(userId, next);
