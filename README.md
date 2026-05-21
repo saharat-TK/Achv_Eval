@@ -53,6 +53,140 @@ complete; Phase 6B (notification email) deferred.
   - [x] Phase 6A: in-app notifications (triggers, header bell, inbox dropdown)
   - [ ] Phase 6B: email delivery
 - [ ] Phase 7: hardening & load testing
+- [ ] Department (สาขาวิชา) entity — see plan below
+
+## Department (สาขาวิชา) — Implementation Plan
+
+Introduce a managed Department layer between the free-text `school`
+("Health Science") and Program. A Program belongs to **at most one**
+Department. Existing programs carry no `departmentId` and are shown as
+"ไม่ระบุ" until reassigned — no migration needed.
+
+### Hierarchy after this change
+
+```
+School (สำนักวิชา, free text — kept on Program for backwards compat)
+  └─ Department (สาขาวิชา, NEW — managed CRUD)
+        └─ Program (หลักสูตร, existing)
+              └─ Course → Offering
+```
+
+### Data model
+
+New collection `departments/{deptId}`:
+
+```ts
+interface DepartmentDoc {
+  nameTh: string;       // "อาชีวอนามัยและความปลอดภัย"
+  nameEn: string;       // "Occupational Health and Safety"
+  isActive: boolean;    // default true
+  createdAt: Ts;
+  updatedAt: Ts;
+}
+```
+
+Extension to `ProgramDoc`:
+
+```ts
+interface ProgramDoc {
+  // ...existing fields
+  /** Optional — added 2026-05. Programs created before this point
+   *  carry null/undefined. */
+  departmentId?: string | null;
+}
+```
+
+### Files
+
+**New:**
+- `lib/data/departments.ts` — `getAllDepartments`, `getDepartment`,
+  `getDepartmentMap(deptIds)`
+- `app/admin/departments/page.tsx` — list table
+- `app/admin/departments/new/page.tsx` — create form
+- `app/admin/departments/[deptId]/page.tsx` — edit form + lifecycle panel
+- `app/admin/departments/actions.ts` — server actions (create / update /
+  soft-delete / restore / hard-delete / checkBlockers)
+- `components/DepartmentForm.tsx` — shared create/edit form
+- `components/DepartmentLifecyclePanel.tsx` — mirrors
+  `ProgramLifecyclePanel`
+- `functions/src/purgeDepartment.ts` — Cloud Function callable
+
+**Modified:**
+- `lib/types/models.ts` — new `DepartmentDoc`; add optional
+  `departmentId` to `ProgramDoc`
+- `app/admin/layout.tsx` — insert "สาขาวิชา" nav link **before**
+  "หลักสูตร", admin-only
+- `components/ProgramForm.tsx` — Department `<select>` (admin editable,
+  director read-only) with "— ไม่ระบุ —" option
+- `app/admin/programs/actions.ts` — accept `departmentId` in
+  `ProgramFormData`, validate the referenced doc exists, store it
+- `app/admin/programs/new/page.tsx` &
+  `app/admin/programs/[programId]/page.tsx` — load departments and
+  pass to `<ProgramForm>`
+- `app/admin/page.tsx` — add a "สาขาวิชา" column to the programs table
+- `functions/src/index.ts` — export `purgeDepartment`; refactor
+  `purgeProgram.ts` to expose `purgeProgramCore(programId)` so the
+  department purge can invoke it per program
+- `firestore.rules` — new `match /departments/{id}` block: read =
+  signed-in (`isMfu()`), write = `isAdmin()`
+- `scripts/seed.ts` — pre-create one OHS department for demos
+
+### Lifecycle — mirrors program lifecycle (three modes)
+
+**Mode 1 — soft-delete (reversible).** `softDeleteDepartment` flips
+`isActive = false`, then **cascades** to every program with
+`departmentId == deptId` (which in turn cascades to courses and
+offerings via the existing helpers). Symmetric `restoreDepartment`.
+Audit: `department_soft_deleted`, `department_restored`.
+
+**Mode 2 — guarded hard-delete.** `deleteDepartment` refuses if any
+program references the department; returns `{ blockers: { programsCount } }`.
+Audit: `department_hard_deleted`.
+
+**Mode 3 — purge (destructive cascade, Cloud Function).** New
+`purgeDepartment` callable. For each program under the department,
+invoke the existing per-program purge logic (factored out as
+`purgeProgramCore`), then delete the department doc. Two-confirm
+gating (typed department name + checkbox), same as program purge.
+Audit: `department_purged` with counts.
+
+**Trade-off:** soft-delete cascades blindly — if a program was
+independently soft-deleted earlier, restoring the department will
+re-activate it too. Same behavior as the existing program→courses
+cascade; documented here for awareness.
+
+### Permissions
+
+- Admin-only for all department CRUD + lifecycle.
+- Directors see the Department dropdown on the program edit page in
+  **read-only** mode.
+- All authenticated MFU users can read the `departments` collection
+  (needed so the dropdown renders for any program viewer).
+
+### Edge cases
+
+| Case | Behavior |
+|---|---|
+| Existing programs with no `departmentId` | Shown as "ไม่ระบุ" in lists; dropdown defaults to "— ไม่ระบุ —" |
+| Hard-delete department with programs | Refused; blocker count surfaced in UI |
+| Program references a deleted department | Dropdown labels the option `(ลบแล้ว)` in red, still selectable |
+| Director viewing a program | Department dropdown is read-only |
+| Department `nameTh` collision | Allowed in v1; uniqueness check is easy to add later |
+
+### Sequence & risk
+
+| Step | Risk | Notes |
+|---|---|---|
+| Model + read helpers | trivial | type + 3 queries |
+| Server actions (CRUD only) | low | mirrors program actions |
+| List + new + edit pages | low | mirrors programs UI |
+| Wire dropdown into `ProgramForm` | medium | adds a required-ish field |
+| Department column on `/admin` | trivial | one extra map lookup |
+| Lifecycle panel (soft + hard) | low | mirrors `ProgramLifecyclePanel` |
+| Purge callable + `purgeProgramCore` refactor | medium | careful with Storage cleanup |
+| Rules + deploy | low | one new match block |
+
+**Total estimate ≈ 6–7 hours.**
 
 ## Admin Role Adjustment — Implementation Plan
 

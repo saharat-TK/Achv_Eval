@@ -14,6 +14,8 @@ export interface ProgramFormData {
   level: ProgramLevel;
   ploDomainSchema: PloSchema;
   isActive: boolean;
+  /** Optional. `null` = "ไม่ระบุ" / unassigned. */
+  departmentId: string | null;
   plos: ProgramPlo[];
 }
 
@@ -42,6 +44,7 @@ function normalize(data: ProgramFormData) {
     level: data.level,
     ploDomainSchema: data.ploDomainSchema,
     isActive: data.isActive,
+    departmentId: data.departmentId ?? null,
     plos: data.plos.map((p) => ({
       ploNumber: p.ploNumber,
       domain: p.domain,
@@ -50,6 +53,20 @@ function normalize(data: ProgramFormData) {
       bloomLevel: p.bloomLevel ?? null,
     })),
   };
+}
+
+/** If the form provided a departmentId, verify the doc exists.
+ *  Returns an error string when the reference is dangling. */
+async function validateDepartment(
+  data: ProgramFormData,
+): Promise<string | null> {
+  if (!data.departmentId) return null;
+  const snap = await getAdminDb()
+    .collection('departments')
+    .doc(data.departmentId)
+    .get();
+  if (!snap.exists) return 'สาขาวิชาที่เลือกไม่มีอยู่ในระบบ';
+  return null;
 }
 
 async function writeAudit(
@@ -80,6 +97,8 @@ export async function createProgram(data: ProgramFormData): Promise<ActionResult
 
   const err = validate(data);
   if (err) return { ok: false, error: err };
+  const deptErr = await validateDepartment(data);
+  if (deptErr) return { ok: false, error: deptErr };
 
   const now = FieldValue.serverTimestamp();
   const ref = await getAdminDb()
@@ -107,6 +126,8 @@ export async function updateProgram(
 
   const err = validate(data);
   if (err) return { ok: false, error: err };
+  const deptErr = await validateDepartment(data);
+  if (deptErr) return { ok: false, error: deptErr };
 
   await getAdminDb()
     .collection('programs')

@@ -108,8 +108,23 @@ export interface ProgramDoc {
   level: ProgramLevel;
   ploDomainSchema: PloSchema;
   isActive: boolean;
+  /**
+   * Optional — added 2026-05. The managed department this program
+   * belongs to. Programs created before this field existed carry
+   * `null` / `undefined` and are surfaced in the UI as "ไม่ระบุ".
+   */
+  departmentId?: string | null;
   /** Embedded — only ~6 PLOs, always read together with the program. */
   plos: ProgramPlo[];
+  createdAt: Ts;
+  updatedAt: Ts;
+}
+
+// ----- departments/{deptId} ------------------------------------------
+export interface DepartmentDoc {
+  nameTh: string;
+  nameEn: string;
+  isActive: boolean;
   createdAt: Ts;
   updatedAt: Ts;
 }

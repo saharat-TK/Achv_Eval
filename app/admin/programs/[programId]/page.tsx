@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import { getCurrentProfile } from '@/lib/firebase/auth-server';
 import { getProgram } from '@/lib/data/programs';
+import { getAllDepartments } from '@/lib/data/departments';
 import ProgramForm from '@/components/ProgramForm';
 import ProgramLifecyclePanel from '@/components/ProgramLifecyclePanel';
 import { checkProgramBlockers, type ProgramFormData } from '@/app/admin/programs/actions';
@@ -33,6 +34,7 @@ export default async function EditProgramPage({
     level: program.level,
     ploDomainSchema: program.ploDomainSchema,
     isActive: program.isActive,
+    departmentId: program.departmentId ?? null,
     plos: (program.plos ?? []).map((p) => ({
       ploNumber: p.ploNumber,
       domain: p.domain,
@@ -41,6 +43,13 @@ export default async function EditProgramPage({
       bloomLevel: p.bloomLevel,
     })),
   };
+
+  const departments = await getAllDepartments();
+  const departmentOptions = departments.map((d) => ({
+    id: d.id,
+    nameTh: d.nameTh,
+    isActive: d.isActive,
+  }));
 
   const isAdmin = profile.roles.isAdmin === true;
   let blockers = {
@@ -91,7 +100,12 @@ export default async function EditProgramPage({
 
           {/* Body — left */}
           <div className="mt-6">
-            <ProgramForm mode="edit" programId={program.id} initial={initial} />
+            <ProgramForm
+              mode="edit"
+              programId={program.id}
+              initial={initial}
+              departments={departmentOptions}
+            />
           </div>
           {/* Body — right */}
           <aside className="mt-6 lg:sticky lg:top-24 lg:self-start">
@@ -128,7 +142,13 @@ export default async function EditProgramPage({
             </div>
           </div>
           <div className="mt-6">
-            <ProgramForm mode="edit" programId={program.id} initial={initial} />
+            <ProgramForm
+              mode="edit"
+              programId={program.id}
+              initial={initial}
+              departments={departmentOptions}
+              canEditDepartment={false}
+            />
           </div>
         </>
       )}
