@@ -3,7 +3,9 @@ import { notFound, redirect } from 'next/navigation';
 import { getCurrentProfile } from '@/lib/firebase/auth-server';
 import { getProgram } from '@/lib/data/programs';
 import { getCourse } from '@/lib/data/courses';
+import { getAdminDb } from '@/lib/firebase/admin';
 import CourseForm from '@/components/CourseForm';
+import CourseLifecyclePanel from '@/components/CourseLifecyclePanel';
 import type { CourseFormData } from '@/app/admin/programs/[programId]/courses/actions';
 
 export const dynamic = 'force-dynamic';
@@ -36,6 +38,19 @@ export default async function EditCoursePage({
     isActive: course.isActive,
   };
 
+  // Count offerings referencing this course — drives the hard-delete
+  // button's enabled state in the lifecycle panel.
+  let offeringsCount = 0;
+  if (profile.roles.isAdmin) {
+    const offeringsSnap = await getAdminDb()
+      .collection('offerings')
+      .where('courseId', '==', course.id)
+      .get();
+    offeringsCount = offeringsSnap.size;
+  }
+
+  const isAdmin = profile.roles.isAdmin;
+
   return (
     <div>
       <Link
@@ -44,18 +59,59 @@ export default async function EditCoursePage({
       >
         ← กลับไปหน้ารายวิชา
       </Link>
-      <h1 className="mt-3 text-xl font-semibold text-slate-800">
-        แก้ไขรายวิชา {course.code}
-      </h1>
-      <p className="mt-1 text-sm text-slate-500">{course.nameTh}</p>
-      <div className="mt-6">
-        <CourseForm
-          mode="edit"
-          programId={program.id}
-          courseId={course.id}
-          initial={initial}
-        />
-      </div>
+
+      {isAdmin ? (
+        <div className="mt-3 grid gap-x-6 lg:grid-cols-[minmax(0,1fr)_256px]">
+          {/* Header — left */}
+          <div>
+            <h1 className="text-xl font-semibold text-slate-800">
+              แก้ไขรายวิชา {course.code}
+            </h1>
+            <p className="mt-1 text-sm text-slate-500">{course.nameTh}</p>
+          </div>
+          {/* Header — right (lg+); on smaller screens the panel shows its own title */}
+          <div className="hidden lg:block">
+            <h2 className="text-sm font-semibold text-slate-700">
+              จัดการสถานะรายวิชา
+            </h2>
+          </div>
+
+          {/* Body — left */}
+          <div className="mt-6">
+            <CourseForm
+              mode="edit"
+              programId={program.id}
+              courseId={course.id}
+              initial={initial}
+            />
+          </div>
+          {/* Body — right */}
+          <aside className="mt-6 lg:sticky lg:top-24 lg:self-start">
+            <CourseLifecyclePanel
+              programId={program.id}
+              courseId={course.id}
+              courseCode={course.code}
+              isActive={course.isActive}
+              blockers={{ offeringsCount }}
+            />
+          </aside>
+        </div>
+      ) : (
+        <>
+          <h1 className="mt-3 text-xl font-semibold text-slate-800">
+            แก้ไขรายวิชา {course.code}
+          </h1>
+          <p className="mt-1 text-sm text-slate-500">{course.nameTh}</p>
+          <div className="mt-6">
+            <CourseForm
+              mode="edit"
+              programId={program.id}
+              courseId={course.id}
+              initial={initial}
+            />
+          </div>
+        </>
+      )}
     </div>
   );
 }

@@ -32,7 +32,10 @@ Legend: ● allowed · ◐ read-only · ○ denied.
 | Hard delete (guarded) | ● | ○ | ○ | ○ | ○ |
 | Purge (destructive) | ● | ○ | ○ | ○ | ○ |
 | **Courses & offerings** |
-| Manage courses | ● | ● (own program) | ○ | ○ | ○ |
+| Manage courses (create / edit / CSV) | ● | ● (own program) | ○ | ○ | ○ |
+| Course soft-delete / restore | ● | ○ | ○ | ○ | ○ |
+| Course hard delete (cascade-guarded) | ● | ○ | ○ | ○ | ○ |
+| Course purge (destructive) | ● | ○ | ○ | ○ | ○ |
 | Create / edit offering | ● | ● (own program) | ○ | ○ | ○ |
 | Assign lecturer | ● | ● (own program) | ○ | ○ | ○ |
 | Clone offering from previous | ● | ● (own program) | ○ | ○ | ○ |
