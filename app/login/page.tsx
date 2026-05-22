@@ -73,6 +73,9 @@ export default function LoginPage() {
         setError('เฉพาะบัญชีอีเมล @mfu.ac.th เท่านั้น');
       } else if (message === 'account_deactivated') {
         setError('บัญชีนี้ถูกปิดใช้งาน กรุณาติดต่อผู้ดูแลระบบ');
+      } else if (message === 'not_authorized') {
+        router.push('/not-authorized');
+        return;
       } else if (message === 'session_failed') {
         setError('สร้างเซสชันไม่สำเร็จ กรุณาลองใหม่');
       } else {

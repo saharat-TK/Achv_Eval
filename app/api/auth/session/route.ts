@@ -44,26 +44,47 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'domain_not_allowed' }, { status: 403 });
   }
 
-  // Auto-create the application profile on first sign-in so Firestore
-  // security rules (which require users/{uid} to exist) work immediately.
-  // Never overwrite an existing profile's roles. A deactivated account is
-  // refused here — it never receives a session cookie.
+  // Bootstrap the application profile on first sign-in. The flow is:
+  //
+  //  • Existing user (users/{uid} exists): respect the isActive flag.
+  //    Grandfathers everyone already in the system before the allowlist
+  //    gate was introduced.
+  //  • New user with an allowlist entry: create users/{uid} from the
+  //    allowlist fields and stamp the allowlist as consumed.
+  //  • New user with no allowlist entry: refuse with `not_authorized`.
   try {
-    const userRef = getAdminDb().collection('users').doc(decoded.uid);
+    const db = getAdminDb();
+    const userRef = db.collection('users').doc(decoded.uid);
     const snap = await userRef.get();
-    if (!snap.exists) {
-      const displayName = (decoded.name as string | undefined) ?? decoded.email!;
+    if (snap.exists) {
+      if (snap.data()?.isActive === false) {
+        return NextResponse.json({ error: 'account_deactivated' }, { status: 403 });
+      }
+    } else {
+      const emailId = decoded.email!.trim().toLowerCase();
+      const allowRef = db.collection('allowlist').doc(emailId);
+      const allowSnap = await allowRef.get();
+      if (!allowSnap.exists) {
+        return NextResponse.json({ error: 'not_authorized' }, { status: 403 });
+      }
+      const allow = allowSnap.data() as {
+        nameTh?: string;
+        nameEn?: string;
+      };
+      const fallback = decoded.email!.split('@')[0] ?? decoded.email!;
       await userRef.set({
         email: decoded.email,
-        nameTh: displayName,
-        nameEn: displayName,
+        nameTh: allow.nameTh?.trim() || fallback,
+        nameEn: allow.nameEn?.trim() || fallback,
         isActive: true,
         roles: { isAdmin: false, directorOf: [], assessorOf: [], verifierOf: [] },
         createdAt: FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp(),
       });
-    } else if (snap.data()?.isActive === false) {
-      return NextResponse.json({ error: 'account_deactivated' }, { status: 403 });
+      await allowRef.update({
+        consumedAt: FieldValue.serverTimestamp(),
+        consumedUid: decoded.uid,
+      });
     }
   } catch {
     return NextResponse.json({ error: 'profile_failed' }, { status: 500 });

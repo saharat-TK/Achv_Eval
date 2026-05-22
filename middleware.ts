@@ -10,7 +10,9 @@ import { NextResponse, type NextRequest } from 'next/server';
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const isPublic =
-    pathname.startsWith('/login') || pathname.startsWith('/api/auth/');
+    pathname.startsWith('/login') ||
+    pathname.startsWith('/not-authorized') ||
+    pathname.startsWith('/api/auth/');
   const hasSession = request.cookies.has('session');
 
   if (!hasSession && !isPublic) {
