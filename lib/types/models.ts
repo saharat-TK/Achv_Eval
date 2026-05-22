@@ -82,6 +82,14 @@ export interface UserDoc {
    * NOT here — it lives on each offering's `lecturerId`.
    */
   roles: {
+    /**
+     * Optional — added 2026-05. Super admins are the only users who may
+     * manage other admins (grant/revoke admin or super-admin, edit or
+     * deactivate an admin account). A super admin is a strict superset of
+     * admin: whenever this is true, `isAdmin` is also kept true, so every
+     * existing `isAdmin` check still passes. Missing = false.
+     */
+    isSuperAdmin?: boolean;
     isAdmin: boolean;
     directorOf: string[]; // programIds
     assessorOf: string[]; // programIds

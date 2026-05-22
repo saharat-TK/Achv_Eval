@@ -6,13 +6,15 @@ import { getAllUsers } from '@/lib/data/users';
 export const dynamic = 'force-dynamic';
 
 function roleSummary(roles: {
+  isSuperAdmin?: boolean;
   isAdmin: boolean;
   directorOf?: string[];
   assessorOf?: string[];
   verifierOf?: string[];
 }): string {
   const parts: string[] = [];
-  if (roles.isAdmin) parts.push('ผู้ดูแลระบบ');
+  if (roles.isSuperAdmin) parts.push('ผู้ดูแลระบบสูงสุด');
+  if (roles.isAdmin && !roles.isSuperAdmin) parts.push('ผู้ดูแลระบบ');
   if (roles.directorOf?.length) parts.push(`ประธานหลักสูตร (${roles.directorOf.length})`);
   if (roles.assessorOf?.length) parts.push(`ผู้ทวนสอบ (${roles.assessorOf.length})`);
   if (roles.verifierOf?.length) parts.push(`กรรมการรับรองผล (${roles.verifierOf.length})`);

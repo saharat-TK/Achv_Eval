@@ -9,10 +9,13 @@ export default function UserActiveToggle({
   userId,
   isSelf,
   initialActive,
+  locked = false,
 }: {
   userId: string;
   isSelf: boolean;
   initialActive: boolean;
+  /** True when the target is an admin and the viewer is not a super admin. */
+  locked?: boolean;
 }) {
   const router = useRouter();
   const confirm = useConfirm();
@@ -56,6 +59,10 @@ export default function UserActiveToggle({
         {isSelf ? (
           <span className="text-xs text-amber-600">
             ไม่สามารถปิดใช้งานบัญชีของตนเองได้
+          </span>
+        ) : locked ? (
+          <span className="text-xs text-slate-500">
+            เฉพาะผู้ดูแลระบบสูงสุดเท่านั้นที่จัดการบัญชีผู้ดูแลระบบได้
           </span>
         ) : (
           <button

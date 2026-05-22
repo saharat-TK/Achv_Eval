@@ -3,12 +3,18 @@
  * admin UI exists.
  *
  * Usage:
+ *   npm run assign-role -- <email> superadmin
  *   npm run assign-role -- <email> admin
  *   npm run assign-role -- <email> assessor <programId>
  *   npm run assign-role -- <email> director <programId>
  *
  * Example:
+ *   npm run assign-role -- saharat.arr@mfu.ac.th superadmin
  *   npm run assign-role -- saharat.arr@mfu.ac.th assessor ohs-bsc
+ *
+ * Note: "superadmin" is the bootstrap for the first super admin (the only
+ * role that can manage other admins). After that, super admins promote
+ * each other from the /admin/users UI.
  */
 import * as admin from 'firebase-admin';
 
@@ -28,7 +34,7 @@ async function main() {
   const [email, role, programId] = process.argv.slice(2);
   if (!email || !role) {
     console.error(
-      'Usage: npm run assign-role -- <email> <admin|assessor|director> [programId]',
+      'Usage: npm run assign-role -- <email> <superadmin|admin|assessor|director> [programId]',
     );
     process.exit(1);
   }
@@ -48,7 +54,13 @@ async function main() {
   }
   const userRef = userSnap.docs[0].ref;
 
-  if (role === 'admin') {
+  if (role === 'superadmin') {
+    // Super admin is a strict superset of admin — set both.
+    await userRef.update({
+      'roles.isSuperAdmin': true,
+      'roles.isAdmin': true,
+    });
+  } else if (role === 'admin') {
     await userRef.update({ 'roles.isAdmin': true });
   } else if (role === 'assessor') {
     await userRef.update({
@@ -59,7 +71,9 @@ async function main() {
       'roles.directorOf': admin.firestore.FieldValue.arrayUnion(programId),
     });
   } else {
-    console.error(`Unknown role "${role}". Use admin, assessor, or director.`);
+    console.error(
+      `Unknown role "${role}". Use superadmin, admin, assessor, or director.`,
+    );
     process.exit(1);
   }
 

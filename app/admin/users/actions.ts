@@ -6,6 +6,7 @@ import { getAdminDb } from '@/lib/firebase/admin';
 import { getSessionUser, getCurrentProfile } from '@/lib/firebase/auth-server';
 
 export interface UserRolesData {
+  isSuperAdmin: boolean;
   isAdmin: boolean;
   directorOf: string[]; // programIds
   assessorOf: string[]; // programIds
@@ -30,6 +31,19 @@ async function countOtherActiveAdmins(excludeUid: string): Promise<number> {
   ).length;
 }
 
+/** Counts other active super admins (excluding the given uid). Guards
+ *  against the system being left with zero active super admins. */
+async function countOtherActiveSuperAdmins(excludeUid: string): Promise<number> {
+  const db = getAdminDb();
+  const snap = await db
+    .collection('users')
+    .where('roles.isSuperAdmin', '==', true)
+    .get();
+  return snap.docs.filter(
+    (doc) => doc.id !== excludeUid && doc.data().isActive !== false,
+  ).length;
+}
+
 /**
  * Updates a user's role assignments. Admin only.
  *
@@ -45,9 +59,12 @@ export async function updateUserRoles(
   if (!actor || !profile?.roles.isAdmin) {
     return { ok: false, error: 'เฉพาะผู้ดูแลระบบเท่านั้นที่จัดการสิทธิ์ผู้ใช้ได้' };
   }
-  if (userId === actor.uid && !roles.isAdmin) {
-    return { ok: false, error: 'ไม่สามารถถอนสิทธิ์ผู้ดูแลระบบของบัญชีตนเองได้' };
-  }
+  const actorIsSuper = profile.roles.isSuperAdmin === true;
+
+  // Super admin is a strict superset of admin — keep isAdmin true whenever
+  // super admin is granted, so all existing isAdmin checks still pass.
+  const nextSuper = roles.isSuperAdmin === true;
+  const nextAdmin = nextSuper ? true : roles.isAdmin;
 
   const db = getAdminDb();
   const userRef = db.collection('users').doc(userId);
@@ -55,11 +72,32 @@ export async function updateUserRoles(
   if (!userSnap.exists) {
     return { ok: false, error: 'ไม่พบผู้ใช้' };
   }
+  const targetRoles = (userSnap.data()?.roles ?? {}) as {
+    isAdmin?: boolean;
+    isSuperAdmin?: boolean;
+  };
+  const targetWasAdmin = targetRoles.isAdmin === true;
+  const targetWasSuper = targetRoles.isSuperAdmin === true;
+
+  // Super-admin gate: only a super admin may touch admin-level accounts or
+  // grant/revoke admin / super-admin status.
+  const targetIsAdminNow = targetWasAdmin || targetWasSuper;
+  const changeTouchesAdmin =
+    nextAdmin !== targetWasAdmin || nextSuper !== targetWasSuper;
+  if ((targetIsAdminNow || changeTouchesAdmin) && !actorIsSuper) {
+    return {
+      ok: false,
+      error: 'เฉพาะผู้ดูแลระบบสูงสุดเท่านั้นที่จัดการสิทธิ์ผู้ดูแลระบบได้',
+    };
+  }
+
+  if (userId === actor.uid && !nextAdmin) {
+    return { ok: false, error: 'ไม่สามารถถอนสิทธิ์ผู้ดูแลระบบของบัญชีตนเองได้' };
+  }
 
   // Last-admin safeguard: refuse if this change would demote the only
   // remaining active admin in the system.
-  const targetWasAdmin = userSnap.data()?.roles?.isAdmin === true;
-  if (targetWasAdmin && !roles.isAdmin) {
+  if (targetWasAdmin && !nextAdmin) {
     const others = await countOtherActiveAdmins(userId);
     if (others === 0) {
       return {
@@ -70,8 +108,21 @@ export async function updateUserRoles(
     }
   }
 
+  // Last-super-admin safeguard.
+  if (targetWasSuper && !nextSuper) {
+    const others = await countOtherActiveSuperAdmins(userId);
+    if (others === 0) {
+      return {
+        ok: false,
+        error:
+          'ไม่สามารถถอนสิทธิ์ได้ — บัญชีนี้เป็นผู้ดูแลระบบสูงสุดที่ยังใช้งานอยู่คนเดียว',
+      };
+    }
+  }
+
   await userRef.update({
-    'roles.isAdmin': roles.isAdmin,
+    'roles.isSuperAdmin': nextSuper,
+    'roles.isAdmin': nextAdmin,
     'roles.directorOf': [...new Set(roles.directorOf)],
     'roles.assessorOf': [...new Set(roles.assessorOf)],
     'roles.verifierOf': [...new Set(roles.verifierOf)],
@@ -87,7 +138,8 @@ export async function updateUserRoles(
     entityId: userId,
     before: null,
     after: {
-      isAdmin: roles.isAdmin,
+      isSuperAdmin: nextSuper,
+      isAdmin: nextAdmin,
       directorOf: roles.directorOf,
       assessorOf: roles.assessorOf,
       verifierOf: roles.verifierOf,
@@ -115,6 +167,7 @@ export async function setUserActive(
   if (!actor || !profile?.roles.isAdmin) {
     return { ok: false, error: 'เฉพาะผู้ดูแลระบบเท่านั้นที่จัดการบัญชีผู้ใช้ได้' };
   }
+  const actorIsSuper = profile.roles.isSuperAdmin === true;
   if (userId === actor.uid && !isActive) {
     return { ok: false, error: 'ไม่สามารถปิดใช้งานบัญชีของตนเองได้' };
   }
@@ -125,16 +178,41 @@ export async function setUserActive(
   if (!userSnap.exists) {
     return { ok: false, error: 'ไม่พบผู้ใช้' };
   }
+  const targetRoles = (userSnap.data()?.roles ?? {}) as {
+    isAdmin?: boolean;
+    isSuperAdmin?: boolean;
+  };
+  const targetIsAdmin = targetRoles.isAdmin === true || targetRoles.isSuperAdmin === true;
+
+  // Super-admin gate: only a super admin may activate/deactivate an admin.
+  if (targetIsAdmin && !actorIsSuper) {
+    return {
+      ok: false,
+      error: 'เฉพาะผู้ดูแลระบบสูงสุดเท่านั้นที่จัดการบัญชีผู้ดูแลระบบได้',
+    };
+  }
 
   // Last-admin safeguard: refuse if deactivating the only remaining active
   // admin in the system.
-  if (!isActive && userSnap.data()?.roles?.isAdmin === true) {
+  if (!isActive && targetRoles.isAdmin === true) {
     const others = await countOtherActiveAdmins(userId);
     if (others === 0) {
       return {
         ok: false,
         error:
           'ไม่สามารถปิดใช้งานได้ — บัญชีนี้เป็นผู้ดูแลระบบที่ยังใช้งานอยู่คนเดียว',
+      };
+    }
+  }
+
+  // Last-super-admin safeguard.
+  if (!isActive && targetRoles.isSuperAdmin === true) {
+    const others = await countOtherActiveSuperAdmins(userId);
+    if (others === 0) {
+      return {
+        ok: false,
+        error:
+          'ไม่สามารถปิดใช้งานได้ — บัญชีนี้เป็นผู้ดูแลระบบสูงสุดที่ยังใช้งานอยู่คนเดียว',
       };
     }
   }
