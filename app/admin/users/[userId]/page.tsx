@@ -58,6 +58,7 @@ export default async function ManageUserRolesPage({
           initial={{
             isSuperAdmin: target.roles?.isSuperAdmin ?? false,
             isAdmin: target.roles?.isAdmin ?? false,
+            isLecturer: target.roles?.isLecturer ?? false,
             directorOf: target.roles?.directorOf ?? [],
             assessorOf: target.roles?.assessorOf ?? [],
             verifierOf: target.roles?.verifierOf ?? [],

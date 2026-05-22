@@ -8,6 +8,7 @@ import { getSessionUser, getCurrentProfile } from '@/lib/firebase/auth-server';
 export interface UserRolesData {
   isSuperAdmin: boolean;
   isAdmin: boolean;
+  isLecturer: boolean;
   directorOf: string[]; // programIds
   assessorOf: string[]; // programIds
   verifierOf: string[]; // programIds
@@ -123,6 +124,7 @@ export async function updateUserRoles(
   await userRef.update({
     'roles.isSuperAdmin': nextSuper,
     'roles.isAdmin': nextAdmin,
+    'roles.isLecturer': roles.isLecturer === true,
     'roles.directorOf': [...new Set(roles.directorOf)],
     'roles.assessorOf': [...new Set(roles.assessorOf)],
     'roles.verifierOf': [...new Set(roles.verifierOf)],
@@ -140,6 +142,7 @@ export async function updateUserRoles(
     after: {
       isSuperAdmin: nextSuper,
       isAdmin: nextAdmin,
+      isLecturer: roles.isLecturer === true,
       directorOf: roles.directorOf,
       assessorOf: roles.assessorOf,
       verifierOf: roles.verifierOf,

@@ -27,6 +27,7 @@ export default function UserRolesEditor({
   const router = useRouter();
   const [isSuperAdmin, setIsSuperAdmin] = useState(initial.isSuperAdmin);
   const [isAdmin, setIsAdmin] = useState(initial.isAdmin);
+  const [isLecturer, setIsLecturer] = useState(initial.isLecturer);
   const [directorOf, setDirectorOf] = useState<string[]>(initial.directorOf);
   const [assessorOf, setAssessorOf] = useState<string[]>(initial.assessorOf);
   const [verifierOf, setVerifierOf] = useState<string[]>(initial.verifierOf);
@@ -48,6 +49,7 @@ export default function UserRolesEditor({
     const res = await updateUserRoles(userId, {
       isSuperAdmin,
       isAdmin,
+      isLecturer,
       directorOf,
       assessorOf,
       verifierOf,
@@ -112,6 +114,31 @@ export default function UserRolesEditor({
             นี่คือบัญชีของท่าน — ระบบไม่อนุญาตให้ถอนสิทธิ์ผู้ดูแลระบบของตนเอง
           </p>
         )}
+      </section>
+
+      {/* Lecturer */}
+      <section className="rounded-xl border border-slate-200 bg-white p-5">
+        <h2 className="text-sm font-semibold text-slate-700">
+          อาจารย์ผู้รับผิดชอบรายวิชา
+        </h2>
+        <label
+          className={`mt-3 flex items-center gap-2 text-sm ${
+            locked ? 'text-slate-400' : 'text-slate-700'
+          }`}
+        >
+          <input
+            type="checkbox"
+            checked={isLecturer}
+            disabled={locked}
+            onChange={(e) => setIsLecturer(e.target.checked)}
+          />
+          เป็นอาจารย์ผู้รับผิดชอบรายวิชา (เห็นเมนู &quot;รายวิชาที่รับผิดชอบ&quot;)
+        </label>
+        <p className="mt-1 text-xs text-slate-500">
+          ระบบจะกำหนดสิทธิ์นี้ให้อัตโนมัติเมื่อผู้ใช้ถูกมอบหมายเป็นอาจารย์
+          ผู้รับผิดชอบในรายวิชาที่เปิดสอน — รายวิชาที่แสดงยังคงอ้างอิงจากการ
+          มอบหมายในแต่ละรายวิชา
+        </p>
       </section>
 
       {/* Director */}

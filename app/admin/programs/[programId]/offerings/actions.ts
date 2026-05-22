@@ -28,6 +28,23 @@ async function authorize(programId: string) {
   return user && allowed ? user : null;
 }
 
+/**
+ * One-way: marks a user as a lecturer so the lecturer workspace shows up
+ * in their workspace switcher. Never auto-revokes (they may teach other
+ * offerings). No-op when no lecturer is assigned.
+ */
+async function grantLecturerRole(lecturerId: string | null | undefined) {
+  if (!lecturerId) return;
+  try {
+    await getAdminDb()
+      .collection('users')
+      .doc(lecturerId)
+      .update({ 'roles.isLecturer': true });
+  } catch {
+    // Non-fatal: a missing user doc shouldn't block the offering write.
+  }
+}
+
 async function audit(action: string, offeringId: string, uid: string, email: string | null) {
   await getAdminDb().collection('auditLog').add({
     occurredAt: FieldValue.serverTimestamp(),
@@ -125,6 +142,7 @@ export async function createOffering(
     updatedBy: user.uid,
   });
 
+  await grantLecturerRole(data.lecturerId);
   await audit('offering_created', ref.id, user.uid, user.email ?? null);
   revalidatePath(`/admin/programs/${programId}/offerings`);
   return { ok: true, id: ref.id };
@@ -169,6 +187,7 @@ export async function updateOffering(
     updatedBy: user.uid,
   });
 
+  await grantLecturerRole(data.lecturerId);
   await audit('offering_updated', offeringId, user.uid, user.email ?? null);
   revalidatePath(`/admin/programs/${programId}/offerings`);
   revalidatePath(`/admin/programs/${programId}/offerings/${offeringId}`);
@@ -238,6 +257,7 @@ export async function cloneOfferings(
       createdBy: user.uid,
       updatedBy: user.uid,
     });
+    await grantLecturerRole(src.lecturerId);
     created++;
   }
 

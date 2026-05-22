@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { getCurrentProfile } from '@/lib/firebase/auth-server';
 import SignOutButton from '@/components/SignOutButton';
 import NotificationBell from '@/components/NotificationBell';
+import WorkspaceSwitcher from '@/components/WorkspaceSwitcher';
 
 export default async function AssessorLayout({
   children,
@@ -33,6 +34,7 @@ export default async function AssessorLayout({
               </span>
             </Link>
             <div className="flex items-center gap-4">
+              <WorkspaceSwitcher current="assessor" roles={profile.roles} />
               <NotificationBell basePath="/assessor" tone="dark" />
               <div className="text-right">
                 <div className="text-sm text-white">{profile.nameTh}</div>

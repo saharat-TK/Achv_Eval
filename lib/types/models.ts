@@ -91,6 +91,15 @@ export interface UserDoc {
      */
     isSuperAdmin?: boolean;
     isAdmin: boolean;
+    /**
+     * Optional — added 2026-05. Drives visibility of the lecturer
+     * workspace ("รายวิชาที่รับผิดชอบ") in the cross-workspace switcher.
+     * Auto-granted (one-way) when a user is assigned as an offering's
+     * lecturer; can also be set manually. NOT the source of which
+     * offerings appear — that's still `offerings.lecturerId`. Missing =
+     * false.
+     */
+    isLecturer?: boolean;
     directorOf: string[]; // programIds
     assessorOf: string[]; // programIds
     verifierOf: string[]; // programIds

@@ -8,6 +8,7 @@ export const dynamic = 'force-dynamic';
 function roleSummary(roles: {
   isSuperAdmin?: boolean;
   isAdmin: boolean;
+  isLecturer?: boolean;
   directorOf?: string[];
   assessorOf?: string[];
   verifierOf?: string[];
@@ -18,6 +19,7 @@ function roleSummary(roles: {
   if (roles.directorOf?.length) parts.push(`ประธานหลักสูตร (${roles.directorOf.length})`);
   if (roles.assessorOf?.length) parts.push(`ผู้ทวนสอบ (${roles.assessorOf.length})`);
   if (roles.verifierOf?.length) parts.push(`กรรมการรับรองผล (${roles.verifierOf.length})`);
+  if (roles.isLecturer) parts.push('อาจารย์ผู้รับผิดชอบ');
   return parts.length ? parts.join(' · ') : '—';
 }
 

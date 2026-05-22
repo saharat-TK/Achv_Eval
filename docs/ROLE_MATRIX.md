@@ -18,8 +18,12 @@ when role behaviour changes.
 - **Assessor** — `assessorOf` contains the program id. Per-program.
 - **Verifier** — `verifierOf` contains the program id. Per-program;
   member of the verification committee.
-- **Lecturer** — `offerings/{id}.lecturerId == uid`. Per-offering, not
-  stored on `users.roles`.
+- **Lecturer** — `offerings/{id}.lecturerId == uid` decides *which*
+  offerings a user owns (per-offering). A `users/{uid}.roles.isLecturer`
+  flag (auto-granted one-way on offering assignment, also settable
+  manually) drives whether the "รายวิชาที่รับผิดชอบ" workspace appears in
+  the cross-workspace switcher. The `/lecturer` workspace itself stays
+  open to any signed-in user.
 
 A user can hold more than one role; checks short-circuit on the first
 matching role.
