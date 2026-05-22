@@ -97,7 +97,7 @@ export default async function AdminAllowlistPage() {
       </div>
 
       <div className="mt-4">
-        <AllowlistTable rows={rows} />
+        <AllowlistTable rows={rows} programs={programOptions} />
       </div>
     </div>
   );
