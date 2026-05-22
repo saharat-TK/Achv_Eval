@@ -45,7 +45,7 @@ export default function DashboardTrends({
           คะแนนเฉลี่ยและความคืบหน้า (%)
         </h3>
         <div className="mt-2 h-64">
-          <ResponsiveContainer width="100%" height="100%">
+          <ResponsiveContainer width="100%" height="100%" minWidth={0}>
             <LineChart data={trend} margin={{ top: 8, right: 8, bottom: 4, left: -16 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
               <XAxis dataKey="label" tick={{ fontSize: 11 }} />
@@ -78,7 +78,7 @@ export default function DashboardTrends({
           การกระจายระดับผลทวนสอบ (จำนวนรายวิชา)
         </h3>
         <div className="mt-2 h-64">
-          <ResponsiveContainer width="100%" height="100%">
+          <ResponsiveContainer width="100%" height="100%" minWidth={0}>
             <BarChart data={trend} margin={{ top: 8, right: 8, bottom: 4, left: -16 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
               <XAxis dataKey="label" tick={{ fontSize: 11 }} />
