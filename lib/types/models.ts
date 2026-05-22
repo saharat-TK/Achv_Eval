@@ -150,6 +150,15 @@ export interface AllowlistDoc {
   nameTh: string;
   nameEn: string;
   notes?: string;
+  /**
+   * Roles applied to the new users/{uid} doc on first sign-in. Lecturer
+   * defaults true; director (per-program) is opt-in and needs a program.
+   * Existing rows without these fields are treated as lecturer=true,
+   * director=false.
+   */
+  presetIsLecturer?: boolean;
+  presetIsDirector?: boolean;
+  presetDirectorProgramId?: string | null;
   addedBy: string; // admin uid
   addedAt: Ts;
   consumedAt?: Ts | null;

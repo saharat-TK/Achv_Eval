@@ -4,7 +4,17 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { addToAllowlist } from '@/app/admin/users/allowlist/actions';
 
-export default function AllowlistAddForm() {
+export interface AllowlistProgramOption {
+  id: string;
+  code: string;
+  nameTh: string;
+}
+
+export default function AllowlistAddForm({
+  programs,
+}: {
+  programs: AllowlistProgramOption[];
+}) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -15,12 +25,18 @@ export default function AllowlistAddForm() {
   const [nameTh, setNameTh] = useState('');
   const [nameEn, setNameEn] = useState('');
   const [notes, setNotes] = useState('');
+  const [isLecturer, setIsLecturer] = useState(true);
+  const [isDirector, setIsDirector] = useState(false);
+  const [directorProgramId, setDirectorProgramId] = useState('');
 
   function reset() {
     setEmail('');
     setNameTh('');
     setNameEn('');
     setNotes('');
+    setIsLecturer(true);
+    setIsDirector(false);
+    setDirectorProgramId('');
     setError(null);
   }
 
@@ -28,7 +44,15 @@ export default function AllowlistAddForm() {
     setBusy(true);
     setError(null);
     setOk(null);
-    const res = await addToAllowlist({ email, nameTh, nameEn, notes });
+    const res = await addToAllowlist({
+      email,
+      nameTh,
+      nameEn,
+      notes,
+      presetIsLecturer: isLecturer,
+      presetIsDirector: isDirector,
+      presetDirectorProgramId: isDirector ? directorProgramId : null,
+    });
     setBusy(false);
     if (res.ok) {
       setOk(`เพิ่ม ${email} ในทะเบียนแล้ว`);
@@ -119,11 +143,51 @@ export default function AllowlistAddForm() {
         </label>
       </div>
 
+      {/* Preset roles applied on first sign-in */}
+      <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50/60 p-3">
+        <p className="text-xs font-medium text-slate-600">
+          สิทธิ์เริ่มต้นเมื่อเข้าสู่ระบบครั้งแรก
+        </p>
+        <label className="mt-2 flex items-center gap-2 text-sm text-slate-700">
+          <input
+            type="checkbox"
+            checked={isLecturer}
+            onChange={(e) => setIsLecturer(e.target.checked)}
+          />
+          อาจารย์ผู้รับผิดชอบรายวิชา
+        </label>
+        <label className="mt-2 flex items-center gap-2 text-sm text-slate-700">
+          <input
+            type="checkbox"
+            checked={isDirector}
+            onChange={(e) => setIsDirector(e.target.checked)}
+          />
+          ประธานหลักสูตร
+        </label>
+        {isDirector && (
+          <label className="mt-2 block text-xs text-slate-600">
+            หลักสูตรที่เป็นประธาน
+            <select
+              value={directorProgramId}
+              onChange={(e) => setDirectorProgramId(e.target.value)}
+              className="mt-1 w-full max-w-sm rounded-lg border border-slate-300 px-3 py-1.5 text-sm focus:border-mfu-primary focus:outline-none"
+            >
+              <option value="">— เลือกหลักสูตร —</option>
+              {programs.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.code} — {p.nameTh}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+      </div>
+
       <div className="mt-3 flex justify-end">
         <button
           type="button"
           onClick={submit}
-          disabled={busy || !email.trim()}
+          disabled={busy || !email.trim() || (isDirector && !directorProgramId)}
           className="rounded-lg bg-mfu-primary px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
         >
           {busy ? 'กำลังบันทึก…' : 'บันทึก'}

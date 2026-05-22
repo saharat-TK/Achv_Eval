@@ -10,6 +10,19 @@ import {
 
 interface ParsedRow extends AllowlistEntryInput {
   rowNumber: number;
+  directorProgramLabel?: string;
+}
+
+export interface AllowlistProgramOption {
+  id: string;
+  code: string;
+  nameTh: string;
+}
+
+function truthy(v: string | undefined): boolean {
+  return ['true', '1', 'yes', 'y', '✓', 'x'].includes(
+    (v ?? '').trim().toLowerCase(),
+  );
 }
 
 /**
@@ -53,7 +66,11 @@ function parseCsv(text: string): { headers: string[]; rows: string[][] } {
   return { headers, rows };
 }
 
-export default function AllowlistCsvUpload() {
+export default function AllowlistCsvUpload({
+  programs,
+}: {
+  programs: AllowlistProgramOption[];
+}) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [parsed, setParsed] = useState<ParsedRow[]>([]);
@@ -92,15 +109,40 @@ export default function AllowlistCsvUpload() {
         const nameThIdx = headers.indexOf('nameth');
         const nameEnIdx = headers.indexOf('nameen');
         const notesIdx = headers.indexOf('notes');
+        const lecturerIdx = headers.indexOf('lecturer');
+        const directorIdx = headers.indexOf('director');
+        const directorProgramIdx = headers.indexOf('directorprogram');
+
+        // Resolve a program code → id (case-insensitive).
+        const byCode = new Map(
+          programs.map((p) => [p.code.trim().toLowerCase(), p]),
+        );
 
         const out: ParsedRow[] = rows
-          .map((r, i) => ({
-            rowNumber: i + 2, // header is line 1
-            email: r[emailIdx] ?? '',
-            nameTh: nameThIdx >= 0 ? r[nameThIdx] : '',
-            nameEn: nameEnIdx >= 0 ? r[nameEnIdx] : '',
-            notes: notesIdx >= 0 ? r[notesIdx] : '',
-          }))
+          .map((r, i) => {
+            const isLecturer = lecturerIdx >= 0 ? truthy(r[lecturerIdx]) : true;
+            const isDirector = directorIdx >= 0 ? truthy(r[directorIdx]) : false;
+            const progCode =
+              directorProgramIdx >= 0 ? (r[directorProgramIdx] ?? '').trim() : '';
+            const prog = progCode
+              ? byCode.get(progCode.toLowerCase())
+              : undefined;
+            return {
+              rowNumber: i + 2, // header is line 1
+              email: r[emailIdx] ?? '',
+              nameTh: nameThIdx >= 0 ? r[nameThIdx] : '',
+              nameEn: nameEnIdx >= 0 ? r[nameEnIdx] : '',
+              notes: notesIdx >= 0 ? r[notesIdx] : '',
+              presetIsLecturer: isLecturer,
+              presetIsDirector: isDirector,
+              presetDirectorProgramId: prog?.id ?? null,
+              directorProgramLabel: isDirector
+                ? prog
+                  ? `${prog.code}`
+                  : progCode || '(ไม่พบหลักสูตร)'
+                : '',
+            };
+          })
           .filter((r) => r.email.trim());
 
         setParsed(out);
@@ -123,6 +165,9 @@ export default function AllowlistCsvUpload() {
           nameTh: p.nameTh,
           nameEn: p.nameEn,
           notes: p.notes,
+          presetIsLecturer: p.presetIsLecturer,
+          presetIsDirector: p.presetIsDirector,
+          presetDirectorProgramId: p.presetDirectorProgramId,
         })),
       );
       if (!res.ok) {
@@ -163,8 +208,11 @@ export default function AllowlistCsvUpload() {
           </h3>
           <p className="mt-1 text-xs text-slate-500">
             คอลัมน์ที่ต้องมี: <code>email</code>. คอลัมน์เสริม:{' '}
-            <code>nameTh</code>, <code>nameEn</code>, <code>notes</code> —
-            ลำดับไม่สำคัญ
+            <code>nameTh</code>, <code>nameEn</code>, <code>notes</code>,{' '}
+            <code>lecturer</code>, <code>director</code>,{' '}
+            <code>directorProgram</code> (รหัสหลักสูตร) — ลำดับไม่สำคัญ.
+            <code>lecturer</code> เริ่มต้นเป็นจริง, <code>director</code>{' '}
+            เริ่มต้นเป็นเท็จ (รับค่า true/1/yes)
           </p>
         </div>
         <button
@@ -213,6 +261,8 @@ export default function AllowlistCsvUpload() {
                   <th className="px-3 py-2 font-medium">ชื่อไทย</th>
                   <th className="px-3 py-2 font-medium">ชื่ออังกฤษ</th>
                   <th className="px-3 py-2 font-medium">หมายเหตุ</th>
+                  <th className="px-3 py-2 font-medium">อาจารย์</th>
+                  <th className="px-3 py-2 font-medium">ประธานหลักสูตร</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -223,6 +273,14 @@ export default function AllowlistCsvUpload() {
                     <td className="px-3 py-2 text-slate-600">{r.nameTh}</td>
                     <td className="px-3 py-2 text-slate-600">{r.nameEn}</td>
                     <td className="px-3 py-2 text-slate-500">{r.notes}</td>
+                    <td className="px-3 py-2 text-slate-600">
+                      {r.presetIsLecturer ? '✓' : '—'}
+                    </td>
+                    <td className="px-3 py-2 text-slate-600">
+                      {r.presetIsDirector
+                        ? `✓ ${r.directorProgramLabel ?? ''}`
+                        : '—'}
+                    </td>
                   </tr>
                 ))}
               </tbody>

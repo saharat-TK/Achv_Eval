@@ -11,6 +11,9 @@ export interface AllowlistEntryInput {
   nameTh?: string;
   nameEn?: string;
   notes?: string;
+  presetIsLecturer?: boolean;
+  presetIsDirector?: boolean;
+  presetDirectorProgramId?: string | null;
 }
 
 export type AllowlistActionResult =
@@ -80,6 +83,46 @@ function fallbackName(email: string): string {
   return email.split('@')[0] ?? email;
 }
 
+interface NormalizedPresets {
+  presetIsLecturer: boolean;
+  presetIsDirector: boolean;
+  presetDirectorProgramId: string | null;
+}
+
+/**
+ * Validate + normalize the preset role fields. Lecturer defaults to true
+ * when unspecified. Director requires an existing program; returns an
+ * error reason otherwise.
+ */
+async function resolvePresets(
+  input: AllowlistEntryInput,
+): Promise<{ ok: true; presets: NormalizedPresets } | { ok: false; reason: string }> {
+  const isLecturer = input.presetIsLecturer !== false; // default true
+  const isDirector = input.presetIsDirector === true;
+  let directorProgramId: string | null = null;
+
+  if (isDirector) {
+    const pid = input.presetDirectorProgramId?.trim();
+    if (!pid) {
+      return { ok: false, reason: 'เลือกประธานหลักสูตรต้องระบุหลักสูตร' };
+    }
+    const prog = await getAdminDb().collection('programs').doc(pid).get();
+    if (!prog.exists) {
+      return { ok: false, reason: 'ไม่พบหลักสูตรที่เลือกสำหรับประธานหลักสูตร' };
+    }
+    directorProgramId = pid;
+  }
+
+  return {
+    ok: true,
+    presets: {
+      presetIsLecturer: isLecturer,
+      presetIsDirector: isDirector,
+      presetDirectorProgramId: directorProgramId,
+    },
+  };
+}
+
 /** Add a single allowlist entry. */
 export async function addToAllowlist(
   input: AllowlistEntryInput,
@@ -90,6 +133,9 @@ export async function addToAllowlist(
   }
   const check = validateEmail(input.email);
   if (!check.ok) return { ok: false, error: check.reason };
+
+  const presetRes = await resolvePresets(input);
+  if (!presetRes.ok) return { ok: false, error: presetRes.reason };
 
   const id = normalizeEmail(input.email);
   const ref = getAdminDb().collection('allowlist').doc(id);
@@ -103,6 +149,9 @@ export async function addToAllowlist(
     nameTh: input.nameTh?.trim() || fallbackName(id),
     nameEn: input.nameEn?.trim() || fallbackName(id),
     notes: input.notes?.trim() || '',
+    presetIsLecturer: presetRes.presets.presetIsLecturer,
+    presetIsDirector: presetRes.presets.presetIsDirector,
+    presetDirectorProgramId: presetRes.presets.presetDirectorProgramId,
     addedBy: user.uid,
     addedAt: FieldValue.serverTimestamp(),
     consumedAt: null,
@@ -145,6 +194,15 @@ export async function bulkAddToAllowlist(
   const byId = new Map<string, AllowlistEntryInput>();
   for (const { id, row } of validRows) byId.set(id, row);
 
+  // Resolve + validate presets per row (director needs an existing program).
+  const presetByEntry = await Promise.all(
+    Array.from(byId.entries()).map(async ([id, row]) => ({
+      id,
+      row,
+      preset: await resolvePresets(row),
+    })),
+  );
+
   // Pre-fetch existing docs to count duplicates.
   const existingChecks = await Promise.all(
     Array.from(byId.keys()).map((id) =>
@@ -158,9 +216,13 @@ export async function bulkAddToAllowlist(
   const batch = db.batch();
   const now = FieldValue.serverTimestamp();
 
-  Array.from(byId.entries()).forEach(([id, row], i) => {
+  presetByEntry.forEach(({ id, row, preset }, i) => {
     if (existingChecks[i].exists) {
       duplicates++;
+      return;
+    }
+    if (!preset.ok) {
+      invalid.push({ email: id, reason: preset.reason });
       return;
     }
     batch.set(db.collection('allowlist').doc(id), {
@@ -168,6 +230,9 @@ export async function bulkAddToAllowlist(
       nameTh: row.nameTh?.trim() || fallbackName(id),
       nameEn: row.nameEn?.trim() || fallbackName(id),
       notes: row.notes?.trim() || '',
+      presetIsLecturer: preset.presets.presetIsLecturer,
+      presetIsDirector: preset.presets.presetIsDirector,
+      presetDirectorProgramId: preset.presets.presetDirectorProgramId,
       addedBy: user.uid,
       addedAt: now,
       consumedAt: null,
@@ -189,6 +254,47 @@ export async function bulkAddToAllowlist(
   }
 
   return { ok: true, added, duplicates, invalid };
+}
+
+/** Update the preset roles on a pending allowlist entry (the row
+ *  checkboxes). Refuses once the entry is consumed — at that point the
+ *  user's actual roles are managed from the user page. */
+export async function updateAllowlistPresets(
+  emailId: string,
+  presets: {
+    presetIsLecturer: boolean;
+    presetIsDirector: boolean;
+    presetDirectorProgramId?: string | null;
+  },
+): Promise<AllowlistActionResult> {
+  const user = await authorizeAdmin();
+  if (!user) {
+    return { ok: false, error: 'เฉพาะผู้ดูแลระบบเท่านั้นที่สามารถดำเนินการนี้ได้' };
+  }
+  const id = normalizeEmail(emailId);
+  const ref = getAdminDb().collection('allowlist').doc(id);
+  const snap = await ref.get();
+  if (!snap.exists) return { ok: false, error: 'ไม่พบรายการ' };
+  if (snap.data()?.consumedAt) {
+    return {
+      ok: false,
+      error: 'ผู้ใช้รายนี้ลงทะเบียนแล้ว — จัดการสิทธิ์จากหน้าผู้ใช้งานแทน',
+    };
+  }
+
+  const presetRes = await resolvePresets({ email: id, ...presets });
+  if (!presetRes.ok) return { ok: false, error: presetRes.reason };
+
+  await ref.update({
+    presetIsLecturer: presetRes.presets.presetIsLecturer,
+    presetIsDirector: presetRes.presets.presetIsDirector,
+    presetDirectorProgramId: presetRes.presets.presetDirectorProgramId,
+  });
+  await audit('allowlist_presets_updated', id, user.uid, user.email ?? null, {
+    ...presetRes.presets,
+  });
+  revalidatePath('/admin/users/allowlist');
+  return { ok: true, id };
 }
 
 /** Remove an allowlist entry. Refuses if already consumed (the
