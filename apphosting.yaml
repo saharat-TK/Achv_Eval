@@ -1,0 +1,29 @@
+env:
+  - variable: NEXT_PUBLIC_FIREBASE_PROJECT_ID
+    value: achv-evaluation-ohs
+  - variable: NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
+    value: achv-evaluation-ohs.firebaseapp.com
+  - variable: NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET
+    value: achv-evaluation-ohs.appspot.com
+  - variable: NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID
+    value: "1005024902113"
+  - variable: NEXT_PUBLIC_FIREBASE_API_KEY
+    value: AIzaSyAYmmk1Z_vydUT-n2UYg_toNrn5KVPFjkA
+  - variable: NEXT_PUBLIC_FIREBASE_APP_ID
+    value: 1:1084422851876:web:7a96c8fe2c76220c65b7b1
+  - variable: GOOGLE_DRIVE_ROOT_FOLDER_ID
+    value: 1DyRfmRzDp-47JArRN7WUYlxM1E3dBFs0
+  - variable: GOOGLE_LOG_SHEET_ID
+    value: 1BgRGKvhaf3ZpKQgBNvE2ZxAJmmCvFl7h72vxTVksa2Q
+  - variable: ALLOWED_EMAIL_DOMAINS
+    value: mfu.ac.th
+  - variable: NEXT_PUBLIC_APP_URL
+    value: https://achv-evaluation-ohs.web.app # Using the default Firebase hosting URL
+
+  # Map the sensitive secrets managed by Google Cloud Secret Manager
+  - variable: GEMINI_API_KEY
+    secret: GEMINI_API_KEY
+  - variable: FIREBASE_CLIENT_EMAIL
+    secret: ADMIN_CLIENT_EMAIL
+  - variable: FIREBASE_PRIVATE_KEY
+    secret: ADMIN_PRIVATE_KEY
