@@ -1,82 +1,58 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { getCurrentProfile } from '@/lib/firebase/auth-server';
-import { getAllPrograms, getProgramsByIds } from '@/lib/data/programs';
-import { getCourseCountsByProgram } from '@/lib/data/courses';
+import {
+  getAllAcademicPrograms,
+  getCurriculumCountsByProgram,
+} from '@/lib/data/academicPrograms';
 import { getDepartmentMap } from '@/lib/data/departments';
-import { PROGRAM_LEVEL_LABEL, PLO_SCHEMA_LABEL } from '@/lib/constants';
-import type { ProgramDoc } from '@/lib/types/models';
+import { PROGRAM_LEVEL_LABEL } from '@/lib/constants';
+import type { AcademicProgramWithId } from '@/lib/data/academicPrograms';
 
 export const dynamic = 'force-dynamic';
 
-type ProgramWithId = ProgramDoc & { id: string };
-
 interface Section {
-  /** Stable key for React. */
   key: string;
   titleTh: string;
-  titleEn?: string;
-  /** Render the title in red when this section is for dangling refs. */
   isWarning?: boolean;
-  programs: ProgramWithId[];
+  programs: AcademicProgramWithId[];
 }
 
-export default async function AdminProgramsPage() {
+export default async function AdminAcademicProgramsPage() {
   const profile = await getCurrentProfile();
   if (!profile) redirect('/login');
+  if (!profile.roles.isAdmin) redirect('/admin');
 
-  const isAdmin = profile.roles.isAdmin;
-  const programs = isAdmin
-    ? await getAllPrograms()
-    : await getProgramsByIds(profile.roles.directorOf ?? []);
-  const courseCounts = await getCourseCountsByProgram(programs.map((p) => p.id));
-  const deptMap = await getDepartmentMap(
-    programs.map((p) => p.departmentId).filter((id): id is string => !!id),
-  );
+  const programs = await getAllAcademicPrograms();
+  const [curriculumCounts, deptMap] = await Promise.all([
+    getCurriculumCountsByProgram(programs.map((p) => p.id)),
+    getDepartmentMap(
+      programs.map((p) => p.departmentId).filter((id): id is string => !!id),
+    ),
+  ]);
 
-  // ----- Group programs into sections by department -----------------
-  const byDept: Record<string, ProgramWithId[]> = {};
-  const unassigned: ProgramWithId[] = [];
-  const dangling: ProgramWithId[] = [];
-
+  // Group by department.
+  const byDept: Record<string, AcademicProgramWithId[]> = {};
+  const unassigned: AcademicProgramWithId[] = [];
   for (const p of programs) {
-    if (!p.departmentId) {
-      unassigned.push(p);
-    } else if (deptMap[p.departmentId]) {
+    if (p.departmentId && deptMap[p.departmentId]) {
       (byDept[p.departmentId] ||= []).push(p);
     } else {
-      dangling.push(p);
+      unassigned.push(p);
     }
   }
-
-  // Programs within a section: sort by program.code DESC (largest first).
-  const sortByCodeDesc = (a: ProgramWithId, b: ProgramWithId) =>
-    b.code.localeCompare(a.code);
-
-  // Real departments first, sorted alphabetically by nameTh.
-  const realSections: Section[] = Object.entries(byDept)
+  const sections: Section[] = Object.entries(byDept)
     .map(([deptId, ps]) => ({
       key: deptId,
       titleTh: deptMap[deptId].nameTh,
-      titleEn: deptMap[deptId].nameEn,
-      programs: ps.sort(sortByCodeDesc),
+      programs: ps.sort((a, b) => a.code.localeCompare(b.code)),
     }))
     .sort((a, b) => a.titleTh.localeCompare(b.titleTh, 'th'));
-
-  const sections: Section[] = [...realSections];
   if (unassigned.length > 0) {
     sections.push({
       key: '_unassigned',
       titleTh: 'ไม่ระบุสาขาวิชา',
-      programs: unassigned.sort(sortByCodeDesc),
-    });
-  }
-  if (dangling.length > 0) {
-    sections.push({
-      key: '_dangling',
-      titleTh: 'สาขาวิชาที่ถูกลบ',
-      isWarning: true,
-      programs: dangling.sort(sortByCodeDesc),
+      programs: unassigned.sort((a, b) => a.code.localeCompare(b.code)),
     });
   }
 
@@ -84,51 +60,36 @@ export default async function AdminProgramsPage() {
     <div>
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-semibold text-slate-800">ฉบับปรับปรุง</h1>
+          <h1 className="text-xl font-semibold text-slate-800">หลักสูตร</h1>
           <p className="mt-1 text-sm text-slate-500">
-            {isAdmin
-              ? 'จัดการฉบับปรับปรุง (curriculum) ทั้งหมดในระบบ'
-              : 'ฉบับปรับปรุงที่ท่านเป็นประธาน'}
+            จัดการหลักสูตรในแต่ละสาขาวิชา — แต่ละหลักสูตรมีฉบับปรับปรุง
+            (curriculum) ได้หลายฉบับ
           </p>
         </div>
-        {isAdmin && (
-          <Link
-            href="/admin/programs/new"
-            className="rounded-lg bg-mfu-primary px-4 py-2 text-sm font-medium text-white hover:opacity-90"
-          >
-            + เพิ่มฉบับปรับปรุง
-          </Link>
-        )}
+        <Link
+          href="/admin/academic-programs/new"
+          className="rounded-lg bg-mfu-primary px-4 py-2 text-sm font-medium text-white hover:opacity-90"
+        >
+          + เพิ่มหลักสูตร
+        </Link>
       </div>
 
       {programs.length === 0 ? (
         <div className="mt-8 rounded-xl border border-dashed border-slate-300 p-10 text-center text-sm text-slate-500">
-          ยังไม่มีฉบับปรับปรุง
+          ยังไม่มีหลักสูตร
         </div>
       ) : (
         <div className="mt-6 space-y-6">
           {sections.map((section) => (
             <section key={section.key}>
               <div className="flex items-end justify-between gap-3 pb-2">
-                <div>
-                  <h2
-                    className={`text-base font-semibold ${
-                      section.isWarning ? 'text-red-600' : 'text-slate-800'
-                    }`}
-                  >
-                    {section.titleTh}
-                  </h2>
-                  {section.titleEn && (
-                    <p className="mt-0.5 text-xs text-slate-500">
-                      {section.titleEn}
-                    </p>
-                  )}
-                </div>
+                <h2 className="text-base font-semibold text-slate-800">
+                  {section.titleTh}
+                </h2>
                 <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-600">
                   {section.programs.length} หลักสูตร
                 </span>
               </div>
-
               <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
                 <table className="w-full text-sm">
                   <thead className="bg-slate-50 text-left text-xs text-slate-500">
@@ -136,9 +97,7 @@ export default async function AdminProgramsPage() {
                       <th className="px-4 py-3 font-medium">รหัส</th>
                       <th className="px-4 py-3 font-medium">ชื่อหลักสูตร</th>
                       <th className="px-4 py-3 font-medium">ระดับ</th>
-                      <th className="px-4 py-3 font-medium">โครงสร้าง PLO</th>
-                      <th className="px-4 py-3 font-medium">จำนวน PLO</th>
-                      <th className="px-4 py-3 font-medium">จำนวนรายวิชา</th>
+                      <th className="px-4 py-3 font-medium">ฉบับปรับปรุง</th>
                       <th className="px-4 py-3 font-medium">สถานะ</th>
                     </tr>
                   </thead>
@@ -147,7 +106,7 @@ export default async function AdminProgramsPage() {
                       <tr key={p.id} className="hover:bg-slate-50">
                         <td className="px-4 py-3">
                           <Link
-                            href={`/admin/programs/${p.id}`}
+                            href={`/admin/academic-programs/${p.id}`}
                             className="font-medium text-mfu-primary hover:underline"
                           >
                             {p.code}
@@ -158,13 +117,7 @@ export default async function AdminProgramsPage() {
                           {PROGRAM_LEVEL_LABEL[p.level]}
                         </td>
                         <td className="px-4 py-3 text-slate-600">
-                          {PLO_SCHEMA_LABEL[p.ploDomainSchema]}
-                        </td>
-                        <td className="px-4 py-3 text-slate-600">
-                          {p.plos?.length ?? 0}
-                        </td>
-                        <td className="px-4 py-3 text-slate-600">
-                          {courseCounts[p.id] ?? 0}
+                          {curriculumCounts[p.id] ?? 0}
                         </td>
                         <td className="px-4 py-3">
                           {p.isActive ? (

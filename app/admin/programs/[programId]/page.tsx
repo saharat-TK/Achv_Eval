@@ -3,6 +3,7 @@ import { notFound, redirect } from 'next/navigation';
 import { getCurrentProfile } from '@/lib/firebase/auth-server';
 import { getProgram } from '@/lib/data/programs';
 import { getAllDepartments } from '@/lib/data/departments';
+import { getAllAcademicPrograms } from '@/lib/data/academicPrograms';
 import ProgramForm from '@/components/ProgramForm';
 import ProgramLifecyclePanel from '@/components/ProgramLifecyclePanel';
 import { checkProgramBlockers, type ProgramFormData } from '@/app/admin/programs/actions';
@@ -35,6 +36,7 @@ export default async function EditProgramPage({
     ploDomainSchema: program.ploDomainSchema,
     isActive: program.isActive,
     departmentId: program.departmentId ?? null,
+    parentProgramId: program.parentProgramId ?? null,
     plos: (program.plos ?? []).map((p) => ({
       ploNumber: p.ploNumber,
       domain: p.domain,
@@ -44,11 +46,19 @@ export default async function EditProgramPage({
     })),
   };
 
-  const departments = await getAllDepartments();
+  const [departments, academicPrograms] = await Promise.all([
+    getAllDepartments(),
+    getAllAcademicPrograms(),
+  ]);
   const departmentOptions = departments.map((d) => ({
     id: d.id,
     nameTh: d.nameTh,
     isActive: d.isActive,
+  }));
+  const parentProgramOptions = academicPrograms.map((p) => ({
+    id: p.id,
+    code: p.code,
+    nameTh: p.nameTh,
   }));
 
   const isAdmin = profile.roles.isAdmin === true;
@@ -105,6 +115,7 @@ export default async function EditProgramPage({
               programId={program.id}
               initial={initial}
               departments={departmentOptions}
+              parentPrograms={parentProgramOptions}
             />
           </div>
           {/* Body — right */}
@@ -148,6 +159,7 @@ export default async function EditProgramPage({
               initial={initial}
               departments={departmentOptions}
               canEditDepartment={false}
+              parentPrograms={parentProgramOptions}
             />
           </div>
         </>

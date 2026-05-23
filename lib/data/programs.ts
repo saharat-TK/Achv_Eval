@@ -28,3 +28,16 @@ export async function getProgram(id: string): Promise<ProgramWithId | null> {
   if (!snap.exists) return null;
   return { id: snap.id, ...(snap.data() as ProgramDoc) };
 }
+
+/** Curriculum revisions belonging to a parent academic program. */
+export async function getCurriculumsForProgram(
+  parentProgramId: string,
+): Promise<ProgramWithId[]> {
+  const snap = await getAdminDb()
+    .collection('programs')
+    .where('parentProgramId', '==', parentProgramId)
+    .get();
+  return snap.docs
+    .map((d) => ({ id: d.id, ...(d.data() as ProgramDoc) }))
+    .sort((a, b) => a.code.localeCompare(b.code));
+}

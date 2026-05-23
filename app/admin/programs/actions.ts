@@ -16,6 +16,8 @@ export interface ProgramFormData {
   isActive: boolean;
   /** Optional. `null` = "ไม่ระบุ" / unassigned. */
   departmentId: string | null;
+  /** Optional parent academic program (หลักสูตร). `null` = unassigned. */
+  parentProgramId: string | null;
   plos: ProgramPlo[];
 }
 
@@ -45,6 +47,7 @@ function normalize(data: ProgramFormData) {
     ploDomainSchema: data.ploDomainSchema,
     isActive: data.isActive,
     departmentId: data.departmentId ?? null,
+    parentProgramId: data.parentProgramId ?? null,
     plos: data.plos.map((p) => ({
       ploNumber: p.ploNumber,
       domain: p.domain,
