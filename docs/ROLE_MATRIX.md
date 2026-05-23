@@ -6,14 +6,24 @@ when role behaviour changes.
 
 ## Roles
 
-- **Super Admin** — `users/{uid}.roles.isAdmin = true`. System-wide.
+- **Super Admin** — `users/{uid}.roles.isSuperAdmin = true` (always also
+  `isAdmin = true`). The only role that can manage admin accounts:
+  grant/revoke admin or super-admin, and edit or deactivate an admin.
+  Strict superset of Admin.
+- **Admin** — `users/{uid}.roles.isAdmin = true`. System-wide management
+  of programs, courses, offerings, and non-admin users. Cannot touch
+  admin or super-admin accounts.
 - **Program Admin** — `directorOf` contains the program id. Per-program;
   also referred to as ประธานหลักสูตร / program director.
 - **Assessor** — `assessorOf` contains the program id. Per-program.
 - **Verifier** — `verifierOf` contains the program id. Per-program;
   member of the verification committee.
-- **Lecturer** — `offerings/{id}.lecturerId == uid`. Per-offering, not
-  stored on `users.roles`.
+- **Lecturer** — `offerings/{id}.lecturerId == uid` decides *which*
+  offerings a user owns (per-offering). A `users/{uid}.roles.isLecturer`
+  flag (auto-granted one-way on offering assignment, also settable
+  manually) drives whether the "รายวิชาที่รับผิดชอบ" workspace appears in
+  the cross-workspace switcher. The `/lecturer` workspace itself stays
+  open to any signed-in user.
 
 A user can hold more than one role; checks short-circuit on the first
 matching role.
@@ -22,7 +32,11 @@ matching role.
 
 Legend: ● allowed · ◐ read-only · ○ denied.
 
-| Capability | Super Admin | Program Admin | Verifier | Assessor | Lecturer |
+"Admin" column below = both Admin and Super Admin (Super Admin is a
+superset). Capabilities unique to Super Admin are listed separately
+under **Users & roles**.
+
+| Capability | Admin | Program Admin | Verifier | Assessor | Lecturer |
 |---|:-:|:-:|:-:|:-:|:-:|
 | **Programs** |
 | List programs (scope) | all | own | own (read) | own (read) | own offering's |
@@ -57,7 +71,8 @@ Legend: ● allowed · ◐ read-only · ○ denied.
 | **Users & roles** |
 | Read user profiles | ● | ● | ● | ● | ● |
 | Edit own profile (no roles) | ● | ● | ● | ● | ● |
-| Change roles / activate / deactivate | ● | ○ | ○ | ○ | ○ |
+| Change roles / activate / deactivate (non-admin targets) | ● | ○ | ○ | ○ | ○ |
+| Manage admin accounts (grant/revoke admin or super-admin, edit/deactivate an admin) | Super Admin only | ○ | ○ | ○ | ○ |
 | **Dashboards & exports** |
 | Executive dashboard | ● (all) | ● (own) | ○ | ○ | ○ |
 | CSV / print PDF export | ● | ● (own) | ○ | ○ | ○ |
@@ -89,8 +104,17 @@ Legend: ● allowed · ◐ read-only · ○ denied.
 5. **Admin viewing.** An admin without `assessorOf` may still enter
    `/assessor` to view offerings — but cannot sign. Useful for support.
 6. **Audit log is read-only and admin-only.** The collection is
-   write-disabled for clients; server actions append. Only super
-   admins can read it.
+   write-disabled for clients; server actions append. Admins (and
+   super admins) can read it.
+7. **Super Admin gates admin management.** A plain admin can manage
+   directors, assessors, verifiers, lecturers, and non-admin user
+   accounts — but cannot grant/revoke admin or super-admin, nor edit
+   or deactivate an admin account. Only a super admin can. Enforced in
+   `updateUserRoles` / `setUserActive` (server actions) with a
+   `firestore.rules` backstop, and guarded by a last-active-super-admin
+   safeguard. Super admin is a strict superset: granting it also sets
+   `isAdmin = true`. Bootstrap the first super admin with
+   `npm run assign-role -- <email> superadmin`.
 
 ## When to update this file
 

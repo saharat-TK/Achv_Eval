@@ -12,6 +12,7 @@
     "seed": "tsx --env-file=.env.local scripts/seed.ts",
     "assign-lecturer": "tsx --env-file=.env.local scripts/assign-lecturer.ts",
     "assign-role": "tsx --env-file=.env.local scripts/assign-role.ts",
+    "backfill-lecturer-role": "tsx --env-file=.env.local scripts/backfill-lecturer-role.ts",
     "firebase:rules": "firebase deploy --only firestore:rules",
     "firebase:indexes": "firebase deploy --only firestore:indexes"
   },

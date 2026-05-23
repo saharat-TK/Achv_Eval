@@ -2,10 +2,13 @@
 
 import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { removeFromAllowlist } from '@/app/admin/users/allowlist/actions';
+import {
+  removeFromAllowlist,
+  updateAllowlistPresets,
+} from '@/app/admin/users/allowlist/actions';
 import { useConfirm } from '@/components/ConfirmDialogProvider';
 
-type SortKey = 'email' | 'nameTh' | 'nameEn' | 'notes' | 'status';
+type SortKey = 'email' | 'nameTh' | 'notes' | 'status';
 type SortDir = 'asc' | 'desc';
 
 export interface AllowlistRow {
@@ -14,9 +17,19 @@ export interface AllowlistRow {
   nameTh: string;
   nameEn: string;
   notes?: string;
+  presetIsLecturer: boolean;
+  presetIsDirector: boolean;
+  presetDirectorProgramId: string | null;
+  presetDirectorProgramName: string | null;
   /** ISO string when serialized server-side, or null. */
   consumedAt: string | null;
   consumedUid: string | null;
+}
+
+export interface AllowlistProgramOption {
+  id: string;
+  code: string;
+  nameTh: string;
 }
 
 function formatDate(iso: string | null): string {
@@ -34,7 +47,13 @@ function formatDate(iso: string | null): string {
   }
 }
 
-export default function AllowlistTable({ rows }: { rows: AllowlistRow[] }) {
+export default function AllowlistTable({
+  rows,
+  programs,
+}: {
+  rows: AllowlistRow[];
+  programs: AllowlistProgramOption[];
+}) {
   const router = useRouter();
   const confirm = useConfirm();
   const [busy, setBusy] = useState<string | null>(null);
@@ -62,8 +81,6 @@ export default function AllowlistTable({ rows }: { rows: AllowlistRow[] }) {
     const dir = sortDir === 'asc' ? 1 : -1;
     const compare = (a: AllowlistRow, b: AllowlistRow): number => {
       if (sortKey === 'status') {
-        // Treat consumedAt as the sort field; pending (null) sorts as
-        // empty string in ascending order (i.e. pending comes first).
         const av = a.consumedAt ?? '';
         const bv = b.consumedAt ?? '';
         return av.localeCompare(bv) * dir;
@@ -71,7 +88,6 @@ export default function AllowlistTable({ rows }: { rows: AllowlistRow[] }) {
       const pick = (row: AllowlistRow): string => {
         if (sortKey === 'email') return row.email ?? '';
         if (sortKey === 'nameTh') return row.nameTh ?? '';
-        if (sortKey === 'nameEn') return row.nameEn ?? '';
         if (sortKey === 'notes') return row.notes ?? '';
         return '';
       };
@@ -94,20 +110,50 @@ export default function AllowlistTable({ rows }: { rows: AllowlistRow[] }) {
   function HeaderButton({
     col,
     label,
+    center = false,
   }: {
     col: SortKey;
     label: string;
+    center?: boolean;
   }) {
     return (
       <button
         type="button"
         onClick={() => toggleSort(col)}
-        className="flex items-center text-left font-medium text-slate-500 hover:text-slate-800"
+        className={`flex items-center font-medium text-slate-500 hover:text-slate-800 ${
+          center ? 'mx-auto justify-center' : 'text-left'
+        }`}
       >
         {label}
         <SortIndicator col={col} />
       </button>
     );
+  }
+
+  async function toggleLecturer(row: AllowlistRow) {
+    setError(null);
+    setBusy(row.id);
+    const res = await updateAllowlistPresets(row.id, {
+      presetIsLecturer: !row.presetIsLecturer,
+      presetIsDirector: row.presetIsDirector,
+      presetDirectorProgramId: row.presetDirectorProgramId,
+    });
+    setBusy(null);
+    if (res.ok) router.refresh();
+    else setError(res.error);
+  }
+
+  async function changeDirector(row: AllowlistRow, programId: string) {
+    setError(null);
+    setBusy(row.id);
+    const res = await updateAllowlistPresets(row.id, {
+      presetIsLecturer: row.presetIsLecturer,
+      presetIsDirector: programId !== '',
+      presetDirectorProgramId: programId || null,
+    });
+    setBusy(null);
+    if (res.ok) router.refresh();
+    else setError(res.error);
   }
 
   async function handleRemove(row: AllowlistRow) {
@@ -122,11 +168,8 @@ export default function AllowlistTable({ rows }: { rows: AllowlistRow[] }) {
     setBusy(row.id);
     const res = await removeFromAllowlist(row.id);
     setBusy(null);
-    if (res.ok) {
-      router.refresh();
-    } else {
-      setError(res.error);
-    }
+    if (res.ok) router.refresh();
+    else setError(res.error);
   }
 
   if (rows.length === 0) {
@@ -149,22 +192,25 @@ export default function AllowlistTable({ rows }: { rows: AllowlistRow[] }) {
         <table className="w-full text-sm">
           <thead className="bg-slate-50 text-left text-xs">
             <tr>
-              <th className="px-4 py-3">
+              <th className="px-3 py-3">
                 <HeaderButton col="email" label="อีเมล" />
               </th>
-              <th className="px-4 py-3">
+              <th className="px-3 py-3">
                 <HeaderButton col="nameTh" label="ชื่อ (ไทย)" />
               </th>
-              <th className="px-4 py-3">
-                <HeaderButton col="nameEn" label="ชื่อ (อังกฤษ)" />
-              </th>
-              <th className="px-4 py-3">
+              <th className="whitespace-nowrap px-3 py-3">
                 <HeaderButton col="notes" label="หมายเหตุ" />
               </th>
-              <th className="px-4 py-3">
-                <HeaderButton col="status" label="สถานะ" />
+              <th className="whitespace-nowrap px-3 py-3 text-center">
+                <HeaderButton col="status" label="สถานะ" center />
               </th>
-              <th className="w-20 px-4 py-3"></th>
+              <th className="whitespace-nowrap px-3 py-3 text-center font-medium text-slate-500">
+                อาจารย์ผู้รับผิดชอบ
+              </th>
+              <th className="px-3 py-3 font-medium text-slate-500">
+                ประธานหลักสูตร
+              </th>
+              <th className="w-12 px-3 py-3"></th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
@@ -175,21 +221,20 @@ export default function AllowlistTable({ rows }: { rows: AllowlistRow[] }) {
                   key={r.id}
                   className={`hover:bg-slate-50 ${consumed ? 'bg-slate-50/40' : ''}`}
                 >
-                  <td className="px-4 py-3 font-medium text-slate-700">
+                  <td className="whitespace-nowrap px-3 py-3 font-medium text-slate-700">
                     {r.email}
                   </td>
-                  <td className="px-4 py-3 text-slate-600">{r.nameTh}</td>
-                  <td className="px-4 py-3 text-slate-600">{r.nameEn}</td>
-                  <td className="px-4 py-3 text-slate-500">{r.notes || '—'}</td>
-                  <td className="px-4 py-3 text-xs">
+                  <td className="px-3 py-3 text-slate-600">{r.nameTh}</td>
+                  <td className="whitespace-nowrap px-3 py-3 text-slate-500">
+                    {r.notes || '—'}
+                  </td>
+                  <td className="whitespace-nowrap px-3 py-3 text-center text-xs">
                     {consumed ? (
-                      <span title={formatDate(r.consumedAt)}>
-                        <span className="rounded-full bg-green-100 px-2.5 py-0.5 font-semibold text-green-800">
-                          ลงทะเบียนแล้ว
-                        </span>
-                        <span className="ml-2 text-slate-500">
-                          {formatDate(r.consumedAt)}
-                        </span>
+                      <span
+                        className="rounded-full bg-green-100 px-2.5 py-0.5 font-semibold text-green-800"
+                        title={formatDate(r.consumedAt)}
+                      >
+                        ลงทะเบียนแล้ว
                       </span>
                     ) : (
                       <span className="rounded-full bg-amber-100 px-2.5 py-0.5 font-semibold text-amber-800">
@@ -197,7 +242,40 @@ export default function AllowlistTable({ rows }: { rows: AllowlistRow[] }) {
                       </span>
                     )}
                   </td>
-                  <td className="px-4 py-3 text-right">
+                  {/* Lecturer — interactive toggle for pending rows, centered */}
+                  <td className="px-3 py-3 text-center">
+                    <input
+                      type="checkbox"
+                      checked={r.presetIsLecturer}
+                      disabled={consumed || busy === r.id}
+                      onChange={() => toggleLecturer(r)}
+                      aria-label={`อาจารย์ผู้รับผิดชอบ ${r.email}`}
+                    />
+                  </td>
+                  {/* Director — live program dropdown for pending rows */}
+                  <td className="px-3 py-3">
+                    {consumed ? (
+                      <span className="text-xs text-slate-500">
+                        {r.presetDirectorProgramName ?? '—'}
+                      </span>
+                    ) : (
+                      <select
+                        value={r.presetDirectorProgramId ?? ''}
+                        disabled={busy === r.id}
+                        onChange={(e) => changeDirector(r, e.target.value)}
+                        aria-label={`ประธานหลักสูตร ${r.email}`}
+                        className="w-full max-w-[220px] rounded-lg border border-slate-300 px-2 py-1 text-xs focus:border-mfu-primary focus:outline-none disabled:opacity-50"
+                      >
+                        <option value="">— ไม่เป็นประธาน —</option>
+                        {programs.map((p) => (
+                          <option key={p.id} value={p.id}>
+                            {p.code} — {p.nameTh}
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                  </td>
+                  <td className="px-3 py-3 text-right">
                     {!consumed && (
                       <button
                         type="button"

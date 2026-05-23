@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { getCurrentProfile } from '@/lib/firebase/auth-server';
 import SignOutButton from '@/components/SignOutButton';
 import NotificationBell from '@/components/NotificationBell';
+import WorkspaceSwitcher from '@/components/WorkspaceSwitcher';
 
 export default async function VerificationLayout({
   children,
@@ -38,6 +39,7 @@ export default async function VerificationLayout({
               </span>
             </Link>
             <div className="flex items-center gap-4">
+              <WorkspaceSwitcher current="verification" roles={profile.roles} />
               <NotificationBell basePath="/verification" tone="dark" />
               <div className="text-right">
                 <div className="text-sm text-white">{profile.nameTh}</div>

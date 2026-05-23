@@ -70,14 +70,35 @@ export async function POST(request: NextRequest) {
       const allow = allowSnap.data() as {
         nameTh?: string;
         nameEn?: string;
+        presetIsLecturer?: boolean;
+        presetIsDirector?: boolean;
+        presetDirectorProgramId?: string | null;
       };
       const fallback = decoded.email!.split('@')[0] ?? decoded.email!;
+      // Apply preset roles. Lecturer defaults true; director (per-program)
+      // only when the preset program still exists.
+      const isLecturer = allow.presetIsLecturer !== false;
+      let directorOf: string[] = [];
+      if (allow.presetIsDirector === true && allow.presetDirectorProgramId) {
+        const prog = await db
+          .collection('programs')
+          .doc(allow.presetDirectorProgramId)
+          .get();
+        if (prog.exists) directorOf = [allow.presetDirectorProgramId];
+      }
       await userRef.set({
         email: decoded.email,
         nameTh: allow.nameTh?.trim() || fallback,
         nameEn: allow.nameEn?.trim() || fallback,
         isActive: true,
-        roles: { isAdmin: false, directorOf: [], assessorOf: [], verifierOf: [] },
+        roles: {
+          isAdmin: false,
+          isSuperAdmin: false,
+          isLecturer,
+          directorOf,
+          assessorOf: [],
+          verifierOf: [],
+        },
         createdAt: FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp(),
       });

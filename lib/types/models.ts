@@ -82,7 +82,24 @@ export interface UserDoc {
    * NOT here — it lives on each offering's `lecturerId`.
    */
   roles: {
+    /**
+     * Optional — added 2026-05. Super admins are the only users who may
+     * manage other admins (grant/revoke admin or super-admin, edit or
+     * deactivate an admin account). A super admin is a strict superset of
+     * admin: whenever this is true, `isAdmin` is also kept true, so every
+     * existing `isAdmin` check still passes. Missing = false.
+     */
+    isSuperAdmin?: boolean;
     isAdmin: boolean;
+    /**
+     * Optional — added 2026-05. Drives visibility of the lecturer
+     * workspace ("รายวิชาที่รับผิดชอบ") in the cross-workspace switcher.
+     * Auto-granted (one-way) when a user is assigned as an offering's
+     * lecturer; can also be set manually. NOT the source of which
+     * offerings appear — that's still `offerings.lecturerId`. Missing =
+     * false.
+     */
+    isLecturer?: boolean;
     directorOf: string[]; // programIds
     assessorOf: string[]; // programIds
     verifierOf: string[]; // programIds
@@ -133,6 +150,15 @@ export interface AllowlistDoc {
   nameTh: string;
   nameEn: string;
   notes?: string;
+  /**
+   * Roles applied to the new users/{uid} doc on first sign-in. Lecturer
+   * defaults true; director (per-program) is opt-in and needs a program.
+   * Existing rows without these fields are treated as lecturer=true,
+   * director=false.
+   */
+  presetIsLecturer?: boolean;
+  presetIsDirector?: boolean;
+  presetDirectorProgramId?: string | null;
   addedBy: string; // admin uid
   addedAt: Ts;
   consumedAt?: Ts | null;

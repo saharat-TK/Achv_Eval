@@ -37,6 +37,10 @@ service cloud.firestore {
       return isMfu() && hasProfile() && userDoc().roles.isAdmin == true;
     }
 
+    function isSuperAdmin() {
+      return isMfu() && hasProfile() && userDoc().roles.isSuperAdmin == true;
+    }
+
     function directsProgram(pid) {
       return isMfu() && hasProfile() && (pid in userDoc().roles.directorOf);
     }
@@ -79,8 +83,18 @@ service cloud.firestore {
         && request.auth.uid == uid
         && request.resource.data.roles == resource.data.roles;
 
-      // Admin can do anything, including changing roles.
-      allow create, update, delete: if isAdmin();
+      // Admins may create/delete and edit non-admin roles. Changing the
+      // admin or super-admin flag requires a super admin. (Role writes go
+      // through server actions in practice; this is a defense-in-depth
+      // backstop for any direct client write.)
+      allow create, delete: if isAdmin();
+      allow update: if isAdmin() && (
+        isSuperAdmin() || (
+          request.resource.data.roles.isAdmin == resource.data.roles.isAdmin
+          && request.resource.data.roles.get('isSuperAdmin', false)
+             == resource.data.roles.get('isSuperAdmin', false)
+        )
+      );
     }
 
     // ----- allowlist -------------------------------------------------

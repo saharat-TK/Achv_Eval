@@ -24,6 +24,11 @@ export default async function ManageUserRolesPage({
   ]);
   if (!target) notFound();
 
+  const canManageAdmins = profile.roles.isSuperAdmin === true;
+  const targetIsAdmin =
+    target.roles?.isAdmin === true || target.roles?.isSuperAdmin === true;
+  const activeLocked = targetIsAdmin && !canManageAdmins;
+
   return (
     <div>
       <Link href="/admin/users" className="text-sm text-slate-500 hover:underline">
@@ -39,17 +44,21 @@ export default async function ManageUserRolesPage({
           userId={target.id}
           isSelf={actor?.uid === target.id}
           initialActive={target.isActive ?? true}
+          locked={activeLocked}
         />
         <UserRolesEditor
           userId={target.id}
           isSelf={actor?.uid === target.id}
+          canManageAdmins={canManageAdmins}
           programs={programs.map((p) => ({
             id: p.id,
             code: p.code,
             nameTh: p.nameTh,
           }))}
           initial={{
+            isSuperAdmin: target.roles?.isSuperAdmin ?? false,
             isAdmin: target.roles?.isAdmin ?? false,
+            isLecturer: target.roles?.isLecturer ?? false,
             directorOf: target.roles?.directorOf ?? [],
             assessorOf: target.roles?.assessorOf ?? [],
             verifierOf: target.roles?.verifierOf ?? [],

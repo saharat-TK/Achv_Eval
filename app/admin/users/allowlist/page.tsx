@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { getCurrentProfile } from '@/lib/firebase/auth-server';
 import { getAllAllowlistEntries } from '@/lib/data/allowlist';
+import { getAllPrograms } from '@/lib/data/programs';
 import AllowlistTable, {
   type AllowlistRow,
 } from '@/components/AllowlistTable';
@@ -24,16 +25,35 @@ export default async function AdminAllowlistPage() {
   if (!profile) redirect('/login');
   if (!profile.roles.isAdmin) redirect('/admin');
 
-  const entries = await getAllAllowlistEntries();
-  const rows: AllowlistRow[] = entries.map((e) => ({
-    id: e.id,
-    email: e.email,
-    nameTh: e.nameTh,
-    nameEn: e.nameEn,
-    notes: e.notes,
-    consumedAt: tsToIso(e.consumedAt),
-    consumedUid: e.consumedUid ?? null,
+  const [entries, programs] = await Promise.all([
+    getAllAllowlistEntries(),
+    getAllPrograms(),
+  ]);
+  const programById = new Map(programs.map((p) => [p.id, p]));
+  const programOptions = programs.map((p) => ({
+    id: p.id,
+    code: p.code,
+    nameTh: p.nameTh,
   }));
+
+  const rows: AllowlistRow[] = entries.map((e) => {
+    const prog = e.presetDirectorProgramId
+      ? programById.get(e.presetDirectorProgramId)
+      : undefined;
+    return {
+      id: e.id,
+      email: e.email,
+      nameTh: e.nameTh,
+      nameEn: e.nameEn,
+      notes: e.notes,
+      presetIsLecturer: e.presetIsLecturer !== false, // default true
+      presetIsDirector: e.presetIsDirector === true,
+      presetDirectorProgramId: e.presetDirectorProgramId ?? null,
+      presetDirectorProgramName: prog ? `${prog.code} — ${prog.nameTh}` : null,
+      consumedAt: tsToIso(e.consumedAt),
+      consumedUid: e.consumedUid ?? null,
+    };
+  });
 
   const pendingCount = rows.filter((r) => !r.consumedAt).length;
   const consumedCount = rows.length - pendingCount;
@@ -72,12 +92,12 @@ export default async function AdminAllowlistPage() {
       </div>
 
       <div className="mt-3 flex flex-col gap-3">
-        <AllowlistAddForm />
-        <AllowlistCsvUpload />
+        <AllowlistAddForm programs={programOptions} />
+        <AllowlistCsvUpload programs={programOptions} />
       </div>
 
       <div className="mt-4">
-        <AllowlistTable rows={rows} />
+        <AllowlistTable rows={rows} programs={programOptions} />
       </div>
     </div>
   );
