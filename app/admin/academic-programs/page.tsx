@@ -97,17 +97,19 @@ export default async function AdminAcademicProgramsPage() {
                 <table className="w-full text-sm">
                   <thead className="bg-slate-50 text-left text-xs text-slate-500">
                     <tr>
-                      <th className="px-4 py-3 font-medium">รหัส</th>
-                      <th className="px-4 py-3 font-medium">ชื่อหลักสูตร</th>
-                      <th className="px-4 py-3 font-medium">ระดับ</th>
-                      <th className="px-4 py-3 font-medium">เล่มหลักสูตร</th>
-                      <th className="px-4 py-3 font-medium">สถานะ</th>
+                      <th className="whitespace-nowrap px-3 py-3 font-medium">รหัส</th>
+                      <th className="w-full px-3 py-3 font-medium">ชื่อหลักสูตร</th>
+                      <th className="whitespace-nowrap px-3 py-3 font-medium">ระดับ</th>
+                      <th className="whitespace-nowrap px-3 py-3 text-center font-medium">
+                        เล่มหลักสูตร
+                      </th>
+                      <th className="whitespace-nowrap px-3 py-3 font-medium">สถานะ</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
                     {section.programs.map((p) => (
                       <tr key={p.id} className="hover:bg-slate-50">
-                        <td className="px-4 py-3">
+                        <td className="whitespace-nowrap px-3 py-3">
                           <Link
                             href={`/admin/academic-programs/${p.id}`}
                             className="font-medium text-mfu-primary hover:underline"
@@ -115,14 +117,14 @@ export default async function AdminAcademicProgramsPage() {
                             {p.code}
                           </Link>
                         </td>
-                        <td className="px-4 py-3 text-slate-700">{p.nameTh}</td>
-                        <td className="px-4 py-3 text-slate-600">
+                        <td className="px-3 py-3 text-slate-700">{p.nameTh}</td>
+                        <td className="whitespace-nowrap px-3 py-3 text-slate-600">
                           {PROGRAM_LEVEL_LABEL[p.level]}
                         </td>
-                        <td className="px-4 py-3 text-slate-600">
+                        <td className="whitespace-nowrap px-3 py-3 text-center text-slate-600">
                           {curriculumCounts[p.id] ?? 0}
                         </td>
-                        <td className="px-4 py-3">
+                        <td className="whitespace-nowrap px-3 py-3">
                           {p.isActive ? (
                             <span className="rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-semibold text-green-800">
                               กำลังใช้งาน

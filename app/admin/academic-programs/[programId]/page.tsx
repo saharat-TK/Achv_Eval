@@ -97,15 +97,15 @@ export default async function EditAcademicProgramPage({
                 <table className="w-full text-sm">
                   <thead className="bg-slate-50 text-left text-xs text-slate-500">
                     <tr>
-                      <th className="px-4 py-3 font-medium">รหัส</th>
-                      <th className="px-4 py-3 font-medium">ชื่อเล่มหลักสูตร</th>
-                      <th className="px-4 py-3 font-medium">สถานะ</th>
+                      <th className="whitespace-nowrap px-3 py-3 font-medium">รหัส</th>
+                      <th className="w-full px-3 py-3 font-medium">ชื่อเล่มหลักสูตร</th>
+                      <th className="whitespace-nowrap px-3 py-3 font-medium">สถานะ</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
                     {curriculums.map((c) => (
                       <tr key={c.id} className="hover:bg-slate-50">
-                        <td className="px-4 py-3">
+                        <td className="whitespace-nowrap px-3 py-3">
                           <Link
                             href={`${curriculumBase}/${c.id}`}
                             className="font-medium text-mfu-primary hover:underline"
@@ -113,8 +113,8 @@ export default async function EditAcademicProgramPage({
                             {c.code}
                           </Link>
                         </td>
-                        <td className="px-4 py-3 text-slate-700">{c.nameTh}</td>
-                        <td className="px-4 py-3 text-xs">
+                        <td className="px-3 py-3 text-slate-700">{c.nameTh}</td>
+                        <td className="whitespace-nowrap px-3 py-3 text-xs">
                           {c.isActive ? (
                             <span className="text-green-700">เปิดใช้งาน</span>
                           ) : (
