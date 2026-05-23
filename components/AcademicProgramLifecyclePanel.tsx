@@ -41,7 +41,7 @@ export default function AcademicProgramLifecyclePanel({
     const ok = await confirm({
       title: 'ปิดใช้งานหลักสูตร',
       message:
-        'หลักสูตรนี้จะถูกปิดใช้งาน ฉบับปรับปรุงภายใต้หลักสูตรยังคงอยู่ และสามารถเปิดใช้งานใหม่ได้',
+        'หลักสูตรนี้จะถูกปิดใช้งาน เล่มหลักสูตรภายใต้หลักสูตรยังคงอยู่ และสามารถเปิดใช้งานใหม่ได้',
       confirmLabel: 'ปิดใช้งานหลักสูตร',
       variant: 'danger',
     });
@@ -96,8 +96,8 @@ export default function AcademicProgramLifecyclePanel({
         router.push('/admin/academic-programs');
       } else if (res.error === 'blockers_exist' && res.blockers) {
         setError(
-          `ลบหลักสูตรไม่ได้ — ยังมีฉบับปรับปรุงอ้างอิงอยู่ ${res.blockers.curriculumsCount} ฉบับ` +
-            ' กรุณาย้ายหรือลบฉบับปรับปรุงเหล่านั้นก่อน',
+          `ลบหลักสูตรไม่ได้ — ยังมีเล่มหลักสูตรอ้างอิงอยู่ ${res.blockers.curriculumsCount} ฉบับ` +
+            ' กรุณาย้ายหรือลบเล่มหลักสูตรเหล่านั้นก่อน',
         );
       } else setError(res.error);
     } catch {
@@ -147,8 +147,8 @@ export default function AcademicProgramLifecyclePanel({
         <h3 className="text-xs font-semibold text-slate-700">ลบหลักสูตร</h3>
         <p className="mt-1 text-[11px] leading-snug text-slate-500">
           {hasBlockers
-            ? `ไม่สามารถลบได้ — มี ${blockers.curriculumsCount} ฉบับปรับปรุงอ้างอิง กรุณาย้ายหรือลบก่อน`
-            : 'ลบหลักสูตรนี้ออกจากระบบ (ทำได้เฉพาะหลักสูตรที่ไม่มีฉบับปรับปรุงอ้างอิง)'}
+            ? `ไม่สามารถลบได้ — มี ${blockers.curriculumsCount} เล่มหลักสูตรอ้างอิง กรุณาย้ายหรือลบก่อน`
+            : 'ลบหลักสูตรนี้ออกจากระบบ (ทำได้เฉพาะหลักสูตรที่ไม่มีเล่มหลักสูตรอ้างอิง)'}
         </p>
         <button
           type="button"

@@ -63,20 +63,21 @@ export default async function AdminLayout({
                   สาขาวิชา
                 </Link>
               )}
-              {profile.roles.isAdmin && (
+              {profile.roles.isAdmin ? (
                 <Link
                   href="/admin/academic-programs"
                   className="border-b-2 border-transparent py-3 text-slate-600 hover:border-mfu-primary hover:text-mfu-primary"
                 >
                   หลักสูตร
                 </Link>
+              ) : (
+                <Link
+                  href="/admin"
+                  className="border-b-2 border-transparent py-3 text-slate-600 hover:border-mfu-primary hover:text-mfu-primary"
+                >
+                  หลักสูตร
+                </Link>
               )}
-              <Link
-                href="/admin"
-                className="border-b-2 border-transparent py-3 text-slate-600 hover:border-mfu-primary hover:text-mfu-primary"
-              >
-                ฉบับปรับปรุง
-              </Link>
               <Link
                 href="/verification"
                 className="border-b-2 border-transparent py-3 text-slate-600 hover:border-mfu-primary hover:text-mfu-primary"

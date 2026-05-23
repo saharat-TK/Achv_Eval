@@ -5,6 +5,7 @@ import { getAllPrograms, getProgramsByIds } from '@/lib/data/programs';
 import { getCourseCountsByProgram } from '@/lib/data/courses';
 import { getDepartmentMap } from '@/lib/data/departments';
 import { PROGRAM_LEVEL_LABEL, PLO_SCHEMA_LABEL } from '@/lib/constants';
+import ProgramAreaTabs from '@/components/ProgramAreaTabs';
 import type { ProgramDoc } from '@/lib/types/models';
 
 export const dynamic = 'force-dynamic';
@@ -84,11 +85,11 @@ export default async function AdminProgramsPage() {
     <div>
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-semibold text-slate-800">ฉบับปรับปรุง</h1>
+          <h1 className="text-xl font-semibold text-slate-800">เล่มหลักสูตร</h1>
           <p className="mt-1 text-sm text-slate-500">
             {isAdmin
-              ? 'จัดการฉบับปรับปรุง (curriculum) ทั้งหมดในระบบ'
-              : 'ฉบับปรับปรุงที่ท่านเป็นประธาน'}
+              ? 'จัดการเล่มหลักสูตร (curriculum) ทั้งหมดในระบบ'
+              : 'เล่มหลักสูตรที่ท่านเป็นประธาน'}
           </p>
         </div>
         {isAdmin && (
@@ -96,14 +97,16 @@ export default async function AdminProgramsPage() {
             href="/admin/programs/new"
             className="rounded-lg bg-mfu-primary px-4 py-2 text-sm font-medium text-white hover:opacity-90"
           >
-            + เพิ่มฉบับปรับปรุง
+            + เพิ่มเล่มหลักสูตร
           </Link>
         )}
       </div>
 
+      {isAdmin && <ProgramAreaTabs current="curriculum" />}
+
       {programs.length === 0 ? (
         <div className="mt-8 rounded-xl border border-dashed border-slate-300 p-10 text-center text-sm text-slate-500">
-          ยังไม่มีฉบับปรับปรุง
+          ยังไม่มีเล่มหลักสูตร
         </div>
       ) : (
         <div className="mt-6 space-y-6">

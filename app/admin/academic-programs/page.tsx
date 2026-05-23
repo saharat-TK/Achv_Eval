@@ -7,6 +7,7 @@ import {
 } from '@/lib/data/academicPrograms';
 import { getDepartmentMap } from '@/lib/data/departments';
 import { PROGRAM_LEVEL_LABEL } from '@/lib/constants';
+import ProgramAreaTabs from '@/components/ProgramAreaTabs';
 import type { AcademicProgramWithId } from '@/lib/data/academicPrograms';
 
 export const dynamic = 'force-dynamic';
@@ -62,8 +63,8 @@ export default async function AdminAcademicProgramsPage() {
         <div>
           <h1 className="text-xl font-semibold text-slate-800">หลักสูตร</h1>
           <p className="mt-1 text-sm text-slate-500">
-            จัดการหลักสูตรในแต่ละสาขาวิชา — แต่ละหลักสูตรมีฉบับปรับปรุง
-            (curriculum) ได้หลายฉบับ
+            จัดการหลักสูตรในแต่ละสาขาวิชา — แต่ละหลักสูตรมีเล่มหลักสูตร
+            (curriculum) ได้หลายเล่ม
           </p>
         </div>
         <Link
@@ -73,6 +74,8 @@ export default async function AdminAcademicProgramsPage() {
           + เพิ่มหลักสูตร
         </Link>
       </div>
+
+      <ProgramAreaTabs current="program" />
 
       {programs.length === 0 ? (
         <div className="mt-8 rounded-xl border border-dashed border-slate-300 p-10 text-center text-sm text-slate-500">
@@ -97,7 +100,7 @@ export default async function AdminAcademicProgramsPage() {
                       <th className="px-4 py-3 font-medium">รหัส</th>
                       <th className="px-4 py-3 font-medium">ชื่อหลักสูตร</th>
                       <th className="px-4 py-3 font-medium">ระดับ</th>
-                      <th className="px-4 py-3 font-medium">ฉบับปรับปรุง</th>
+                      <th className="px-4 py-3 font-medium">เล่มหลักสูตร</th>
                       <th className="px-4 py-3 font-medium">สถานะ</th>
                     </tr>
                   </thead>

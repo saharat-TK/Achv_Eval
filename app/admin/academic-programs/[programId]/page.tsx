@@ -78,19 +78,19 @@ export default async function EditAcademicProgramPage({
           <section>
             <div className="flex items-center justify-between">
               <h2 className="text-sm font-semibold text-slate-700">
-                ฉบับปรับปรุง (Curriculum)
+                เล่มหลักสูตร (Curriculum)
               </h2>
               <Link
                 href={`${curriculumBase}/new?program=${program.id}`}
                 className="rounded-lg bg-mfu-primary px-3 py-1.5 text-xs font-medium text-white hover:opacity-90"
               >
-                + เพิ่มฉบับปรับปรุง
+                + เพิ่มเล่มหลักสูตร
               </Link>
             </div>
 
             {curriculums.length === 0 ? (
               <div className="mt-3 rounded-xl border border-dashed border-slate-300 p-8 text-center text-sm text-slate-500">
-                ยังไม่มีฉบับปรับปรุงในหลักสูตรนี้
+                ยังไม่มีเล่มหลักสูตรในหลักสูตรนี้
               </div>
             ) : (
               <div className="mt-3 overflow-hidden rounded-xl border border-slate-200 bg-white">
@@ -98,7 +98,7 @@ export default async function EditAcademicProgramPage({
                   <thead className="bg-slate-50 text-left text-xs text-slate-500">
                     <tr>
                       <th className="px-4 py-3 font-medium">รหัส</th>
-                      <th className="px-4 py-3 font-medium">ชื่อฉบับปรับปรุง</th>
+                      <th className="px-4 py-3 font-medium">ชื่อเล่มหลักสูตร</th>
                       <th className="px-4 py-3 font-medium">สถานะ</th>
                     </tr>
                   </thead>

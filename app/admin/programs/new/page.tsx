@@ -24,7 +24,7 @@ export default async function NewProgramPage({
   ]);
 
   // Prefill the parent program (and inherit its department) when arriving
-  // from a program's "+ เพิ่มฉบับปรับปรุง" button.
+  // from a program's "+ เพิ่มเล่มหลักสูตร" button.
   const parent = searchParams.program
     ? academicPrograms.find((p) => p.id === searchParams.program)
     : undefined;
@@ -54,7 +54,7 @@ export default async function NewProgramPage({
         ← {parent ? 'กลับไปหน้าหลักสูตร' : 'กลับไปหน้ารายการ'}
       </Link>
       <h1 className="mt-3 text-xl font-semibold text-slate-800">
-        เพิ่มฉบับปรับปรุงใหม่
+        เพิ่มเล่มหลักสูตรใหม่
         {parent && (
           <span className="ml-2 text-base font-normal text-slate-500">
             ในหลักสูตร {parent.code}
