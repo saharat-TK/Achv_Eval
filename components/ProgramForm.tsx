@@ -20,6 +20,12 @@ export interface DepartmentOption {
   isActive: boolean;
 }
 
+export interface ParentProgramOption {
+  id: string;
+  code: string;
+  nameTh: string;
+}
+
 const DOMAINS = Object.keys(PLO_DOMAIN_LABEL) as PloDomain[];
 
 const EMPTY: ProgramFormData = {
@@ -31,6 +37,7 @@ const EMPTY: ProgramFormData = {
   ploDomainSchema: '6_domain_tqf',
   isActive: true,
   departmentId: null,
+  parentProgramId: null,
   plos: [],
 };
 
@@ -43,6 +50,7 @@ export default function ProgramForm({
   initial,
   departments = [],
   canEditDepartment = true,
+  parentPrograms = [],
 }: {
   mode: 'create' | 'edit';
   programId?: string;
@@ -51,6 +59,8 @@ export default function ProgramForm({
   departments?: DepartmentOption[];
   /** When false, the dropdown renders disabled (director view). */
   canEditDepartment?: boolean;
+  /** Parent academic-program (หลักสูตร) options. Empty → field hidden. */
+  parentPrograms?: ParentProgramOption[];
 }) {
   const router = useRouter();
   const [form, setForm] = useState<ProgramFormData>(initial ?? EMPTY);
@@ -125,6 +135,29 @@ export default function ProgramForm({
               onChange={(e) => set('school', e.target.value)}
             />
           </label>
+          {parentPrograms.length > 0 && (
+            <label className="text-sm text-slate-600">
+              หลักสูตร (Program)
+              <select
+                className={inputCls}
+                value={form.parentProgramId ?? ''}
+                onChange={(e) =>
+                  set('parentProgramId', e.target.value ? e.target.value : null)
+                }
+              >
+                <option value="">— ไม่ระบุ —</option>
+                {parentPrograms.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.code} — {p.nameTh}
+                  </option>
+                ))}
+                {form.parentProgramId &&
+                  !parentPrograms.some((p) => p.id === form.parentProgramId) && (
+                    <option value={form.parentProgramId}>(ลบแล้ว)</option>
+                  )}
+              </select>
+            </label>
+          )}
           <label className="text-sm text-slate-600">
             ชื่อหลักสูตร (ไทย)
             <input

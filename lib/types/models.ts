@@ -117,6 +117,35 @@ export interface ProgramPlo {
   bloomLevel?: number; // 1..6
 }
 
+/**
+ * Academic Program (หลักสูตร) — the degree program. Belongs to a
+ * department; owns one or more curriculum revisions. Stored in the
+ * `academicPrograms` collection.
+ *
+ * NOTE on naming: the existing `programs` collection (ProgramDoc below)
+ * actually represents a *curriculum revision* (ฉบับปรับปรุง) — it carries
+ * the PLOs/courses/offerings. We keep that collection + its `programId`
+ * foreign keys unchanged to avoid a system-wide rename; `AcademicProgramDoc`
+ * is the new parent layer above it.
+ */
+export interface AcademicProgramDoc {
+  code: string;
+  nameTh: string;
+  nameEn: string;
+  level: ProgramLevel;
+  /** The department this program belongs to. */
+  departmentId?: string | null;
+  isActive: boolean;
+  createdAt: Ts;
+  updatedAt: Ts;
+}
+
+/**
+ * Curriculum revision (ฉบับปรับปรุง). Despite the name, the `programs`
+ * collection is the curriculum layer — it owns PLOs, courses, and
+ * offerings, and is the unit assessed for TQF/AUN-QA. `programId`
+ * foreign keys elsewhere point here.
+ */
 export interface ProgramDoc {
   code: string;
   nameTh: string;
@@ -126,12 +155,19 @@ export interface ProgramDoc {
   ploDomainSchema: PloSchema;
   isActive: boolean;
   /**
-   * Optional — added 2026-05. The managed department this program
-   * belongs to. Programs created before this field existed carry
-   * `null` / `undefined` and are surfaced in the UI as "ไม่ระบุ".
+   * Optional — added 2026-05. The managed department this curriculum
+   * belongs to. Kept populated for backward-compatible reads even after
+   * `parentProgramId` is introduced (department is also derivable from
+   * the parent program).
    */
   departmentId?: string | null;
-  /** Embedded — only ~6 PLOs, always read together with the program. */
+  /**
+   * Optional — added 2026-05. The parent academic program (หลักสูตร)
+   * this curriculum revision belongs to. `null` until an admin assigns
+   * it. Surfaced in the UI as "ไม่ระบุ".
+   */
+  parentProgramId?: string | null;
+  /** Embedded — only ~6 PLOs, always read together with the curriculum. */
   plos: ProgramPlo[];
   createdAt: Ts;
   updatedAt: Ts;

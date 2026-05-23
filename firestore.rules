@@ -105,6 +105,15 @@ service cloud.firestore {
       allow create, update, delete: if isAdmin();
     }
 
+    // ----- academicPrograms ------------------------------------------
+    // Program (หลักสูตร) layer between department and curriculum. Any
+    // signed-in MFU user can read (dropdowns render for everyone); only
+    // admins write.
+    match /academicPrograms/{programId} {
+      allow read: if isMfu();
+      allow create, update, delete: if isAdmin();
+    }
+
     // ----- departments -----------------------------------------------
     // Managed org-chart layer above programs. Any signed-in MFU user
     // can read (so the program form dropdown renders for everyone);
