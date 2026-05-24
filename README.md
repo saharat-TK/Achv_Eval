@@ -11,12 +11,12 @@ semester for verification.
 
 - **Frontend:** Next.js 14 (App Router) + TypeScript + Tailwind CSS
 - **Auth:** Firebase Authentication, Google SSO restricted to `@mfu.ac.th`
-- **Database:** Cloud Firestore (security rules enforce the four-role matrix)
+- **Database:** Cloud Firestore (security rules enforce the role matrix)
 - **AI:** Google Gemini 2.5 Pro (single-shot, with deterministic grade-stats hybrid)
 - **File storage:** Google Drive (owned by Academic & QA Department)
 - **Visibility mirror:** Google Sheets — lecturer-action log
 - **Notifications:** Gmail API (in-app inbox + email)
-- **Hosting:** Vercel
+- **Hosting:** Firebase App Hosting (SSR on Cloud Run)
 
 See [`docs/FIRESTORE_MODEL.md`](docs/FIRESTORE_MODEL.md) for the data model and
 [`prompts/`](prompts/) for the AI evaluation guidelines.
@@ -53,480 +53,78 @@ complete; Phase 6B (notification email) deferred.
   - [x] Phase 6A: in-app notifications (triggers, header bell, inbox dropdown)
   - [ ] Phase 6B: email delivery
 - [ ] Phase 7: hardening & load testing
-- [ ] Department (สาขาวิชา) entity — see plan below
 
-## Department (สาขาวิชา) — Implementation Plan
+### Post-Phase-5 additions (all shipped)
 
-Introduce a managed Department layer between the free-text `school`
-("Health Science") and Program. A Program belongs to **at most one**
-Department. Existing programs carry no `departmentId` and are shown as
-"ไม่ระบุ" until reassigned — no migration needed.
+- [x] Program lifecycle — soft-delete / hard-delete / purge
+- [x] Course lifecycle — soft / hard / purge, plus bulk actions and bulk-open offerings
+- [x] `isActive` cascade to offerings (closing a program/course hides it from lecturer + assessor)
+- [x] Styled confirm dialog replacing native `window.confirm()`
+- [x] Department (สาขาวิชา) entity with lifecycle
+- [x] Org hierarchy: Department → Program (หลักสูตร) → Curriculum (เล่มหลักสูตร) → Course → Offering
+- [x] Allowlist sign-in gating + preset roles (lecturer / program director) + `/not-authorized` page
+- [x] Super Admin tier — the only role that can manage admins
+- [x] Lecturer role + cross-workspace switcher
 
-### Hierarchy after this change
+## Organization & access model
+
+### Academic hierarchy
 
 ```
-School (สำนักวิชา, free text — kept on Program for backwards compat)
-  └─ Department (สาขาวิชา, NEW — managed CRUD)
-        └─ Program (หลักสูตร, existing)
-              └─ Course → Offering
+สาขาวิชา (Department)
+  └─ หลักสูตร (Program)
+       └─ เล่มหลักสูตร (Curriculum revision)
+            └─ Course
+                 └─ Offering
 ```
 
-### Data model
+The unit assessed for TQF/AUN-QA is the **curriculum** (เล่มหลักสูตร) — it
+owns the PLOs, courses, and offerings. For historical reasons the curriculum
+lives in the Firestore `programs` collection and is referenced by `programId`
+throughout; the parent **Program** (หลักสูตร) layer is a separate
+`academicPrograms` collection, linked via the curriculum's `parentProgramId`.
+Departments are the `departments` collection. All three are admin-managed from
+the workspace nav (สาขาวิชา → หลักสูตร → เล่มหลักสูตร, the last two as sub-tabs).
 
-New collection `departments/{deptId}`:
+Department, program, and course each have a lifecycle — soft-delete
+(reversible, cascades to children), cascade-guarded hard delete, and (for
+department/program-purge via Cloud Function, course-purge via `purgeCourse`)
+a destructive purge. Closing a program or course cascades `isActive` down to
+its offerings, hiding them from the lecturer and assessor workspaces.
 
-```ts
-interface DepartmentDoc {
-  nameTh: string;       // "อาชีวอนามัยและความปลอดภัย"
-  nameEn: string;       // "Occupational Health and Safety"
-  isActive: boolean;    // default true
-  createdAt: Ts;
-  updatedAt: Ts;
-}
-```
+### Sign-in: allowlist gating
 
-Extension to `ProgramDoc`:
+Only pre-provisioned emails can sign in. On a Google account's first sign-in
+(`@mfu.ac.th`), the auth route checks `allowlist/{email}`:
 
-```ts
-interface ProgramDoc {
-  // ...existing fields
-  /** Optional — added 2026-05. Programs created before this point
-   *  carry null/undefined. */
-  departmentId?: string | null;
-}
-```
+- **No entry** → 403, routed to `/not-authorized` (shows the contact email
+  from `NEXT_PUBLIC_CONTACT_EMAIL`).
+- **Entry found** → a `users/{uid}` profile is bootstrapped from the
+  allowlist's name + preset roles, and the entry is stamped `consumedAt`.
+- **Existing users** (already have a `users/{uid}` doc) are grandfathered —
+  the allowlist check is skipped, so deploying this gate never locks anyone
+  who has signed in before.
 
-### Files
+Admins manage the allowlist at `/admin/users/allowlist` (single add, CSV
+import, per-row preset controls). Presets applied on first sign-in:
+**lecturer** (default on) and **program director** (pick a curriculum).
 
-**New:**
-- `lib/data/departments.ts` — `getAllDepartments`, `getDepartment`,
-  `getDepartmentMap(deptIds)`
-- `app/admin/departments/page.tsx` — list table
-- `app/admin/departments/new/page.tsx` — create form
-- `app/admin/departments/[deptId]/page.tsx` — edit form + lifecycle panel
-- `app/admin/departments/actions.ts` — server actions (create / update /
-  soft-delete / restore / hard-delete / checkBlockers)
-- `components/DepartmentForm.tsx` — shared create/edit form
-- `components/DepartmentLifecyclePanel.tsx` — mirrors
-  `ProgramLifecyclePanel`
-- `functions/src/purgeDepartment.ts` — Cloud Function callable
+### Roles
 
-**Modified:**
-- `lib/types/models.ts` — new `DepartmentDoc`; add optional
-  `departmentId` to `ProgramDoc`
-- `app/admin/layout.tsx` — insert "สาขาวิชา" nav link **before**
-  "หลักสูตร", admin-only
-- `components/ProgramForm.tsx` — Department `<select>` (admin editable,
-  director read-only) with "— ไม่ระบุ —" option
-- `app/admin/programs/actions.ts` — accept `departmentId` in
-  `ProgramFormData`, validate the referenced doc exists, store it
-- `app/admin/programs/new/page.tsx` &
-  `app/admin/programs/[programId]/page.tsx` — load departments and
-  pass to `<ProgramForm>`
-- `app/admin/page.tsx` — add a "สาขาวิชา" column to the programs table
-- `functions/src/index.ts` — export `purgeDepartment`; refactor
-  `purgeProgram.ts` to expose `purgeProgramCore(programId)` so the
-  department purge can invoke it per program
-- `firestore.rules` — new `match /departments/{id}` block: read =
-  signed-in (`isMfu()`), write = `isAdmin()`
-- `scripts/seed.ts` — pre-create one OHS department for demos
-
-### Lifecycle — mirrors program lifecycle (three modes)
-
-**Mode 1 — soft-delete (reversible).** `softDeleteDepartment` flips
-`isActive = false`, then **cascades** to every program with
-`departmentId == deptId` (which in turn cascades to courses and
-offerings via the existing helpers). Symmetric `restoreDepartment`.
-Audit: `department_soft_deleted`, `department_restored`.
-
-**Mode 2 — guarded hard-delete.** `deleteDepartment` refuses if any
-program references the department; returns `{ blockers: { programsCount } }`.
-Audit: `department_hard_deleted`.
-
-**Mode 3 — purge (destructive cascade, Cloud Function).** New
-`purgeDepartment` callable. For each program under the department,
-invoke the existing per-program purge logic (factored out as
-`purgeProgramCore`), then delete the department doc. Two-confirm
-gating (typed department name + checkbox), same as program purge.
-Audit: `department_purged` with counts.
-
-**Trade-off:** soft-delete cascades blindly — if a program was
-independently soft-deleted earlier, restoring the department will
-re-activate it too. Same behavior as the existing program→courses
-cascade; documented here for awareness.
-
-### Permissions
-
-- Admin-only for all department CRUD + lifecycle.
-- Directors see the Department dropdown on the program edit page in
-  **read-only** mode.
-- All authenticated MFU users can read the `departments` collection
-  (needed so the dropdown renders for any program viewer).
-
-### Edge cases
-
-| Case | Behavior |
-|---|---|
-| Existing programs with no `departmentId` | Shown as "ไม่ระบุ" in lists; dropdown defaults to "— ไม่ระบุ —" |
-| Hard-delete department with programs | Refused; blocker count surfaced in UI |
-| Program references a deleted department | Dropdown labels the option `(ลบแล้ว)` in red, still selectable |
-| Director viewing a program | Department dropdown is read-only |
-| Department `nameTh` collision | Allowed in v1; uniqueness check is easy to add later |
-
-### Sequence & risk
-
-| Step | Risk | Notes |
+| Role | Stored as | Scope |
 |---|---|---|
-| Model + read helpers | trivial | type + 3 queries |
-| Server actions (CRUD only) | low | mirrors program actions |
-| List + new + edit pages | low | mirrors programs UI |
-| Wire dropdown into `ProgramForm` | medium | adds a required-ish field |
-| Department column on `/admin` | trivial | one extra map lookup |
-| Lifecycle panel (soft + hard) | low | mirrors `ProgramLifecyclePanel` |
-| Purge callable + `purgeProgramCore` refactor | medium | careful with Storage cleanup |
-| Rules + deploy | low | one new match block |
+| Super Admin | `roles.isSuperAdmin` (implies `isAdmin`) | the only role that can grant/revoke admin or super-admin, or edit/deactivate an admin |
+| Admin | `roles.isAdmin` | system-wide management of everything except admin accounts |
+| Program Director | `roles.directorOf[]` (curriculum ids) | per-curriculum management |
+| Assessor | `roles.assessorOf[]` | per-curriculum assessment sign-off |
+| Verifier | `roles.verifierOf[]` | per-curriculum final verification |
+| Lecturer | `roles.isLecturer` (+ `offerings.lecturerId`) | the lecturer workspace; offerings owned per assignment |
 
-**Total estimate ≈ 6–7 hours.**
-
-## Admin Role Adjustment — Implementation Plan
-
-Audit findings from branch `admin-role-adjustment`. The current model has
-two tiers — global `isAdmin` (super admin) and per-program `directorOf`
-(program admin). The audit found six items worth resolving (A–F). They
-are listed in recommended build order: small/safe first, decision-heavy
-last.
-
-### F. Document "admin writes via server" convention (10 min)
-
-The Firestore rules for `assessments` and `verifications` require
-`assessesProgram` / `verifiesProgram` for client writes and don't
-short-circuit on `isAdmin`. This is intentional — sign-off writes go
-through `/api/assessor/submit` and `/api/verification/submit` so the
-role check stays explicit on the server. Capture this so it isn't
-mis-read as a bug.
-
-- Add a top-of-block comment in `firestore.rules` above
-  `match /offerings/{id}/assessments/{aid}` and
-  `match /offerings/{id}/verifications/{vid}` explaining: "Sign-off
-  writes go through server actions; client rules deliberately exclude
-  `isAdmin()` so an admin cannot fabricate a signed record."
-- No code changes.
-
-### C. Last-admin safeguard (½ day)
-
-`users/actions.ts:32` already blocks an admin from removing **their
-own** `isAdmin`, but they can demote or deactivate **another** admin.
-If the system ends up with zero active admins it's locked out of user
-management.
-
-- Add a helper `countOtherActiveAdmins(actorUid)` to
-  `app/admin/users/actions.ts` — single Firestore query
-  `where('roles.isAdmin', '==', true).where('isActive', '!=', false)`
-  excluding the actor, returning the count.
-- In `updateUserRoles`: if the target currently has `isAdmin=true`, the
-  incoming roles set it to false, **and** `countOtherActiveAdmins
-  (target)` is 0, return `last_admin_protected`.
-- In `setUserActive`: if the target currently has `isAdmin=true`, the
-  incoming value is `false`, **and** `countOtherActiveAdmins(target)`
-  is 0, return `last_admin_protected`.
-- Surface a friendly error in `app/admin/users/[userId]/page.tsx`.
-- Tests: by hand — try to demote/deactivate the only other admin;
-  confirm the action refuses.
-
-### E. Admin read access to `/assessor` (½ hour)
-
-Admins currently can't browse the assessor workspace at all
-(`app/assessor/layout.tsx` redirects if `assessorOf` is empty). Allow
-admins in for support/troubleshooting; their view stays read-only
-because the assessor submit route still gates on `assessorOf`
-(unchanged).
-
-- `app/assessor/layout.tsx`: change the gate to
-  `if (!isAdmin && (!assessorOf || assessorOf.length === 0))
-   redirect('/login')`.
-- `app/assessor/page.tsx` and any list/data fetcher: if `isAdmin` and
-  `assessorOf` is empty, show all programs' offerings instead of an
-  empty list. Otherwise behave the same.
-- `app/assessor/[offeringId]/page.tsx`: admin can view but not sign
-  (the form's submit will be rejected by the server). Optionally hide
-  the sign-off button when the viewer isn't an assessor of the
-  program.
-
-### D. Codify the director-as-verifier overlap (1 hour)
-
-Currently directors are admitted to `/verification` and can submit
-final verification decisions (`api/verification/submit:63`). If this
-is the intended policy ("directors may sit on the verification
-committee for their programs"), make it explicit and discoverable.
-
-- Add a new `docs/ROLE_MATRIX.md` documenting every role × capability
-  intersection (read, write, sign, scope).
-- Link it from this README's "Security notes" section.
-- No code change required if the overlap is policy. If you'd rather
-  separate the roles, see option in finding A below.
-
-### B. Build UIs for the two rule-only admin capabilities (1 day)
-
-`firestore.rules` already grant `isAdmin` two abilities that have no
-client surface: reading the audit log and deleting a program.
-
-**B1. Audit log viewer.**
-- New page `app/admin/audit-log/page.tsx` — admin-only (redirect
-  others). Server-rendered.
-- New data fn `lib/data/auditLog.ts` with a paginated read of
-  `auditLog`, ordered by `occurredAt desc`. Filters: `entityType`,
-  `actorEmail`, date range. Page size 50.
-- Composite index in `firestore.indexes.json` for
-  `(entityType ASC, occurredAt DESC)` (single-field `occurredAt`
-  already covers the unfiltered read).
-- New nav link "บันทึกการทำงาน" in `app/admin/layout.tsx` sub-nav,
-  visible only to `isAdmin`.
-
-**B2. Program lifecycle — three modes, ordered safest to most destructive.**
-
-All three are admin-only and live in
-`app/admin/programs/actions.ts`. Surfaced from
-`app/admin/programs/[programId]/page.tsx` with progressively stronger
-confirmations.
-
-**Mode 1 — Soft-delete (reversible).**
-- Server action `softDeleteProgram(programId)`.
-- Marks `programs/{id}.isActive = false`.
-- Cascades `isActive = false` to every `courses` doc with
-  `programId == id`.
-- **Untouched:** offerings (carry lifecycle `status`, not `isActive`;
-  changing them would corrupt the AUN-QA history); AI reports,
-  assessments, verifications, notifications, audit log, Storage
-  PDFs; user role arrays (`directorOf/assessorOf/verifierOf`) —
-  preserved so undelete restores the assignment graph cleanly.
-- Action `auditLog` entry: `program_soft_deleted`.
-- Symmetric `restoreProgram(programId)` action flips both back to
-  `true` and records `program_restored`.
-- This is the **default** path; the UI button labels it
-  "ปิดใช้งานหลักสูตร".
-
-**Mode 2 — Hard delete (cascade-guarded).**
-- Server action `deleteProgram(programId)`.
-- **Guard:** refuses if any of these reference the program — returns
-  a structured error listing the blockers:
-  - any `courses` with `programId == id`
-  - any `offerings` with `programId == id`
-  - any user whose `roles.{directorOf, assessorOf, verifierOf}`
-    contains the program id
-  - any `implementationReviews` with `programId == id`
-- If the guard passes the program doc has no related records, so
-  deleting just the program doc is enough — no cascade required.
-- Action `auditLog` entry: `program_hard_deleted`.
-- UI: confirm dialog. Labelled "ลบหลักสูตร" — only enabled when
-  the guard would pass (the page can pre-check and grey out
-  otherwise).
-
-**Mode 3 — Purge (destructive cascading, danger zone).**
-- Server action `purgeProgram(programId)`.
-- **Irreversible.** Wipes every record tied to the program. The
-  AUN-QA audit trail for those courses is lost — only the purge
-  receipt in `auditLog` remains.
-- Order of operations (Admin SDK, batched where possible):
-  1. List every `offerings/{oid}` with `programId == id`.
-  2. For each offering, delete every doc in its subcollections —
-     `aiReports`, `assessments`, `verifications` — and delete any
-     Storage objects referenced by those docs
-     (`reportStoragePath`, `signedPdfStoragePath`,
-     `finalPdfStoragePath`).
-  3. Delete every `notifications` with `relatedOfferingId` in the
-     offering set.
-  4. Delete the offering docs themselves.
-  5. Delete every `courses` with `programId == id`.
-  6. Delete every `implementationReviews` with `programId == id`.
-  7. For every user whose `roles.{directorOf, assessorOf,
-     verifierOf}` contains the program id, remove it from those
-     arrays.
-  8. Delete the program doc.
-  9. Write a single `auditLog` entry `program_purged` summarizing
-     counts removed.
-- This is heavy enough that it belongs in a Cloud Function callable
-  (`purgeProgram`) rather than a Next route — Firestore needs
-  per-doc deletes and Storage cleanup, and a callable can run
-  longer than a serverless route. The callable verifies `isAdmin`
-  via the Admin SDK + user doc.
-- UI: a separate "ลบทั้งหมดถาวร" button in a red danger panel,
-  hidden behind a disclosure. Two confirmations:
-  - Typed: admin must type the program code exactly to enable
-    the button.
-  - Checkbox: "ฉันเข้าใจว่าการกระทำนี้ไม่สามารถย้อนกลับได้
-    และจะลบประวัติการทวนสอบทั้งหมดของหลักสูตรนี้".
-- The button only appears for `isAdmin`.
-
-**UI hierarchy on the program detail page:**
-1. Soft-delete button (calm, primary action).
-2. Hard delete button (visible only if guard would pass, otherwise
-   greyed with an explanation pointing to soft-delete).
-3. Danger zone collapsible at the bottom containing the purge.
-
-### A. Resolve the assessor/verifier sign-off asymmetry — strict (½ day)
-
-The two signed acts authorize different role-sets today:
-
-| Action | Current allowed callers (server route) |
-|---|---|
-| Sign assessment (`/api/assessor/submit`) | `assessorOf` only |
-| Sign verification (`/api/verification/submit`) | `isAdmin` OR `directorOf` OR `verifierOf` |
-
-**Decision: strict (Option 1).** A signed record carries the signer's
-name and date; admins shouldn't sign on behalf of a committee.
-Tighten verification submit to **`verifierOf` only** to match the
-assessment path. Resolves finding D too.
-
-- `app/api/verification/submit/route.ts`: change the `allowed` check
-  to `(verifierOf ?? []).includes(programId)`. Remove the
-  `isAdmin || directorOf` paths.
-- `functions/src/generateFinalVerificationReport.ts`: same tightening
-  (admin/director can no longer regenerate someone else's
-  verification PDF).
-- `app/verification/layout.tsx`: keep admin/director **read** access
-  to the queue (visibility, no signing).
-- Drop the explicit `isAdmin` short-circuit; document via the
-  ROLE_MATRIX.md (finding D).
-- Test by hand: an admin who isn't a verifier of the program attempts
-  to sign — expect `not_authorized` (403).
-
-Either option is a one-file edit on the server route plus the
-matching Cloud Function. Tests by hand: attempt sign-off as the
-non-role-holding admin; confirm 403.
-
-## Sequence & risk
-
-| Step | Risk | Notes |
-|---|---|---|
-| F. Rules comments | trivial | docs only |
-| C. Last-admin guard | low | server-only logic; covered by hand-test |
-| E. Admin → `/assessor` | low | layout + page widening |
-| D. ROLE_MATRIX.md | trivial | docs only |
-| B1. Audit log UI | medium | new index + page |
-| B2. Program lifecycle (soft + hard + purge) | medium → high | the purge needs careful UI gating and Storage cleanup |
-| A. Sign-off symmetry | medium | policy decision; touches sign-off paths |
-
-## Course Lifecycle — Implementation Plan
-
-Mirrors the program-lifecycle pattern (B2 above) one level down.
-Audit findings on courses showed the admin/director gating is solid
-across UI + actions + rules, but **no delete UI** exists, **no
-per-course soft-delete**, and **no purge** for retiring a course and
-all its history. This section adds those three modes plus the
-smaller-but-related improvements found in the audit.
-
-All three lifecycle modes are admin-only (mirroring program
-lifecycle) and live in
-`app/admin/programs/[programId]/courses/actions.ts`. The UI surface
-is a new `components/CourseLifecyclePanel.tsx` mounted on
-`app/admin/programs/[programId]/courses/[courseId]/page.tsx`.
-
-### Mode 1 — Soft-delete (reversible)
-
-- `softDeleteCourse(courseId)` server action.
-- Marks `courses/{id}.isActive = false`.
-- **Untouched:** offerings (they carry lifecycle `status`, not
-  `isActive`; touching them would corrupt AUN-QA history), all
-  subcollections (aiReports/assessments/verifications), Storage,
-  notifications, audit log.
-- Symmetric `restoreCourse(courseId)` flips it back.
-- Audit entries: `course_soft_deleted`, `course_restored`.
-- UI button label: "ปิดใช้งานรายวิชา" / "กู้คืนรายวิชา".
-- This is the **default** path — preserves AUN-QA history.
-
-### Mode 2 — Hard delete (cascade-guarded)
-
-- `deleteCourse(courseId)` server action.
-- **Guard:** refuses if any `offerings` doc has `courseId == id`.
-  Returns a structured error with the offering count and a hint to
-  use soft-delete or purge.
-- If the guard passes the course has no offerings, so deleting the
-  course doc is sufficient — no cascade required.
-- Audit: `course_hard_deleted`.
-- UI: confirm dialog. Greyed out by `checkCourseBlockers` when
-  offerings exist; tooltip points to soft-delete.
-
-### Mode 3 — Purge (destructive cascading, danger zone)
-
-Deletes the course and every record tied to its offerings.
-**Irreversible** — the AUN-QA audit trail for this course is lost
-(only the purge receipt in `auditLog` remains).
-
-- `purgeCourse(courseId)` **Cloud Function callable** (heavy work +
-  Storage cleanup, same pattern as `purgeProgram`).
-- Order of operations (Admin SDK):
-  1. List every `offerings/{oid}` with `courseId == id`.
-  2. For each offering:
-     - Delete every doc in its subcollections — `aiReports`,
-       `assessments`, `verifications` — and delete any Storage
-       objects they reference (`reportStoragePath`,
-       `signedPdfStoragePath`, `finalPdfStoragePath`).
-     - Delete `notifications` where `relatedOfferingId == oid`.
-     - Delete `implementationReviews` where `previousOfferingId`
-       or `newOfferingId == oid`.
-     - Delete the offering doc.
-  3. Delete the course doc.
-  4. Write a single `auditLog` entry `course_purged` with counts.
-- Auth: admin only (callable verifies `roles.isAdmin === true`
-  server-side).
-- UI: red danger panel behind a disclosure. Two confirmations to
-  enable the button:
-  - Typed: admin must type the course code exactly.
-  - Checkbox: "ฉันเข้าใจว่าการกระทำนี้ไม่สามารถย้อนกลับได้
-    และจะลบประวัติการทวนสอบทั้งหมดของรายวิชานี้".
-
-### Smaller fixes alongside the lifecycle (audit findings C3–C6)
-
-These are independent of the lifecycle work but worth bundling:
-
-- **C3** — `batchUploadCourses`: emit a per-row `course_created`
-  audit entry inside the loop (in addition to the existing
-  `courses_batch_uploaded` summary), so individual courses are
-  traceable.
-- **C4** — uniqueness validation: in `validate()` and inside the
-  CSV loop, refuse if a course with the same `code` already exists
-  in the program. Pre-fetch the program's existing codes once for
-  the CSV pass.
-- **C5** — let the CSV import set `isActive` from an optional
-  column (default `true` when missing).
-- **C6** — replace the CSV per-doc loop with `db.batch()` chunks of
-  500 ops for atomicity + speed (still works with the per-row audit
-  if the audit writes use the same batch).
-
-### Files touched
-
-- `app/admin/programs/[programId]/courses/actions.ts` — add
-  `softDeleteCourse`, `restoreCourse`, `deleteCourse`,
-  `checkCourseBlockers`; tighten `validate()` for C4; adjust CSV
-  loop for C3/C5/C6.
-- `components/CourseLifecyclePanel.tsx` — new, modelled on
-  `ProgramLifecyclePanel.tsx`.
-- `app/admin/programs/[programId]/courses/[courseId]/page.tsx` —
-  mount the lifecycle panel for admins.
-- `functions/src/purgeCourse.ts` — new callable.
-- `functions/src/index.ts` — export `purgeCourse`.
-- `docs/ROLE_MATRIX.md` — extend the courses row to cover
-  soft-delete / hard-delete / purge.
-
-### UI hierarchy on the course detail page
-
-1. Calm soft-delete / restore button (primary action).
-2. Hard-delete button — visible only when guard would pass,
-   otherwise greyed with an explanation pointing to soft-delete.
-3. Danger zone collapsible at the bottom containing the purge.
-
-### Sequence & risk
-
-| Step | Risk | Notes |
-|---|---|---|
-| Soft-delete + restore | low | mirrors program softDelete |
-| Hard delete (guarded) | low | one query + one delete |
-| C4 uniqueness | low | cheap query before write |
-| C5 CSV isActive column | low | parser tweak |
-| C6 batched CSV writes | low | one-time refactor |
-| C3 per-row CSV audit | low | inside the loop |
-| **Purge callable** | medium | careful with Storage cleanup; matches purgeProgram |
-| **Lifecycle panel UI** | medium | typed-code + checkbox gating must match purgeProgram safety |
+A user can hold several roles; a cross-workspace switcher in every top bar
+lets multi-role users hop between the workspaces they can access. Lecturer is
+auto-granted (one-way) when someone is assigned as an offering's lecturer.
+Bootstrap the first super admin with `npm run assign-role -- <email> superadmin`.
+The full role × capability matrix lives in [`docs/ROLE_MATRIX.md`](docs/ROLE_MATRIX.md).
 
 ## Prerequisites
 
@@ -576,6 +174,7 @@ Fill in:
 | `FIREBASE_CLIENT_EMAIL`, `FIREBASE_PRIVATE_KEY` | Service account JSON (step 2.5) — keep the `\n` escapes in the private key |
 | `GEMINI_API_KEY` | Google AI Studio |
 | `ALLOWED_EMAIL_DOMAINS` | leave as `mfu.ac.th` |
+| `NEXT_PUBLIC_CONTACT_EMAIL` | shown on `/not-authorized` to users not on the allowlist |
 
 Also set the project id in [`.firebaserc`](.firebaserc) (replace
 `REPLACE_WITH_FIREBASE_PROJECT_ID`).
@@ -639,22 +238,28 @@ npm run seed
 
 Creates 1 program (6 TQF PLOs), 5 courses, 1 sample offering.
 
-### 8. Run locally and promote yourself to admin
+### 8. Run locally and bootstrap the first super admin
 
 ```bash
 npm run dev    # → http://localhost:3000
 ```
 
-Sign in with `saharat.arr@mfu.ac.th`. The `users/{uid}` profile is created
-automatically by `/api/auth/session` on first sign-in.
+Sign-in is allowlist-gated, so for the very first account either add your
+email at `/admin/users/allowlist` (not possible before an admin exists) or,
+more simply, **add an `allowlist/{your-email}` doc by hand** in the Firebase
+Console (fields: `email`, `nameTh`, `nameEn`), then sign in with
+`saharat.arr@mfu.ac.th`. The `users/{uid}` profile is bootstrapped on first
+sign-in.
 
-Then, in the Firebase Console → Firestore → `users` → your document, set:
+Then promote yourself to **super admin** (the only role that can manage other
+admins):
 
+```bash
+npm run assign-role -- saharat.arr@mfu.ac.th superadmin
 ```
-roles.isAdmin = true
-```
 
-(or run a one-off admin script). Re-sign-in to pick up the change.
+This sets both `roles.isSuperAdmin` and `roles.isAdmin`. Re-sign-in to pick up
+the change. (You can also set the flags directly in the Firestore console.)
 
 ## Project structure
 
@@ -662,10 +267,16 @@ roles.isAdmin = true
 app/
   layout.tsx, page.tsx, globals.css   App shell
   login/page.tsx                      Google sign-in
-  api/auth/session/route.ts           Session-cookie mint/clear + profile upsert
+  not-authorized/page.tsx             Shown to users not on the allowlist
+  api/auth/session/route.ts           Session mint/clear + allowlist-gated profile bootstrap
   lecturer/                           Lecturer workspace (Phase 1)
   assessor/                           Assessor review and sign-off flow (Phase 2)
-  admin/                              Program, course, offering, and user management (Phase 3)
+  admin/                              Department, program, curriculum, course,
+                                      offering, user & allowlist management
+  admin/departments/                  สาขาวิชา (Department) management
+  admin/academic-programs/            หลักสูตร (Program) management + curriculum list
+  admin/programs/                     เล่มหลักสูตร (Curriculum), courses, offerings
+  admin/users/ , users/allowlist/     Roles + sign-in allowlist
   verification/                       Verification committee queue and detail shell (Phase 4)
 
 components/                           Shared UI (StatusBadge, AnalyzeCoursePanel…)
@@ -686,18 +297,24 @@ middleware.ts                         Session-cookie gate
 functions/                            Firebase Cloud Functions (separate deploy)
   src/analyzeCourse.ts                Callable: run Gemini course analysis
   src/generateCombinedReport.ts       Callable: signed combined assessor report
+  src/generateFinalVerificationReport.ts  Callable: final verification PDF
+  src/purgeProgram.ts / purgeCourse.ts / purgeDepartment.ts  Destructive purges
   src/gemini.ts                       Gemini integration + result schema
   src/reportPdf.ts                    AI report PDF generation
   prompts/                            AI evaluation guidelines (authoritative)
     CLAUDE.master.md / CLAUDE.undergrad.md
 
 docs/FIRESTORE_MODEL.md               Data model + design rationale
+docs/ROLE_MATRIX.md                   Role × capability matrix
 
-firestore.rules                       Four-role security rules
+firestore.rules                       Role-based security rules
 firestore.indexes.json                Composite indexes
 firebase.json, .firebaserc            Firebase CLI config
+apphosting.yaml                       Firebase App Hosting config
 
-scripts/seed.ts                       OHS seed
+scripts/seed.ts                       OHS seed (department + program + curriculum)
+scripts/assign-role.ts                Grant superadmin/admin/assessor/director
+scripts/backfill-lecturer-role.ts     One-off isLecturer backfill
 ```
 
 ## Commands
@@ -707,6 +324,8 @@ npm run dev               # Dev server
 npm run build             # Production build
 npm run typecheck         # tsc --noEmit
 npm run seed              # Seed Firestore with OHS data
+npm run assign-role -- <email> <superadmin|admin|assessor|director> [programId]
+npm run backfill-lecturer-role        # Flag existing offering lecturers as isLecturer
 npm run firebase:rules    # Deploy firestore.rules
 npm run firebase:indexes  # Deploy firestore.indexes.json
 
