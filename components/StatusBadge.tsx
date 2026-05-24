@@ -11,7 +11,10 @@ const TONE_CLASSES: Record<string, string> = {
 };
 
 export default function StatusBadge({ status }: { status: OfferingStatus }) {
-  const meta = OFFERING_STATUS[status];
+  const meta = OFFERING_STATUS[status] ?? {
+    labelTh: status,
+    tone: 'slate' as const,
+  };
   return (
     <span
       className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${TONE_CLASSES[meta.tone]}`}
