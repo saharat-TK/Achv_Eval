@@ -58,7 +58,7 @@ function normalize(data: DepartmentFormData) {
   return {
     nameTh: data.nameTh.trim(),
     nameEn: data.nameEn.trim(),
-    isActive: data.isActive,
+    // isActive is owned by the lifecycle panel; only create sets it.
   };
 }
 
@@ -76,7 +76,7 @@ export async function createDepartment(
   const now = FieldValue.serverTimestamp();
   const ref = await getAdminDb()
     .collection('departments')
-    .add({ ...normalize(data), createdAt: now, updatedAt: now });
+    .add({ ...normalize(data), isActive: true, createdAt: now, updatedAt: now });
 
   await audit('department_created', ref.id, user.uid, user.email ?? null);
   revalidatePath('/admin/departments');

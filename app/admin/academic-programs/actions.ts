@@ -73,7 +73,7 @@ function normalize(data: AcademicProgramFormData) {
     nameEn: data.nameEn.trim(),
     level: data.level,
     departmentId: data.departmentId ?? null,
-    isActive: data.isActive,
+    // isActive is owned by the lifecycle panel; only create sets it.
   };
 }
 
@@ -93,7 +93,7 @@ export async function createAcademicProgram(
   const now = FieldValue.serverTimestamp();
   const ref = await getAdminDb()
     .collection('academicPrograms')
-    .add({ ...normalize(data), createdAt: now, updatedAt: now });
+    .add({ ...normalize(data), isActive: true, createdAt: now, updatedAt: now });
 
   await audit('academic_program_created', ref.id, user.uid, user.email ?? null);
   revalidatePath('/admin/academic-programs');
