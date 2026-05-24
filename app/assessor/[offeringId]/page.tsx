@@ -6,8 +6,15 @@ import StatusBadge from '@/components/StatusBadge';
 import AiReportsList from '@/components/AiReportsList';
 import AssessmentForm from '@/components/AssessmentForm';
 import { SEMESTER_LABEL } from '@/lib/constants';
+import type { OfferingStatus } from '@/lib/types/models';
 
 export const dynamic = 'force-dynamic';
+
+const ASSESSMENT_VISIBLE_STATUSES: OfferingStatus[] = [
+  'pending_assessment',
+  'assessor_review',
+  'assessed',
+];
 
 export default async function AssessorOfferingPage({
   params,
@@ -23,6 +30,7 @@ export default async function AssessorOfferingPage({
   // any offering read-only — the sign-off API still checks assessorOf.
   if (
     !offering ||
+    !ASSESSMENT_VISIBLE_STATUSES.includes(offering.status) ||
     (!profile.roles.isAdmin &&
       (!profile.roles.assessorOf.includes(offering.programId) ||
         offering.isActive === false))

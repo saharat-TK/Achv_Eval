@@ -24,6 +24,7 @@ export const OFFERING_STATUS: Record<
   ready_for_ai: { labelTh: 'พร้อมวิเคราะห์', tone: 'blue' },
   ai_in_progress: { labelTh: 'กำลังวิเคราะห์', tone: 'blue' },
   ai_complete: { labelTh: 'วิเคราะห์เสร็จ', tone: 'violet' },
+  pending_assessment: { labelTh: 'รอทวนสอบ', tone: 'violet' },
   assessor_review: { labelTh: 'รอผู้ทวนสอบ', tone: 'violet' },
   assessed: { labelTh: 'ทวนสอบแล้ว', tone: 'green' },
   verification_review: { labelTh: 'รอคณะกรรมการ', tone: 'violet' },

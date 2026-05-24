@@ -9,9 +9,9 @@ export interface UserRolesData {
   isSuperAdmin: boolean;
   isAdmin: boolean;
   isLecturer: boolean;
-  directorOf: string[]; // programIds
-  assessorOf: string[]; // programIds
-  verifierOf: string[]; // programIds
+  directorOfAcademicPrograms: string[];
+  assessorOfAcademicPrograms: string[];
+  verifierOfAcademicPrograms: string[];
 }
 
 export type RolesActionResult = { ok: true } | { ok: false; error: string };
@@ -45,6 +45,31 @@ async function countOtherActiveSuperAdmins(excludeUid: string): Promise<number> 
   ).length;
 }
 
+function unique(values: string[]): string[] {
+  return [...new Set(values.filter(Boolean))];
+}
+
+async function getCurriculumIdsForAcademicPrograms(
+  academicProgramIds: string[],
+): Promise<string[]> {
+  const ids = unique(academicProgramIds);
+  if (ids.length === 0) return [];
+
+  const db = getAdminDb();
+  const chunks: string[][] = [];
+  for (let i = 0; i < ids.length; i += 30) chunks.push(ids.slice(i, i + 30));
+
+  const snaps = await Promise.all(
+    chunks.map((chunk) =>
+      db.collection('programs').where('parentProgramId', 'in', chunk).get(),
+    ),
+  );
+
+  return snaps
+    .flatMap((snap) => snap.docs.map((doc) => doc.id))
+    .sort((a, b) => a.localeCompare(b));
+}
+
 /**
  * Updates a user's role assignments. Admin only.
  *
@@ -66,6 +91,15 @@ export async function updateUserRoles(
   // super admin is granted, so all existing isAdmin checks still pass.
   const nextSuper = roles.isSuperAdmin === true;
   const nextAdmin = nextSuper ? true : roles.isAdmin;
+  const directorAcademicProgramIds = unique(roles.directorOfAcademicPrograms);
+  const assessorAcademicProgramIds = unique(roles.assessorOfAcademicPrograms);
+  const verifierAcademicProgramIds = unique(roles.verifierOfAcademicPrograms);
+  const [directorCurriculumIds, assessorCurriculumIds, verifierCurriculumIds] =
+    await Promise.all([
+      getCurriculumIdsForAcademicPrograms(directorAcademicProgramIds),
+      getCurriculumIdsForAcademicPrograms(assessorAcademicProgramIds),
+      getCurriculumIdsForAcademicPrograms(verifierAcademicProgramIds),
+    ]);
 
   const db = getAdminDb();
   const userRef = db.collection('users').doc(userId);
@@ -125,9 +159,14 @@ export async function updateUserRoles(
     'roles.isSuperAdmin': nextSuper,
     'roles.isAdmin': nextAdmin,
     'roles.isLecturer': roles.isLecturer === true,
-    'roles.directorOf': [...new Set(roles.directorOf)],
-    'roles.assessorOf': [...new Set(roles.assessorOf)],
-    'roles.verifierOf': [...new Set(roles.verifierOf)],
+    'roles.directorOfAcademicPrograms': directorAcademicProgramIds,
+    'roles.assessorOfAcademicPrograms': assessorAcademicProgramIds,
+    'roles.verifierOfAcademicPrograms': verifierAcademicProgramIds,
+    // Compatibility mirrors: existing pages, API routes, and rules still
+    // authorize offerings by curriculum id (`offerings.programId`).
+    'roles.directorOf': directorCurriculumIds,
+    'roles.assessorOf': assessorCurriculumIds,
+    'roles.verifierOf': verifierCurriculumIds,
     updatedAt: FieldValue.serverTimestamp(),
   });
 
@@ -143,9 +182,12 @@ export async function updateUserRoles(
       isSuperAdmin: nextSuper,
       isAdmin: nextAdmin,
       isLecturer: roles.isLecturer === true,
-      directorOf: roles.directorOf,
-      assessorOf: roles.assessorOf,
-      verifierOf: roles.verifierOf,
+      directorOfAcademicPrograms: directorAcademicProgramIds,
+      assessorOfAcademicPrograms: assessorAcademicProgramIds,
+      verifierOfAcademicPrograms: verifierAcademicProgramIds,
+      directorOf: directorCurriculumIds,
+      assessorOf: assessorCurriculumIds,
+      verifierOf: verifierCurriculumIds,
     },
   });
 

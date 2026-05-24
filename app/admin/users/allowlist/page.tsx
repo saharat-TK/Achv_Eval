@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { getCurrentProfile } from '@/lib/firebase/auth-server';
 import { getAllAllowlistEntries } from '@/lib/data/allowlist';
-import { getAllPrograms } from '@/lib/data/programs';
+import { getAllAcademicPrograms } from '@/lib/data/academicPrograms';
 import AllowlistTable, {
   type AllowlistRow,
 } from '@/components/AllowlistTable';
@@ -25,12 +25,12 @@ export default async function AdminAllowlistPage() {
   if (!profile) redirect('/login');
   if (!profile.roles.isAdmin) redirect('/admin');
 
-  const [entries, programs] = await Promise.all([
+  const [entries, academicPrograms] = await Promise.all([
     getAllAllowlistEntries(),
-    getAllPrograms(),
+    getAllAcademicPrograms(),
   ]);
-  const programById = new Map(programs.map((p) => [p.id, p]));
-  const programOptions = programs.map((p) => ({
+  const programById = new Map(academicPrograms.map((p) => [p.id, p]));
+  const programOptions = academicPrograms.map((p) => ({
     id: p.id,
     code: p.code,
     nameTh: p.nameTh,

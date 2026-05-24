@@ -5,16 +5,18 @@ import { readFileSync } from 'fs';
 import { join } from 'path';
 import { runAnalysis, type InputFile } from './gemini';
 import { generateAndStoreReport } from './reportPdf';
-import {
-  createNotification,
-  createNotifications,
-  getProgramAssessorIds,
-} from './notifications';
+import { createNotification } from './notifications';
 
 const GEMINI_API_KEY = defineSecret('GEMINI_API_KEY');
 const LOG_SHEET_ID = defineString('GOOGLE_LOG_SHEET_ID', { default: '' });
 const REGION = 'asia-southeast1';
 const MAX_TOTAL_BYTES = 25 * 1024 * 1024; // 25 MB across all files
+const ANALYSIS_ATTEMPT_LIMIT = 4;
+const ANALYSIS_ALLOWED_STATUSES = new Set([
+  'documents_pending',
+  'ready_for_ai',
+  'ai_complete',
+]);
 
 interface CallFile {
   type: string;
@@ -64,6 +66,7 @@ export const analyzeCourse = onCall(
 
     // ----- Authorize: caller must be the assigned lecturer ------------
     const offeringRef = db.collection('offerings').doc(offeringId);
+    const reportsRef = offeringRef.collection('aiReports');
     const offeringSnap = await offeringRef.get();
     if (!offeringSnap.exists) {
       throw new HttpsError('not-found', 'ไม่พบรายวิชา');
@@ -72,6 +75,11 @@ export const analyzeCourse = onCall(
       programId: string;
       lecturerId: string | null;
       courseCode?: string;
+      academicYear: number;
+      semester: string;
+      status?: string;
+      analysisAttemptLimit?: number;
+      analysisAttemptCount?: number;
     };
     if (offering.lecturerId !== uid) {
       throw new HttpsError('permission-denied', 'ท่านไม่ใช่ผู้รับผิดชอบรายวิชานี้');
@@ -88,45 +96,105 @@ export const analyzeCourse = onCall(
     );
 
     const model = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
+    const model = process.env.GEMINI_MODEL || 'gemini-2.5-pro';
 
-    // ----- Create the aiReports doc (running) -------------------------
-    const reportsRef = offeringRef.collection('aiReports');
-    const existing = await reportsRef.count().get();
-    const version = existing.data().count + 1;
-
+    // Existing offerings may predate attempt counters. Count current reports
+    // once and use that as the transactional fallback for those records.
+    const existingReportCountSnap = await reportsRef.count().get();
+    const existingReportCount = existingReportCountSnap.data().count;
     const reportRef = reportsRef.doc();
     const now = admin.firestore.FieldValue.serverTimestamp();
-    await reportRef.set({
-      offeringId,
-      version,
-      status: 'running',
-      promptTemplate,
-      geminiModel: model,
-      geminiRequestId: null,
-      inputTokenCount: null,
-      outputTokenCount: null,
-      inputFiles: files.map((f) => ({
-        type: f.type,
-        filename: f.filename,
-        sizeBytes: Math.floor((f.dataBase64?.length ?? 0) * 0.75),
-      })),
-      reportStoragePath: null,
-      reportDownloadUrl: null,
-      logSheetRowId: null,
-      structuredOutput: null,
-      gradeStats: null,
-      errorMessage: null,
-      startedAt: now,
-      completedAt: null,
-      createdAt: now,
-      createdBy: uid,
-    });
-    await offeringRef.update({
-      status: 'ai_in_progress',
-      updatedAt: now,
-      updatedBy: uid,
+
+    const accepted = await db.runTransaction(async (tx) => {
+      const currentOfferingSnap = await tx.get(offeringRef);
+      if (!currentOfferingSnap.exists) {
+        throw new HttpsError('not-found', 'ไม่พบรายวิชา');
+      }
+      const currentOffering = currentOfferingSnap.data() as {
+        programId: string;
+        lecturerId: string | null;
+        academicYear: number;
+        semester: string;
+        status?: string;
+        latestAiReportId?: string | null;
+        analysisAttemptLimit?: number;
+        analysisAttemptCount?: number;
+      };
+      if (currentOffering.lecturerId !== uid) {
+        throw new HttpsError('permission-denied', 'ท่านไม่ใช่ผู้รับผิดชอบรายวิชานี้');
+      }
+      if (!ANALYSIS_ALLOWED_STATUSES.has(currentOffering.status ?? 'documents_pending')) {
+        throw new HttpsError(
+          'failed-precondition',
+          'รายวิชานี้เข้าสู่ขั้นตอนทวนสอบแล้ว ไม่สามารถวิเคราะห์ใหม่ได้',
+        );
+      }
+
+      const attemptLimit = currentOffering.analysisAttemptLimit ?? ANALYSIS_ATTEMPT_LIMIT;
+      const usedAttempts =
+        typeof currentOffering.analysisAttemptCount === 'number'
+          ? currentOffering.analysisAttemptCount
+          : Math.min(existingReportCount, attemptLimit);
+      if (usedAttempts >= attemptLimit) {
+        throw new HttpsError(
+          'failed-precondition',
+          `ใช้สิทธิ์วิเคราะห์ครบ ${attemptLimit} ครั้งแล้ว`,
+        );
+      }
+
+      const programRef = db.collection('programs').doc(currentOffering.programId);
+      const programSnap = await tx.get(programRef);
+      const program = programSnap.data() as { level?: string } | undefined;
+      const promptTemplate =
+        program?.level === 'undergraduate' ? 'CLAUDE.undergrad.md' : 'CLAUDE.master.md';
+      const version = usedAttempts + 1;
+
+      tx.set(reportRef, {
+        offeringId,
+        version,
+        academicYear: currentOffering.academicYear,
+        semester: currentOffering.semester,
+        status: 'running',
+        promptTemplate,
+        geminiModel: model,
+        geminiRequestId: null,
+        inputTokenCount: null,
+        outputTokenCount: null,
+        inputFiles: files.map((f) => ({
+          type: f.type,
+          filename: f.filename,
+          sizeBytes: Math.floor((f.dataBase64?.length ?? 0) * 0.75),
+        })),
+        reportStoragePath: null,
+        reportDownloadUrl: null,
+        logSheetRowId: null,
+        structuredOutput: null,
+        gradeStats: null,
+        errorMessage: null,
+        startedAt: now,
+        completedAt: null,
+        createdAt: now,
+        createdBy: uid,
+      });
+      tx.update(offeringRef, {
+        status: 'ai_in_progress',
+        analysisAttemptLimit: attemptLimit,
+        analysisAttemptCount: version,
+        updatedAt: now,
+        updatedBy: uid,
+      });
+
+      return {
+        version,
+        promptTemplate,
+        previousLatestAiReportId: currentOffering.latestAiReportId ?? null,
+      };
     });
 
+    const guideline = readFileSync(
+      join(__dirname, '..', 'prompts', accepted.promptTemplate),
+      'utf-8',
+    );
     // ----- Run the analysis -------------------------------------------
     try {
       const geminiFiles: InputFile[] = files.map((f) => ({
@@ -157,8 +225,10 @@ export const analyzeCourse = onCall(
         updatedBy: uid,
       });
       await writeAudit(db, uid, actorEmail, 'ai_analysis_succeeded', reportRef.id);
+      await deleteOlderReports(reportsRef, reportRef.id);
 
-      // Notify the lecturer and the program's assessors. Non-fatal.
+      // Notify the lecturer. Assessors are notified only after the lecturer
+      // explicitly sends the completed AI report for assessment.
       try {
         if (offering.lecturerId) {
           await createNotification({
@@ -169,13 +239,6 @@ export const analyzeCourse = onCall(
             relatedOfferingId: offeringId,
           });
         }
-        const assessorIds = await getProgramAssessorIds(offering.programId);
-        await createNotifications(assessorIds, {
-          type: 'course_ready_for_review',
-          title: 'มีรายวิชารอการทวนสอบ',
-          body: `รายวิชา ${offering.courseCode ?? ''} พร้อมให้ทวนสอบแล้ว`.trim(),
-          relatedOfferingId: offeringId,
-        });
       } catch (notifyErr) {
         console.error('notification failed (non-fatal)', notifyErr);
       }
@@ -195,17 +258,27 @@ export const analyzeCourse = onCall(
         console.error('generateAndStoreReport failed (non-fatal)', pdfErr);
       }
 
-      return { reportId: reportRef.id, version, status: 'succeeded' };
+      return { reportId: reportRef.id, version: accepted.version, status: 'succeeded' };
     } catch (err) {
       const message = err instanceof Error ? err.message : 'unknown error';
-      await reportRef.update({
-        status: 'failed',
-        errorMessage: message,
-        completedAt: admin.firestore.FieldValue.serverTimestamp(),
-      });
+      const existingLatest = accepted.previousLatestAiReportId
+        ? await reportsRef.doc(accepted.previousLatestAiReportId).get()
+        : null;
+      if (existingLatest?.exists) {
+        await reportRef.delete();
+      } else {
+        await reportRef.update({
+          status: 'failed',
+          errorMessage: message,
+          completedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+      }
       // Revert offering so the lecturer can retry.
       await offeringRef.update({
         status: 'ready_for_ai',
+        latestAiReportId: accepted.previousLatestAiReportId,
+        lastAnalysisError: message,
+        lastAnalysisFailedAt: admin.firestore.FieldValue.serverTimestamp(),
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         updatedBy: uid,
       });
@@ -214,6 +287,37 @@ export const analyzeCourse = onCall(
     }
   },
 );
+
+async function deleteOlderReports(
+  reportsRef: admin.firestore.CollectionReference,
+  keepReportId: string,
+): Promise<void> {
+  const snap = await reportsRef.get();
+  const oldReports = snap.docs.filter((doc) => doc.id !== keepReportId);
+  if (oldReports.length === 0) return;
+
+  const bucket = admin.storage().bucket();
+  await Promise.all(
+    oldReports.map(async (doc) => {
+      const path = doc.data()?.reportStoragePath;
+      if (typeof path === 'string' && path) {
+        try {
+          await bucket.file(path).delete({ ignoreNotFound: true });
+        } catch (err) {
+          console.error(`failed to delete old AI report PDF ${path}`, err);
+        }
+      }
+    }),
+  );
+
+  for (let i = 0; i < oldReports.length; i += 450) {
+    const batch = admin.firestore().batch();
+    for (const doc of oldReports.slice(i, i + 450)) {
+      batch.delete(doc.ref);
+    }
+    await batch.commit();
+  }
+}
 
 async function writeAudit(
   db: admin.firestore.Firestore,

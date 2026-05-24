@@ -113,6 +113,7 @@ export interface DashboardFilters {
 
 const AI_COMPLETED_STATUSES: OfferingStatus[] = [
   'ai_complete',
+  'pending_assessment',
   'assessor_review',
   'assessed',
   'verification_review',
@@ -143,6 +144,7 @@ const FOLLOW_UP_STATUSES: OfferingStatus[] = [
 
 const ACTIONABLE_STATUSES: OfferingStatus[] = [
   'ai_complete',
+  'pending_assessment',
   'assessor_review',
   'needs_follow_up',
   'pending_review_next_semester',
@@ -192,7 +194,8 @@ function assessmentReason(
   offering: OfferingWithId,
   assessment: AssessmentWithId | null,
 ): string | null {
-  if (offering.status === 'ai_complete') return 'รอผู้ทวนสอบเริ่มประเมิน';
+  if (offering.status === 'ai_complete') return 'รออาจารย์ส่งผลเพื่อทวนสอบ';
+  if (offering.status === 'pending_assessment') return 'รอผู้ทวนสอบเริ่มประเมิน';
   if (offering.status === 'assessor_review') return 'รอผู้ทวนสอบลงนาม';
   if (offering.status === 'needs_follow_up') return 'รับรองแบบมีเงื่อนไข';
   if (offering.status === 'pending_review_next_semester') {

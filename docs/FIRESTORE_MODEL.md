@@ -45,14 +45,20 @@ user doc carries:
 ```
 roles: {
   isAdmin: boolean,
-  directorOf: [programId],
-  assessorOf: [programId],
-  verifierOf: [programId]
+  directorOfAcademicPrograms: [academicProgramId],
+  assessorOfAcademicPrograms: [academicProgramId],
+  verifierOfAcademicPrograms: [academicProgramId],
+  directorOf: [programId],   // compatibility mirror: curriculum ids
+  assessorOf: [programId],   // compatibility mirror: curriculum ids
+  verifierOf: [programId]    // compatibility mirror: curriculum ids
 }
 ```
 
-`verifierOf` is for verification committee members who can review
-final-assessed offerings for selected programs.
+`verifierOfAcademicPrograms` is for verification committee members who can
+review final-assessed offerings for selected academic programs.
+The role assignment UI writes academic-program ids and expands them to the
+legacy curriculum arrays so existing offering queries and rules can continue
+to authorize via `offerings.programId`.
 
 Rules authorize by reading the caller's own `users/{uid}` doc. The
 **lecturer** role is the exception: it is per-offering, so it lives on
@@ -71,6 +77,11 @@ They are owned by exactly one offering and always queried within its scope.
 Subcollections keep them naturally partitioned and let security rules
 inherit the offering's `programId` via the parent path. (There is no
 `uploads` subcollection — see "Files are NOT stored" above.)
+
+Each offering allows at most 4 accepted AI-analysis attempts. The counter
+lives on `OfferingDoc.analysisAttemptCount`; failed accepted runs still count.
+Only the latest `aiReports/{reportId}` document is retained for the offering,
+and it records the offering's `academicYear`, `semester`, and `createdAt`.
 
 ### 4. `programId` and course identity are denormalized onto offerings
 
@@ -112,8 +123,9 @@ draft
   → documents_pending      (lecturer assigned, awaiting uploads)
   → ready_for_ai           (required files uploaded)
   → ai_in_progress
-  → ai_complete
-  → assessor_review
+  → ai_complete            (AI report ready; lecturer may review/re-run)
+  → pending_assessment     (lecturer sent result to assessor queue)
+  → assessor_review        (assessor saved a draft)
   → assessed               (assessor signed off)
   → verification_review
   → verified | needs_follow_up   (committee final verification)

@@ -51,6 +51,7 @@ export type OfferingStatus =
   | 'ready_for_ai'
   | 'ai_in_progress'
   | 'ai_complete'
+  | 'pending_assessment'
   | 'assessor_review'
   | 'assessed'
   | 'verification_review'
@@ -100,9 +101,18 @@ export interface UserDoc {
      * false.
      */
     isLecturer?: boolean;
-    directorOf: string[]; // programIds
-    assessorOf: string[]; // programIds
-    verifierOf: string[]; // programIds
+    /**
+     * Legacy curriculum-scope role arrays (`programs/{id}` ids). Kept
+     * populated as an expanded compatibility mirror while role assignment
+     * moves to academic-program scope.
+     */
+    directorOf: string[]; // curriculum ids
+    assessorOf: string[]; // curriculum ids
+    verifierOf: string[]; // curriculum ids
+    /** Academic-program-scope role arrays (`academicPrograms/{id}` ids). */
+    directorOfAcademicPrograms?: string[];
+    assessorOfAcademicPrograms?: string[];
+    verifierOfAcademicPrograms?: string[];
   };
   createdAt: Ts;
   updatedAt: Ts;
@@ -188,12 +198,13 @@ export interface AllowlistDoc {
   notes?: string;
   /**
    * Roles applied to the new users/{uid} doc on first sign-in. Lecturer
-   * defaults true; director (per-program) is opt-in and needs a program.
+   * defaults true; director is opt-in and needs an academic program.
    * Existing rows without these fields are treated as lecturer=true,
    * director=false.
    */
   presetIsLecturer?: boolean;
   presetIsDirector?: boolean;
+  /** Academic program id; older rows may contain a curriculum id. */
   presetDirectorProgramId?: string | null;
   addedBy: string; // admin uid
   addedAt: Ts;
@@ -243,6 +254,9 @@ export interface OfferingDoc {
   status: OfferingStatus;
   previousOfferingId: string | null; // carry-forward link
   latestAiReportId: string | null;
+  /** AI analysis attempts are capped per offering. Missing count = 0 used. */
+  analysisAttemptLimit?: number;
+  analysisAttemptCount?: number;
   assessmentId: string | null;
   /**
    * Visibility flag. Cascaded from the parent program/course's lifecycle —
@@ -268,6 +282,8 @@ export interface AnalyzedInputFile {
 export interface AiReportDoc {
   offeringId: string;
   version: number;
+  academicYear: number;
+  semester: Semester;
   status: AiReportStatus;
   promptTemplate: 'CLAUDE.master.md' | 'CLAUDE.undergrad.md';
   geminiModel: string;

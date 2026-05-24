@@ -7,14 +7,14 @@ export type AssessmentWithId = AssessmentDoc & { id: string };
 
 /**
  * Fetch offerings for a set of programs with statuses relevant to an assessor.
- * Returns offerings where status is ai_complete, assessor_review, or assessed.
+ * Returns offerings where status is pending_assessment, assessor_review, or assessed.
  */
 export async function getOfferingsForAssessor(
   programIds: string[],
 ): Promise<OfferingWithId[]> {
   if (programIds.length === 0) return [];
 
-  const ASSESSOR_STATUSES = ['ai_complete', 'assessor_review', 'assessed'];
+  const ASSESSOR_STATUSES = ['pending_assessment', 'assessor_review', 'assessed'];
   const db = getAdminDb();
 
   // Firestore `in` supports up to 30 values; programIds is typically 1-3.

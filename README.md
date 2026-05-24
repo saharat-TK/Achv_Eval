@@ -107,7 +107,7 @@ Only pre-provisioned emails can sign in. On a Google account's first sign-in
 
 Admins manage the allowlist at `/admin/users/allowlist` (single add, CSV
 import, per-row preset controls). Presets applied on first sign-in:
-**lecturer** (default on) and **program director** (pick a curriculum).
+**lecturer** (default on) and **program director** (pick an academic program).
 
 ### Roles
 
@@ -115,14 +115,17 @@ import, per-row preset controls). Presets applied on first sign-in:
 |---|---|---|
 | Super Admin | `roles.isSuperAdmin` (implies `isAdmin`) | the only role that can grant/revoke admin or super-admin, or edit/deactivate an admin |
 | Admin | `roles.isAdmin` | system-wide management of everything except admin accounts |
-| Program Director | `roles.directorOf[]` (curriculum ids) | per-curriculum management |
-| Assessor | `roles.assessorOf[]` | per-curriculum assessment sign-off |
-| Verifier | `roles.verifierOf[]` | per-curriculum final verification |
+| Program Director | `roles.directorOfAcademicPrograms[]` | all curriculum revisions under the selected academic program |
+| Assessor | `roles.assessorOfAcademicPrograms[]` | assessment sign-off for all curriculum revisions under the selected academic program |
+| Verifier | `roles.verifierOfAcademicPrograms[]` | final verification for all curriculum revisions under the selected academic program |
 | Lecturer | `roles.isLecturer` (+ `offerings.lecturerId`) | the lecturer workspace; offerings owned per assignment |
 
 A user can hold several roles; a cross-workspace switcher in every top bar
 lets multi-role users hop between the workspaces they can access. Lecturer is
 auto-granted (one-way) when someone is assigned as an offering's lecturer.
+For compatibility with existing offering queries, the server also mirrors the
+academic-program selections to the legacy curriculum arrays
+`roles.directorOf[]`, `roles.assessorOf[]`, and `roles.verifierOf[]`.
 Bootstrap the first super admin with `npm run assign-role -- <email> superadmin`.
 The full role × capability matrix lives in [`docs/ROLE_MATRIX.md`](docs/ROLE_MATRIX.md).
 
@@ -315,6 +318,7 @@ apphosting.yaml                       Firebase App Hosting config
 scripts/seed.ts                       OHS seed (department + program + curriculum)
 scripts/assign-role.ts                Grant superadmin/admin/assessor/director
 scripts/backfill-lecturer-role.ts     One-off isLecturer backfill
+scripts/backfill-academic-program-role-scope.ts  One-off academic-program role backfill
 ```
 
 ## Commands
@@ -324,8 +328,9 @@ npm run dev               # Dev server
 npm run build             # Production build
 npm run typecheck         # tsc --noEmit
 npm run seed              # Seed Firestore with OHS data
-npm run assign-role -- <email> <superadmin|admin|assessor|director> [programId]
+npm run assign-role -- <email> <superadmin|admin|assessor|director> [academicProgramId]
 npm run backfill-lecturer-role        # Flag existing offering lecturers as isLecturer
+npm run backfill-academic-role-scope  # Migrate curriculum-scoped roles to academic-program scope
 npm run firebase:rules    # Deploy firestore.rules
 npm run firebase:indexes  # Deploy firestore.indexes.json
 

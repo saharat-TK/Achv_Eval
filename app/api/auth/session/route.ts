@@ -75,16 +75,37 @@ export async function POST(request: NextRequest) {
         presetDirectorProgramId?: string | null;
       };
       const fallback = decoded.email!.split('@')[0] ?? decoded.email!;
-      // Apply preset roles. Lecturer defaults true; director (per-program)
-      // only when the preset program still exists.
+      // Apply preset roles. Lecturer defaults true. Older allowlist rows may
+      // still store a curriculum id, so we also derive the academic-program id
+      // and keep the curriculum array as a compatibility mirror.
       const isLecturer = allow.presetIsLecturer !== false;
       let directorOf: string[] = [];
+      let directorOfAcademicPrograms: string[] = [];
       if (allow.presetIsDirector === true && allow.presetDirectorProgramId) {
         const prog = await db
           .collection('programs')
           .doc(allow.presetDirectorProgramId)
           .get();
-        if (prog.exists) directorOf = [allow.presetDirectorProgramId];
+        if (prog.exists) {
+          directorOf = [allow.presetDirectorProgramId];
+          const parentProgramId = prog.data()?.parentProgramId;
+          if (typeof parentProgramId === 'string' && parentProgramId) {
+            directorOfAcademicPrograms = [parentProgramId];
+          }
+        } else {
+          const academicProgram = await db
+            .collection('academicPrograms')
+            .doc(allow.presetDirectorProgramId)
+            .get();
+          if (academicProgram.exists) {
+            directorOfAcademicPrograms = [allow.presetDirectorProgramId];
+            const curriculums = await db
+              .collection('programs')
+              .where('parentProgramId', '==', allow.presetDirectorProgramId)
+              .get();
+            directorOf = curriculums.docs.map((doc) => doc.id);
+          }
+        }
       }
       await userRef.set({
         email: decoded.email,
@@ -98,6 +119,9 @@ export async function POST(request: NextRequest) {
           directorOf,
           assessorOf: [],
           verifierOf: [],
+          directorOfAcademicPrograms,
+          assessorOfAcademicPrograms: [],
+          verifierOfAcademicPrograms: [],
         },
         createdAt: FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp(),

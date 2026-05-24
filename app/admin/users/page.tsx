@@ -12,13 +12,22 @@ function roleSummary(roles: {
   directorOf?: string[];
   assessorOf?: string[];
   verifierOf?: string[];
+  directorOfAcademicPrograms?: string[];
+  assessorOfAcademicPrograms?: string[];
+  verifierOfAcademicPrograms?: string[];
 }): string {
   const parts: string[] = [];
+  const directorCount =
+    roles.directorOfAcademicPrograms?.length || roles.directorOf?.length || 0;
+  const assessorCount =
+    roles.assessorOfAcademicPrograms?.length || roles.assessorOf?.length || 0;
+  const verifierCount =
+    roles.verifierOfAcademicPrograms?.length || roles.verifierOf?.length || 0;
   if (roles.isSuperAdmin) parts.push('ผู้ดูแลระบบสูงสุด');
   if (roles.isAdmin && !roles.isSuperAdmin) parts.push('ผู้ดูแลระบบ');
-  if (roles.directorOf?.length) parts.push(`ประธานหลักสูตร (${roles.directorOf.length})`);
-  if (roles.assessorOf?.length) parts.push(`ผู้ทวนสอบ (${roles.assessorOf.length})`);
-  if (roles.verifierOf?.length) parts.push(`กรรมการรับรองผล (${roles.verifierOf.length})`);
+  if (directorCount) parts.push(`ประธานหลักสูตร (${directorCount})`);
+  if (assessorCount) parts.push(`ผู้ทวนสอบ (${assessorCount})`);
+  if (verifierCount) parts.push(`กรรมการรับรองผล (${verifierCount})`);
   if (roles.isLecturer) parts.push('อาจารย์ผู้รับผิดชอบ');
   return parts.length ? parts.join(' · ') : '—';
 }
