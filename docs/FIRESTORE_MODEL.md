@@ -45,14 +45,20 @@ user doc carries:
 ```
 roles: {
   isAdmin: boolean,
-  directorOf: [programId],
-  assessorOf: [programId],
-  verifierOf: [programId]
+  directorOfAcademicPrograms: [academicProgramId],
+  assessorOfAcademicPrograms: [academicProgramId],
+  verifierOfAcademicPrograms: [academicProgramId],
+  directorOf: [programId],   // compatibility mirror: curriculum ids
+  assessorOf: [programId],   // compatibility mirror: curriculum ids
+  verifierOf: [programId]    // compatibility mirror: curriculum ids
 }
 ```
 
-`verifierOf` is for verification committee members who can review
-final-assessed offerings for selected programs.
+`verifierOfAcademicPrograms` is for verification committee members who can
+review final-assessed offerings for selected academic programs.
+The role assignment UI writes academic-program ids and expands them to the
+legacy curriculum arrays so existing offering queries and rules can continue
+to authorize via `offerings.programId`.
 
 Rules authorize by reading the caller's own `users/{uid}` doc. The
 **lecturer** role is the exception: it is per-offering, so it lives on

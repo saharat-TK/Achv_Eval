@@ -1,7 +1,7 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import { FieldValue } from 'firebase-admin/firestore';
+import { FieldValue, type DocumentReference } from 'firebase-admin/firestore';
 import { getAdminDb } from '@/lib/firebase/admin';
 import { getSessionUser, getCurrentProfile } from '@/lib/firebase/auth-server';
 import type { ProgramLevel, PloSchema, ProgramPlo } from '@/lib/types/models';
@@ -91,6 +91,83 @@ async function writeAudit(
   });
 }
 
+async function syncCurriculumRoleMirrors(
+  curriculumId: string,
+  oldAcademicProgramId: string | null,
+  newAcademicProgramId: string | null,
+): Promise<void> {
+  if (oldAcademicProgramId === newAcademicProgramId) return;
+
+  const db = getAdminDb();
+  const rolePairs = [
+    ['directorOfAcademicPrograms', 'directorOf'],
+    ['assessorOfAcademicPrograms', 'assessorOf'],
+    ['verifierOfAcademicPrograms', 'verifierOf'],
+  ] as const;
+  const updates = new Map<
+    string,
+    {
+      ref: DocumentReference;
+      ops: Record<string, 'add' | 'remove'>;
+    }
+  >();
+
+  async function queue(
+    academicRoleField: string,
+    legacyRoleField: string,
+    academicProgramId: string,
+    op: 'add' | 'remove',
+  ) {
+    const snap = await db
+      .collection('users')
+      .where(`roles.${academicRoleField}`, 'array-contains', academicProgramId)
+      .get();
+    for (const doc of snap.docs) {
+      const existing = updates.get(doc.ref.path) ?? { ref: doc.ref, ops: {} };
+      const field = `roles.${legacyRoleField}`;
+      // If a user is assigned to both the old and new academic programs, keep
+      // the curriculum mirrored for that role.
+      if (op === 'add' || existing.ops[field] !== 'add') {
+        existing.ops[field] = op;
+      }
+      updates.set(doc.ref.path, existing);
+    }
+  }
+
+  await Promise.all(
+    rolePairs.flatMap(([academicRoleField, legacyRoleField]) => [
+      oldAcademicProgramId
+        ? queue(
+            academicRoleField,
+            legacyRoleField,
+            oldAcademicProgramId,
+            'remove',
+          )
+        : Promise.resolve(),
+      newAcademicProgramId
+        ? queue(academicRoleField, legacyRoleField, newAcademicProgramId, 'add')
+        : Promise.resolve(),
+    ]),
+  );
+
+  const entries = [...updates.values()];
+  for (let i = 0; i < entries.length; i += 450) {
+    const batch = db.batch();
+    for (const update of entries.slice(i, i + 450)) {
+      const data = Object.fromEntries(
+        Object.entries(update.ops).map(([field, op]) => [
+          field,
+          op === 'add'
+            ? FieldValue.arrayUnion(curriculumId)
+            : FieldValue.arrayRemove(curriculumId),
+        ]),
+      );
+      batch.update(update.ref, data);
+    }
+    await batch.commit();
+  }
+}
+
 /** Create a new program. Admin only. */
 export async function createProgram(data: ProgramFormData): Promise<ActionResult> {
   const user = await getSessionUser();
@@ -108,6 +185,7 @@ export async function createProgram(data: ProgramFormData): Promise<ActionResult
   const ref = await getAdminDb()
     .collection('programs')
     .add({ ...normalize(data), isActive: true, createdAt: now, updatedAt: now });
+  await syncCurriculumRoleMirrors(ref.id, null, data.parentProgramId ?? null);
 
   await writeAudit('program_created', ref.id, user.uid, user.email ?? null);
   revalidatePath('/admin');
@@ -133,10 +211,21 @@ export async function updateProgram(
   const deptErr = await validateDepartment(data);
   if (deptErr) return { ok: false, error: deptErr };
 
-  await getAdminDb()
-    .collection('programs')
-    .doc(programId)
-    .update({ ...normalize(data), updatedAt: FieldValue.serverTimestamp() });
+  const programRef = getAdminDb().collection('programs').doc(programId);
+  const beforeSnap = await programRef.get();
+  if (!beforeSnap.exists) return { ok: false, error: 'ไม่พบหลักสูตร' };
+  const oldParentProgramId =
+    (beforeSnap.data()?.parentProgramId as string | undefined) ?? null;
+
+  await programRef.update({
+    ...normalize(data),
+    updatedAt: FieldValue.serverTimestamp(),
+  });
+  await syncCurriculumRoleMirrors(
+    programId,
+    oldParentProgramId,
+    data.parentProgramId ?? null,
+  );
 
   await writeAudit('program_updated', programId, user.uid, user.email ?? null);
   revalidatePath('/admin');
@@ -384,4 +473,3 @@ export async function checkProgramBlockers(
     },
   };
 }
-

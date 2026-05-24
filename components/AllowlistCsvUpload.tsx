@@ -113,7 +113,7 @@ export default function AllowlistCsvUpload({
         const directorIdx = headers.indexOf('director');
         const directorProgramIdx = headers.indexOf('directorprogram');
 
-        // Resolve a program code → id (case-insensitive).
+        // Resolve an academic program code → id (case-insensitive).
         const byCode = new Map(
           programs.map((p) => [p.code.trim().toLowerCase(), p]),
         );
@@ -210,7 +210,8 @@ export default function AllowlistCsvUpload({
             คอลัมน์ที่ต้องมี: <code>email</code>. คอลัมน์เสริม:{' '}
             <code>nameTh</code>, <code>nameEn</code>, <code>notes</code>,{' '}
             <code>lecturer</code>, <code>director</code>,{' '}
-            <code>directorProgram</code> (รหัสหลักสูตร) — ลำดับไม่สำคัญ.
+            <code>directorProgram</code> (รหัสหลักสูตร ไม่ใช่เล่มหลักสูตร) —
+            ลำดับไม่สำคัญ.
             <code>lecturer</code> เริ่มต้นเป็นจริง, <code>director</code>{' '}
             เริ่มต้นเป็นเท็จ (รับค่า true/1/yes)
           </p>
