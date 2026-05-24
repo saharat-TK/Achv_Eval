@@ -111,7 +111,7 @@ function toDoc(programId: string, data: CourseFormData) {
     type: data.type,
     yearOfStudy: data.yearOfStudy ?? null,
     semester: data.semester ?? null,
-    isActive: data.isActive,
+    // isActive is owned by the course lifecycle panel; only create sets it.
   };
 }
 
@@ -134,7 +134,7 @@ export async function createCourse(
   const now = FieldValue.serverTimestamp();
   const ref = await getAdminDb()
     .collection('courses')
-    .add({ ...toDoc(programId, data), createdAt: now, updatedAt: now });
+    .add({ ...toDoc(programId, data), isActive: true, createdAt: now, updatedAt: now });
 
   await audit('course_created', ref.id, user.uid, user.email ?? null);
   revalidatePath(`/admin/programs/${programId}/courses`);

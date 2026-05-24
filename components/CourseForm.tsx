@@ -149,14 +149,6 @@ export default function CourseForm({
             </select>
           </label>
         </div>
-        <label className="mt-3 flex items-center gap-2 text-xs text-slate-600">
-          <input
-            type="checkbox"
-            checked={form.isActive}
-            onChange={(e) => set('isActive', e.target.checked)}
-          />
-          เปิดใช้งานรายวิชา
-        </label>
       </section>
 
       {error && <p className="text-sm text-red-600">{error}</p>}

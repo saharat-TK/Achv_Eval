@@ -45,7 +45,8 @@ function normalize(data: ProgramFormData) {
     school: data.school?.trim() || 'Health Science',
     level: data.level,
     ploDomainSchema: data.ploDomainSchema,
-    isActive: data.isActive,
+    // isActive is intentionally NOT written here — it is owned solely by
+    // the lifecycle panel (soft-delete / restore). Only create sets it.
     departmentId: data.departmentId ?? null,
     parentProgramId: data.parentProgramId ?? null,
     plos: data.plos.map((p) => ({
@@ -106,7 +107,7 @@ export async function createProgram(data: ProgramFormData): Promise<ActionResult
   const now = FieldValue.serverTimestamp();
   const ref = await getAdminDb()
     .collection('programs')
-    .add({ ...normalize(data), createdAt: now, updatedAt: now });
+    .add({ ...normalize(data), isActive: true, createdAt: now, updatedAt: now });
 
   await writeAudit('program_created', ref.id, user.uid, user.email ?? null);
   revalidatePath('/admin');
