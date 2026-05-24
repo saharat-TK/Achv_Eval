@@ -42,3 +42,6 @@ next-env.d.ts
 
 # Vercel
 .vercel
+
+# Local scratch space — secret-setup temp files, never commit
+scratch/
