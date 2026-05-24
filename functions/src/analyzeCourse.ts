@@ -85,6 +85,17 @@ export const analyzeCourse = onCall(
       throw new HttpsError('permission-denied', 'ท่านไม่ใช่ผู้รับผิดชอบรายวิชานี้');
     }
 
+    // ----- Pick the guideline by program level ------------------------
+    const programSnap = await db.collection('programs').doc(offering.programId).get();
+    const program = programSnap.data() as { level?: string } | undefined;
+    const promptTemplate =
+      program?.level === 'undergraduate' ? 'CLAUDE.undergrad.md' : 'CLAUDE.master.md';
+    const guideline = readFileSync(
+      join(__dirname, '..', 'prompts', promptTemplate),
+      'utf-8',
+    );
+
+    const model = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
     const model = process.env.GEMINI_MODEL || 'gemini-2.5-pro';
 
     // Existing offerings may predate attempt counters. Count current reports
