@@ -50,6 +50,8 @@ AUTOMATED MODE — OVERRIDES (take precedence over the guideline above)
   ignore "ขั้นตอนที่ 0" and proceed directly.
 - Do NOT produce a .docx file. Return ONE JSON object only — no prose or
   markdown code fences around it.
+- JSON string values must be valid JSON strings: escape line breaks as \\n
+  and escape double quotes inside Markdown content.
 - Base every statement on the attached documents. If evidence is missing,
   write "ไม่พบหลักฐานในเอกสารที่ได้รับ".
 - Be thorough and detailed. Do not summarise away substance — this output
@@ -70,6 +72,8 @@ interface Usage {
 async function callJson<T>(args: {
   genAI: GoogleGenerativeAI;
   model: string;
+  label: string;
+  schemaHint: string;
   systemInstruction: string;
   userText: string;
   files: InputFile[];
@@ -80,7 +84,7 @@ async function callJson<T>(args: {
     generationConfig: {
       responseMimeType: 'application/json',
       temperature: 0.3,
-      maxOutputTokens: 32768,
+      maxOutputTokens: 65536,
     },
   });
 
@@ -90,20 +94,177 @@ async function callJson<T>(args: {
     ],
   });
 
-  const text = resp.response.text();
-  let data: T;
-  try {
-    data = JSON.parse(text) as T;
-  } catch {
-    throw new Error('Gemini returned output that is not valid JSON');
+  const finishReason = resp.response.candidates?.[0]?.finishReason;
+  if (finishReason === 'MAX_TOKENS') {
+    throw new Error(`${args.label}: Gemini output was cut off before JSON completed`);
   }
+
+  const text = resp.response.text();
+  const usage = {
+    input: resp.response.usageMetadata?.promptTokenCount ?? 0,
+    output: resp.response.usageMetadata?.candidatesTokenCount ?? 0,
+  };
+  try {
+    return {
+      data: parseJson<T>(text),
+      usage,
+    };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'invalid JSON';
+    console.warn('Gemini returned malformed JSON; attempting repair', {
+      section: args.label,
+      outputLength: text.length,
+      outputPreview: preview(text),
+    });
+
+    try {
+      const repaired = await repairJson<T>({
+        genAI: args.genAI,
+        model: args.model,
+        label: args.label,
+        schemaHint: args.schemaHint,
+        malformedText: text,
+      });
+      return {
+        data: repaired.data,
+        usage: addUsage(usage, repaired.usage),
+      };
+    } catch (repairErr) {
+      console.warn('Gemini JSON repair failed', {
+        section: args.label,
+        error: repairErr instanceof Error ? repairErr.message : String(repairErr),
+      });
+    }
+
+    throw new Error(`${args.label}: ${message}`);
+  }
+}
+
+async function repairJson<T>(args: {
+  genAI: GoogleGenerativeAI;
+  model: string;
+  label: string;
+  schemaHint: string;
+  malformedText: string;
+}): Promise<{ data: T; usage: Usage }> {
+  const model = args.genAI.getGenerativeModel({
+    model: args.model,
+    systemInstruction:
+      'You are a JSON repair tool. Return only one valid JSON object. ' +
+      'Do not summarize, translate, add, remove, or reword content.',
+    generationConfig: {
+      responseMimeType: 'application/json',
+      temperature: 0,
+      maxOutputTokens: 65536,
+    },
+  });
+
+  const resp = await model.generateContent({
+    contents: [
+      {
+        role: 'user',
+        parts: [
+          {
+            text:
+              `Repair the malformed JSON output for ${args.label}.\n\n` +
+              `Required JSON shape:\n${args.schemaHint}\n\n` +
+              'Rules:\n' +
+              '- Return JSON only. No markdown code fence, prose, or commentary.\n' +
+              '- Preserve the original content exactly as much as possible.\n' +
+              '- Escape all line breaks inside string values as \\n.\n' +
+              '- Escape double quotes inside string values as \\".\n\n' +
+              'Malformed output:\n' +
+              args.malformedText,
+          },
+        ],
+      },
+    ],
+  });
+
+  const finishReason = resp.response.candidates?.[0]?.finishReason;
+  if (finishReason === 'MAX_TOKENS') {
+    throw new Error(`${args.label}: JSON repair output was cut off`);
+  }
+
   return {
-    data,
+    data: parseJson<T>(resp.response.text()),
     usage: {
       input: resp.response.usageMetadata?.promptTokenCount ?? 0,
       output: resp.response.usageMetadata?.candidatesTokenCount ?? 0,
     },
   };
+}
+
+function addUsage(a: Usage, b: Usage): Usage {
+  return {
+    input: a.input + b.input,
+    output: a.output + b.output,
+  };
+}
+
+function preview(text: string): string {
+  return text.replace(/\s+/g, ' ').slice(0, 300);
+}
+
+function parseJson<T>(raw: string): T {
+  const text = raw.trim();
+  if (!text) {
+    throw new Error('Gemini returned empty output instead of JSON');
+  }
+
+  const candidates = [
+    text,
+    stripCodeFence(text),
+    extractFirstJsonObject(text),
+  ].filter((value): value is string => Boolean(value));
+
+  for (const candidate of candidates) {
+    try {
+      return JSON.parse(candidate) as T;
+    } catch {
+      // Try the next candidate.
+    }
+  }
+
+  throw new Error('Gemini returned output that is not valid JSON');
+}
+
+function stripCodeFence(text: string): string | null {
+  const match = text.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i);
+  return match?.[1]?.trim() ?? null;
+}
+
+function extractFirstJsonObject(text: string): string | null {
+  const start = text.indexOf('{');
+  if (start < 0) return null;
+
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+
+  for (let i = start; i < text.length; i++) {
+    const ch = text[i];
+
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+    if (ch === '\\') {
+      escaped = true;
+      continue;
+    }
+    if (ch === '"') {
+      inString = !inString;
+      continue;
+    }
+    if (inString) continue;
+
+    if (ch === '{') depth++;
+    if (ch === '}') depth--;
+    if (depth === 0) return text.slice(start, i + 1).trim();
+  }
+
+  return null;
 }
 
 /**
@@ -125,6 +286,8 @@ export async function runAnalysis(args: {
   const call1 = callJson<{ content: string }>({
     genAI,
     model,
+    label: 'ส่วนที่ 1',
+    schemaHint: '{ "content": "<Markdown รายละเอียดของส่วนที่ 1>" }',
     systemInstruction: system,
     files,
     userText:
@@ -144,6 +307,12 @@ export async function runAnalysis(args: {
   }>({
     genAI,
     model,
+    label: 'ส่วนที่ 2',
+    schemaHint:
+      '{ "content": "<Markdown รายละเอียดของส่วนที่ 2>", ' +
+      '"overallSummary": "<บทสรุปผู้บริหารแบบ Markdown>", ' +
+      '"criticalIssues": ["<ประเด็น Critical>", "..."], ' +
+      '"courseCodeDetected": "<รหัสวิชาที่พบในเอกสาร>" }',
     systemInstruction: system,
     files,
     userText:
@@ -161,6 +330,8 @@ export async function runAnalysis(args: {
   const call3 = callJson<{ content: string }>({
     genAI,
     model,
+    label: 'ส่วนที่ 3',
+    schemaHint: '{ "content": "<Markdown ร่าง มคอ.3 ฉบับปรับปรุง>" }',
     systemInstruction: system,
     files,
     userText:
@@ -168,6 +339,8 @@ export async function runAnalysis(args: {
       'แก้ไขทุกจุดอ่อนที่พบ คงจุดเด่นไว้ ประกอบด้วยบทสรุปการเปลี่ยนแปลง ' +
       'และร่างข้อความฉบับสมบูรณ์ — หมวดที่ 4 (แผนการสอน) ต้องเป็น ' +
       'ตารางสมบูรณ์ครบทุกสัปดาห์. ' +
+      'ห้ามใช้ Markdown code fence. ค่า content ต้องเป็น JSON string เดียวเท่านั้น ' +
+      'และต้อง escape เครื่องหมาย " และ line break เป็น \\n. ' +
       'ส่งผลเป็น JSON: { "content": "<Markdown ร่าง มคอ.3 ฉบับปรับปรุง>" }',
   });
 
@@ -181,6 +354,15 @@ export async function runAnalysis(args: {
   }>({
     genAI,
     model,
+    label: 'ส่วนที่ 4',
+    schemaHint:
+      '{ "items": [ { "key": "item1Clo|item21Content|item22Methods|' +
+      'item31AssessmentMethods|item32AssessmentForms|item33Proportions|' +
+      'item34ExamQuality", "labelTh": "<ชื่อหัวข้อ>", "score": 1|2|3, ' +
+      '"strengths": "<ข้อดี>", "improvements": "<ข้อพัฒนา>" } ], ' +
+      '"totalScore": <ผลรวม>, "maxScore": 21, ' +
+      '"percent": <ร้อยละ ทศนิยม 1 ตำแหน่ง>, ' +
+      '"band": "improve|good|excellent" }',
     systemInstruction: system,
     files,
     userText:

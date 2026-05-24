@@ -13,7 +13,15 @@ export type OfferingWithId = OfferingDoc & { id: string };
 export async function getOffering(offeringId: string): Promise<OfferingWithId | null> {
   const snap = await getAdminDb().collection('offerings').doc(offeringId).get();
   if (!snap.exists) return null;
-  return { id: snap.id, ...(snap.data() as OfferingDoc) };
+  const offering = { id: snap.id, ...(snap.data() as OfferingDoc) };
+  if (typeof offering.analysisAttemptCount !== 'number') {
+    const reports = await snap.ref.collection('aiReports').count().get();
+    offering.analysisAttemptCount = Math.min(
+      reports.data().count,
+      offering.analysisAttemptLimit ?? 4,
+    );
+  }
+  return offering;
 }
 
 /**

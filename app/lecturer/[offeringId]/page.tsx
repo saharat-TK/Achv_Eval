@@ -70,7 +70,12 @@ export default async function OfferingDetailPage({
           ที่สร้างขึ้นเท่านั้น
         </p>
         <div className="mt-3">
-          <AnalyzeCoursePanel offeringId={offering.id} />
+          <AnalyzeCoursePanel
+            offeringId={offering.id}
+            status={offering.status}
+            attemptLimit={offering.analysisAttemptLimit ?? 4}
+            attemptCount={offering.analysisAttemptCount ?? 0}
+          />
         </div>
       </section>
 
@@ -83,6 +88,7 @@ export default async function OfferingDetailPage({
           offeringId={offering.id}
           combinedReportUrl={assessment?.signedPdfUrl ?? null}
           combinedReportPending={Boolean(assessment && !assessment.signedPdfUrl)}
+          enableAssessmentHandoff
         />
       </section>
     </div>

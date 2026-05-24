@@ -35,6 +35,7 @@ const STATUS_SORT: Record<OfferingStatus, number> = {
   ready_for_ai: 9,
   ai_in_progress: 9,
   ai_complete: 9,
+  pending_assessment: 9,
   assessor_review: 9,
   pending_review_next_semester: 9,
   implemented: 9,

@@ -27,7 +27,7 @@ interface Offering {
 }
 
 const ASSESSOR_STATUSES: OfferingStatus[] = [
-  'ai_complete',
+  'pending_assessment',
   'assessor_review',
   'assessed',
 ];

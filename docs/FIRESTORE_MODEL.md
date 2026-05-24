@@ -72,6 +72,11 @@ Subcollections keep them naturally partitioned and let security rules
 inherit the offering's `programId` via the parent path. (There is no
 `uploads` subcollection — see "Files are NOT stored" above.)
 
+Each offering allows at most 4 accepted AI-analysis attempts. The counter
+lives on `OfferingDoc.analysisAttemptCount`; failed accepted runs still count.
+Only the latest `aiReports/{reportId}` document is retained for the offering,
+and it records the offering's `academicYear`, `semester`, and `createdAt`.
+
 ### 4. `programId` and course identity are denormalized onto offerings
 
 Security rules and list views need the program and course code without a
@@ -112,8 +117,9 @@ draft
   → documents_pending      (lecturer assigned, awaiting uploads)
   → ready_for_ai           (required files uploaded)
   → ai_in_progress
-  → ai_complete
-  → assessor_review
+  → ai_complete            (AI report ready; lecturer may review/re-run)
+  → pending_assessment     (lecturer sent result to assessor queue)
+  → assessor_review        (assessor saved a draft)
   → assessed               (assessor signed off)
   → verification_review
   → verified | needs_follow_up   (committee final verification)

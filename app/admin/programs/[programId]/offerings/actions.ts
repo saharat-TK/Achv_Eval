@@ -6,6 +6,8 @@ import { getAdminDb } from '@/lib/firebase/admin';
 import { getSessionUser, getCurrentProfile } from '@/lib/firebase/auth-server';
 import type { Semester, OfferingStatus, OfferingDoc } from '@/lib/types/models';
 
+const ANALYSIS_ATTEMPT_LIMIT = 4;
+
 export interface OfferingFormData {
   courseId: string;
   academicYear: number;
@@ -134,6 +136,8 @@ export async function createOffering(
     status,
     previousOfferingId: null,
     latestAiReportId: null,
+    analysisAttemptLimit: ANALYSIS_ATTEMPT_LIMIT,
+    analysisAttemptCount: 0,
     assessmentId: null,
     isActive: true,
     createdAt: now,
@@ -250,6 +254,8 @@ export async function cloneOfferings(
       status: src.lecturerId ? 'documents_pending' : 'draft',
       previousOfferingId: src.id,
       latestAiReportId: null,
+      analysisAttemptLimit: ANALYSIS_ATTEMPT_LIMIT,
+      analysisAttemptCount: 0,
       assessmentId: null,
       isActive: true,
       createdAt: now,
@@ -418,6 +424,8 @@ export async function bulkCreateOfferingsFromCourses(
       status,
       previousOfferingId: null,
       latestAiReportId: null,
+      analysisAttemptLimit: ANALYSIS_ATTEMPT_LIMIT,
+      analysisAttemptCount: 0,
       assessmentId: null,
       isActive: true,
       createdAt: now,
