@@ -91,8 +91,8 @@ interface NormalizedPresets {
 
 /**
  * Validate + normalize the preset role fields. Lecturer defaults to true
- * when unspecified. Director requires an existing program; returns an
- * error reason otherwise.
+ * when unspecified. Director requires an existing academic program; returns
+ * an error reason otherwise.
  */
 async function resolvePresets(
   input: AllowlistEntryInput,
@@ -106,7 +106,7 @@ async function resolvePresets(
     if (!pid) {
       return { ok: false, reason: 'เลือกประธานหลักสูตรต้องระบุหลักสูตร' };
     }
-    const prog = await getAdminDb().collection('programs').doc(pid).get();
+    const prog = await getAdminDb().collection('academicPrograms').doc(pid).get();
     if (!prog.exists) {
       return { ok: false, reason: 'ไม่พบหลักสูตรที่เลือกสำหรับประธานหลักสูตร' };
     }

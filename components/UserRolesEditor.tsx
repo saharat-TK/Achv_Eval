@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { updateUserRoles, type UserRolesData } from '@/app/admin/users/actions';
 
-export interface ProgramOption {
+export interface AcademicProgramOption {
   id: string;
   code: string;
   nameTh: string;
@@ -13,13 +13,13 @@ export interface ProgramOption {
 export default function UserRolesEditor({
   userId,
   isSelf,
-  programs,
+  academicPrograms,
   initial,
   canManageAdmins = false,
 }: {
   userId: string;
   isSelf: boolean;
-  programs: ProgramOption[];
+  academicPrograms: AcademicProgramOption[];
   initial: UserRolesData;
   /** Whether the viewer is a super admin — gates the admin checkboxes. */
   canManageAdmins?: boolean;
@@ -28,9 +28,15 @@ export default function UserRolesEditor({
   const [isSuperAdmin, setIsSuperAdmin] = useState(initial.isSuperAdmin);
   const [isAdmin, setIsAdmin] = useState(initial.isAdmin);
   const [isLecturer, setIsLecturer] = useState(initial.isLecturer);
-  const [directorOf, setDirectorOf] = useState<string[]>(initial.directorOf);
-  const [assessorOf, setAssessorOf] = useState<string[]>(initial.assessorOf);
-  const [verifierOf, setVerifierOf] = useState<string[]>(initial.verifierOf);
+  const [directorOfAcademicPrograms, setDirectorOfAcademicPrograms] = useState<
+    string[]
+  >(initial.directorOfAcademicPrograms);
+  const [assessorOfAcademicPrograms, setAssessorOfAcademicPrograms] = useState<
+    string[]
+  >(initial.assessorOfAcademicPrograms);
+  const [verifierOfAcademicPrograms, setVerifierOfAcademicPrograms] = useState<
+    string[]
+  >(initial.verifierOfAcademicPrograms);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
@@ -50,9 +56,9 @@ export default function UserRolesEditor({
       isSuperAdmin,
       isAdmin,
       isLecturer,
-      directorOf,
-      assessorOf,
-      verifierOf,
+      directorOfAcademicPrograms,
+      assessorOfAcademicPrograms,
+      verifierOfAcademicPrograms,
     });
     setBusy(false);
     if (res.ok) {
@@ -142,33 +148,33 @@ export default function UserRolesEditor({
       </section>
 
       {/* Director */}
-      <RoleProgramPicker
+      <RoleAcademicProgramPicker
         title="ประธานหลักสูตร"
-        hint="จัดการหลักสูตร รายวิชา และรายวิชาที่เปิดสอนของหลักสูตรที่เลือก"
-        programs={programs}
-        selected={directorOf}
+        hint="จัดการเล่มหลักสูตร รายวิชา และรายวิชาที่เปิดสอนทั้งหมดภายใต้หลักสูตรที่เลือก"
+        academicPrograms={academicPrograms}
+        selected={directorOfAcademicPrograms}
         disabled={locked}
-        onToggle={(id) => setDirectorOf((l) => toggle(l, id))}
+        onToggle={(id) => setDirectorOfAcademicPrograms((l) => toggle(l, id))}
       />
 
       {/* Assessor */}
-      <RoleProgramPicker
+      <RoleAcademicProgramPicker
         title="ผู้ทวนสอบ"
-        hint="ทวนสอบรายวิชาในหลักสูตรที่เลือก"
-        programs={programs}
-        selected={assessorOf}
+        hint="ทวนสอบรายวิชาในทุกเล่มหลักสูตรภายใต้หลักสูตรที่เลือก"
+        academicPrograms={academicPrograms}
+        selected={assessorOfAcademicPrograms}
         disabled={locked}
-        onToggle={(id) => setAssessorOf((l) => toggle(l, id))}
+        onToggle={(id) => setAssessorOfAcademicPrograms((l) => toggle(l, id))}
       />
 
       {/* Verification committee */}
-      <RoleProgramPicker
+      <RoleAcademicProgramPicker
         title="คณะกรรมการรับรองผล"
         hint="ตรวจรับรองผลหลังผู้ทวนสอบลงนาม และกำหนดรายการที่ต้องติดตาม"
-        programs={programs}
-        selected={verifierOf}
+        academicPrograms={academicPrograms}
+        selected={verifierOfAcademicPrograms}
         disabled={locked}
-        onToggle={(id) => setVerifierOf((l) => toggle(l, id))}
+        onToggle={(id) => setVerifierOfAcademicPrograms((l) => toggle(l, id))}
       />
 
       {msg && (
@@ -188,17 +194,17 @@ export default function UserRolesEditor({
   );
 }
 
-function RoleProgramPicker({
+function RoleAcademicProgramPicker({
   title,
   hint,
-  programs,
+  academicPrograms,
   selected,
   onToggle,
   disabled = false,
 }: {
   title: string;
   hint: string;
-  programs: ProgramOption[];
+  academicPrograms: AcademicProgramOption[];
   selected: string[];
   onToggle: (id: string) => void;
   disabled?: boolean;
@@ -207,11 +213,11 @@ function RoleProgramPicker({
     <section className="rounded-xl border border-slate-200 bg-white p-5">
       <h2 className="text-sm font-semibold text-slate-700">{title}</h2>
       <p className="mt-1 text-xs text-slate-500">{hint}</p>
-      {programs.length === 0 ? (
+      {academicPrograms.length === 0 ? (
         <p className="mt-3 text-sm text-slate-400">ยังไม่มีหลักสูตรในระบบ</p>
       ) : (
         <div className="mt-3 space-y-2">
-          {programs.map((p) => (
+          {academicPrograms.map((p) => (
             <label
               key={p.id}
               className={`flex items-center gap-2 text-sm ${

@@ -13,11 +13,14 @@ when role behaviour changes.
 - **Admin** — `users/{uid}.roles.isAdmin = true`. System-wide management
   of programs, courses, offerings, and non-admin users. Cannot touch
   admin or super-admin accounts.
-- **Program Admin** — `directorOf` contains the program id. Per-program;
+- **Program Admin** — `directorOfAcademicPrograms` contains the academic
+  program id. Applies to every curriculum revision under that program;
   also referred to as ประธานหลักสูตร / program director.
-- **Assessor** — `assessorOf` contains the program id. Per-program.
-- **Verifier** — `verifierOf` contains the program id. Per-program;
-  member of the verification committee.
+- **Assessor** — `assessorOfAcademicPrograms` contains the academic program
+  id. Applies to every curriculum revision under that program.
+- **Verifier** — `verifierOfAcademicPrograms` contains the academic program
+  id. Applies to every curriculum revision under that program; member of
+  the verification committee.
 - **Lecturer** — `offerings/{id}.lecturerId == uid` decides *which*
   offerings a user owns (per-offering). A `users/{uid}.roles.isLecturer`
   flag (auto-granted one-way on offering assignment, also settable
@@ -27,6 +30,10 @@ when role behaviour changes.
 
 A user can hold more than one role; checks short-circuit on the first
 matching role.
+
+For compatibility with existing offering queries and Firestore rules, the
+server mirrors academic-program assignments into the legacy curriculum arrays
+`directorOf`, `assessorOf`, and `verifierOf`.
 
 ## Capability matrix
 
@@ -85,7 +92,8 @@ under **Users & roles**.
 ## Notes on design intent
 
 1. **Sign-off is strictly role-bound.** Signing an assessment requires
-   `assessorOf`; signing a final verification requires `verifierOf`.
+   assessor assignment for the offering's academic program; signing a final
+   verification requires verifier assignment for that academic program.
    The signature carries the signer's name and date — admins do not
    sign on behalf of a committee. This is enforced by the server
    routes (`/api/assessor/submit`, `/api/verification/submit`) and by
@@ -100,8 +108,8 @@ under **Users & roles**.
    lecturer for one offering and not another.
 4. **Verifier ⊃ committee.** Directors of a program are not
    implicitly on the verification committee. To sit on it, the
-   director must also be added to `verifierOf` for their program.
-5. **Admin viewing.** An admin without `assessorOf` may still enter
+   director must also be added as a verifier for that academic program.
+5. **Admin viewing.** An admin without an assessor assignment may still enter
    `/assessor` to view offerings — but cannot sign. Useful for support.
 6. **Audit log is read-only and admin-only.** The collection is
    write-disabled for clients; server actions append. Admins (and

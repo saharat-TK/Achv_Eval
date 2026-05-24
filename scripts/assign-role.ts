@@ -5,12 +5,12 @@
  * Usage:
  *   npm run assign-role -- <email> superadmin
  *   npm run assign-role -- <email> admin
- *   npm run assign-role -- <email> assessor <programId>
- *   npm run assign-role -- <email> director <programId>
+ *   npm run assign-role -- <email> assessor <academicProgramId>
+ *   npm run assign-role -- <email> director <academicProgramId>
  *
  * Example:
  *   npm run assign-role -- saharat.arr@mfu.ac.th superadmin
- *   npm run assign-role -- saharat.arr@mfu.ac.th assessor ohs-bsc
+ *   npm run assign-role -- saharat.arr@mfu.ac.th assessor ohs-bsc-program
  *
  * Note: "superadmin" is the bootstrap for the first super admin (the only
  * role that can manage other admins). After that, super admins promote
@@ -31,15 +31,15 @@ if (!admin.apps.length) {
 const db = admin.firestore();
 
 async function main() {
-  const [email, role, programId] = process.argv.slice(2);
+  const [email, role, academicProgramId] = process.argv.slice(2);
   if (!email || !role) {
     console.error(
-      'Usage: npm run assign-role -- <email> <superadmin|admin|assessor|director> [programId]',
+      'Usage: npm run assign-role -- <email> <superadmin|admin|assessor|director> [academicProgramId]',
     );
     process.exit(1);
   }
-  if ((role === 'assessor' || role === 'director') && !programId) {
-    console.error(`Role "${role}" requires a programId.`);
+  if ((role === 'assessor' || role === 'director') && !academicProgramId) {
+    console.error(`Role "${role}" requires an academicProgramId.`);
     process.exit(1);
   }
 
@@ -53,6 +53,22 @@ async function main() {
     process.exit(1);
   }
   const userRef = userSnap.docs[0].ref;
+  let curriculumIds: string[] = [];
+  if (role === 'assessor' || role === 'director') {
+    const academicProgram = await db
+      .collection('academicPrograms')
+      .doc(academicProgramId)
+      .get();
+    if (!academicProgram.exists) {
+      console.error(`No academic program with id ${academicProgramId}.`);
+      process.exit(1);
+    }
+    const curriculums = await db
+      .collection('programs')
+      .where('parentProgramId', '==', academicProgramId)
+      .get();
+    curriculumIds = curriculums.docs.map((doc) => doc.id);
+  }
 
   if (role === 'superadmin') {
     // Super admin is a strict superset of admin — set both.
@@ -63,13 +79,25 @@ async function main() {
   } else if (role === 'admin') {
     await userRef.update({ 'roles.isAdmin': true });
   } else if (role === 'assessor') {
-    await userRef.update({
-      'roles.assessorOf': admin.firestore.FieldValue.arrayUnion(programId),
-    });
+    const update: Record<string, unknown> = {
+      'roles.assessorOfAcademicPrograms':
+        admin.firestore.FieldValue.arrayUnion(academicProgramId),
+    };
+    if (curriculumIds.length > 0) {
+      update['roles.assessorOf'] =
+        admin.firestore.FieldValue.arrayUnion(...curriculumIds);
+    }
+    await userRef.update(update);
   } else if (role === 'director') {
-    await userRef.update({
-      'roles.directorOf': admin.firestore.FieldValue.arrayUnion(programId),
-    });
+    const update: Record<string, unknown> = {
+      'roles.directorOfAcademicPrograms':
+        admin.firestore.FieldValue.arrayUnion(academicProgramId),
+    };
+    if (curriculumIds.length > 0) {
+      update['roles.directorOf'] =
+        admin.firestore.FieldValue.arrayUnion(...curriculumIds);
+    }
+    await userRef.update(update);
   } else {
     console.error(
       `Unknown role "${role}". Use superadmin, admin, assessor, or director.`,
@@ -78,7 +106,9 @@ async function main() {
   }
 
   console.log(
-    `Granted "${role}"${programId ? ` (${programId})` : ''} to ${email}.`,
+    `Granted "${role}"${
+      academicProgramId ? ` (${academicProgramId})` : ''
+    } to ${email}.`,
   );
 }
 
