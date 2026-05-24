@@ -29,6 +29,16 @@ interface YearGroup {
 }
 
 /**
+ * Single uniform year-header style — Starbucks House Green (#00704A):
+ * a soft green tint with a deep-green left accent and matching text.
+ * Full class strings (not interpolated) so Tailwind keeps them.
+ */
+const YEAR_STYLE = {
+  bar: 'border-[#00704A]/20 border-l-[#00704A] bg-[#00704A]/[0.06]',
+  text: 'text-[#00704A]',
+};
+
+/**
  * Live list of the lecturer's assigned offerings, grouped by academic year
  * (latest → oldest) and, within each year, by semester ordered summer →
  * 2nd → 1st (semester 3 → 2 → 1). Year sections are collapsible; the
@@ -133,12 +143,13 @@ export default function LecturerOfferingsTable({ uid }: { uid: string }) {
     <div className="mt-6 space-y-4">
       {groups.map((g, idx) => {
         const isOpen = expanded.has(g.year);
+        const palette = YEAR_STYLE;
         return (
           <section key={g.year}>
             <button
               type="button"
               onClick={() => toggleYear(g.year)}
-              className="flex w-full items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-left hover:bg-slate-50"
+              className={`flex w-full items-center justify-between gap-3 rounded-xl border border-l-4 px-4 py-3 text-left transition-colors hover:brightness-[0.98] ${palette.bar}`}
             >
               <span className="flex items-center gap-2">
                 <svg
@@ -149,21 +160,21 @@ export default function LecturerOfferingsTable({ uid }: { uid: string }) {
                   strokeWidth={2}
                   strokeLinecap="round"
                   strokeLinejoin="round"
-                  className={`h-4 w-4 text-slate-400 transition-transform ${isOpen ? 'rotate-90' : ''}`}
+                  className={`h-4 w-4 transition-transform ${isOpen ? 'rotate-90' : ''} ${palette.text} opacity-60`}
                   aria-hidden
                 >
                   <polyline points="9 18 15 12 9 6" />
                 </svg>
-                <span className="text-base font-semibold text-slate-800">
+                <span className={`text-base font-semibold ${palette.text}`}>
                   ปีการศึกษา {g.year}
                 </span>
                 {idx === 0 && (
-                  <span className="rounded-full bg-mfu-primary/10 px-2 py-0.5 text-xs font-medium text-mfu-primary">
+                  <span className="rounded-full bg-mfu-primary px-2 py-0.5 text-xs font-medium text-white">
                     ล่าสุด
                   </span>
                 )}
               </span>
-              <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-600">
+              <span className="rounded-full bg-white/70 px-2.5 py-0.5 text-xs font-medium text-slate-600">
                 {g.count} รายวิชา
               </span>
             </button>
