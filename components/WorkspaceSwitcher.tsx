@@ -1,3 +1,6 @@
+'use client';
+
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 
 export type WorkspaceKey = 'admin' | 'verification' | 'assessor' | 'lecturer';
@@ -49,11 +52,20 @@ const WORKSPACES: WorkspaceDef[] = [
   },
 ];
 
+interface Rect {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+}
+
 /**
  * Cross-workspace switcher shown in every workspace top bar. Renders a
- * segmented pill control (one pill per workspace the user can access) so
- * multi-role users can switch with a single tap. Hidden when only one
- * workspace is available. Pills wrap to a new line on narrow screens.
+ * segmented pill control with a sliding white "thumb" that glides under
+ * the highlighted pill — it follows the cursor on hover and rests on the
+ * current workspace otherwise. Clicking a pill navigates to that
+ * workspace (each has its own menu bar). Hidden when only one workspace
+ * is available; pills wrap on narrow screens.
  */
 export default function WorkspaceSwitcher({
   current,
@@ -63,32 +75,85 @@ export default function WorkspaceSwitcher({
   roles: SwitcherRoles;
 }) {
   const available = WORKSPACES.filter((w) => w.canAccess(roles));
-  // Nothing to switch to — don't render the control at all.
+
+  const trackRef = useRef<HTMLDivElement>(null);
+  const itemRefs = useRef<(HTMLElement | null)[]>([]);
+  const [rects, setRects] = useState<Rect[]>([]);
+  const [hoverIndex, setHoverIndex] = useState<number | null>(null);
+
+  const activeIndex = Math.max(
+    0,
+    available.findIndex((w) => w.key === current),
+  );
+  const highlightIndex = hoverIndex ?? activeIndex;
+
+  useEffect(() => {
+    const measure = () => {
+      const track = trackRef.current;
+      if (!track) return;
+      const t = track.getBoundingClientRect();
+      setRects(
+        itemRefs.current.map((el) => {
+          if (!el) return { left: 0, top: 0, width: 0, height: 0 };
+          const r = el.getBoundingClientRect();
+          return {
+            left: r.left - t.left,
+            top: r.top - t.top,
+            width: r.width,
+            height: r.height,
+          };
+        }),
+      );
+    };
+    measure();
+    window.addEventListener('resize', measure);
+    return () => window.removeEventListener('resize', measure);
+  }, [available.length]);
+
   if (available.length < 2) return null;
+
+  const thumb = rects[highlightIndex];
 
   return (
     <div className="flex flex-wrap items-center gap-2">
       <span className="text-xs font-medium text-white/70">Switch workspace</span>
-      <div className="flex flex-wrap items-center gap-1 rounded-lg bg-white/10 p-1">
-        {available.map((w) => {
-          const isCurrent = w.key === current;
-          if (isCurrent) {
+      <div
+        ref={trackRef}
+        className="relative flex flex-wrap items-center gap-1 rounded-lg bg-white/10 p-1"
+      >
+        {thumb && thumb.width > 0 && (
+          <span
+            aria-hidden
+            className="pointer-events-none absolute rounded-md bg-white shadow-sm transition-all duration-300 ease-out"
+            style={{
+              left: thumb.left,
+              top: thumb.top,
+              width: thumb.width,
+              height: thumb.height,
+            }}
+          />
+        )}
+        {available.map((w, i) => {
+          const highlighted = i === highlightIndex;
+          const cls = `relative z-10 rounded-md px-3 py-1 text-xs transition-colors duration-200 active:scale-95 ${
+            highlighted ? 'font-semibold text-mfu-primary' : 'font-medium text-white'
+          }`;
+          const setRef = (el: HTMLElement | null) => {
+            itemRefs.current[i] = el;
+          };
+          const hoverHandlers = {
+            onMouseEnter: () => setHoverIndex(i),
+            onMouseLeave: () => setHoverIndex(null),
+          };
+          if (w.key === current) {
             return (
-              <span
-                key={w.key}
-                aria-current="page"
-                className="rounded-md bg-white px-3 py-1 text-xs font-semibold text-mfu-primary"
-              >
+              <span key={w.key} ref={setRef} aria-current="page" className={cls} {...hoverHandlers}>
                 {w.label}
               </span>
             );
           }
           return (
-            <Link
-              key={w.key}
-              href={w.href}
-              className="rounded-md px-3 py-1 text-xs font-medium text-white hover:bg-white/20"
-            >
+            <Link key={w.key} ref={setRef} href={w.href} className={cls} {...hoverHandlers}>
               {w.label}
             </Link>
           );
