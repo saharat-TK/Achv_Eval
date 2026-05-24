@@ -10,8 +10,14 @@ import {
   getProgramVerifierIds,
   notifySafely,
 } from '@/lib/data/notifications';
+import type { OfferingStatus } from '@/lib/types/models';
 
 export const runtime = 'nodejs';
+const ASSESSMENT_ALLOWED_STATUSES: OfferingStatus[] = [
+  'pending_assessment',
+  'assessor_review',
+  'assessed',
+];
 
 /**
  * POST /api/assessor/submit
@@ -66,6 +72,9 @@ export async function POST(request: NextRequest) {
   const offering = offeringSnap.data()!;
   if (!profile.roles.assessorOf.includes(offering.programId)) {
     return NextResponse.json({ error: 'not_authorized' }, { status: 403 });
+  }
+  if (!ASSESSMENT_ALLOWED_STATUSES.includes(offering.status)) {
+    return NextResponse.json({ error: 'not_pending_assessment' }, { status: 409 });
   }
 
   // 4. Compute rubric result
@@ -135,7 +144,7 @@ export async function POST(request: NextRequest) {
         updatedAt: now,
         updatedBy: user.uid,
       });
-    } else if (offering.status === 'ai_complete') {
+    } else if (offering.status === 'pending_assessment') {
       // Move to assessor_review on first draft save
       await offeringRef.update({
         status: 'assessor_review',

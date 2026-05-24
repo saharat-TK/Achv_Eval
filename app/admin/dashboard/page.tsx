@@ -22,6 +22,7 @@ const STATUS_ORDER: OfferingStatus[] = [
   'ready_for_ai',
   'ai_in_progress',
   'ai_complete',
+  'pending_assessment',
   'assessor_review',
   'assessed',
   'verification_review',

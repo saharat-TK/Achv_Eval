@@ -51,6 +51,7 @@ export type OfferingStatus =
   | 'ready_for_ai'
   | 'ai_in_progress'
   | 'ai_complete'
+  | 'pending_assessment'
   | 'assessor_review'
   | 'assessed'
   | 'verification_review'
@@ -253,6 +254,9 @@ export interface OfferingDoc {
   status: OfferingStatus;
   previousOfferingId: string | null; // carry-forward link
   latestAiReportId: string | null;
+  /** AI analysis attempts are capped per offering. Missing count = 0 used. */
+  analysisAttemptLimit?: number;
+  analysisAttemptCount?: number;
   assessmentId: string | null;
   /**
    * Visibility flag. Cascaded from the parent program/course's lifecycle —
@@ -278,6 +282,8 @@ export interface AnalyzedInputFile {
 export interface AiReportDoc {
   offeringId: string;
   version: number;
+  academicYear: number;
+  semester: Semester;
   status: AiReportStatus;
   promptTemplate: 'CLAUDE.master.md' | 'CLAUDE.undergrad.md';
   geminiModel: string;

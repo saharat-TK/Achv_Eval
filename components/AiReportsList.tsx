@@ -1,10 +1,14 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { collection, query, orderBy, onSnapshot } from 'firebase/firestore';
+import { useRouter } from 'next/navigation';
+import { collection, doc, query, orderBy, onSnapshot } from 'firebase/firestore';
 import { getFirebaseAuth, getFirebaseDb } from '@/lib/firebase/config';
-import { REPORT_STATUS_TH } from '@/lib/constants';
-import type { AiReportStatus } from '@/lib/types/models';
+import { REPORT_STATUS_TH, SEMESTER_LABEL } from '@/lib/constants';
+import { sendOfferingForAssessment } from '@/app/lecturer/[offeringId]/actions';
+import { useConfirm } from '@/components/ConfirmDialogProvider';
+import { useToast } from '@/components/ToastProvider';
+import type { AiReportStatus, OfferingStatus, Semester } from '@/lib/types/models';
 import MarkdownView from './MarkdownView';
 
 interface RubricItem {
@@ -32,10 +36,18 @@ interface StructuredOutput {
 interface Report {
   id: string;
   version: number;
+  academicYear?: number;
+  semester?: Semester;
   status: AiReportStatus;
   errorMessage?: string | null;
   structuredOutput?: StructuredOutput | null;
   reportDownloadUrl?: string | null;
+  createdAt?: { toDate: () => Date } | null;
+}
+
+interface OfferingHandoffState {
+  status: OfferingStatus;
+  latestAiReportId?: string | null;
 }
 
 const BAND_TH: Record<string, string> = {
@@ -43,6 +55,18 @@ const BAND_TH: Record<string, string> = {
   good: 'ดี',
   improve: 'ควรปรับปรุง',
 };
+
+function formatCreatedAt(ts: Report['createdAt']): string | null {
+  const date = ts?.toDate?.();
+  if (!date) return null;
+  return date.toLocaleString('th-TH', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
 
 /**
  * Live list of AI reports for an offering. Subscribes to Firestore so the
@@ -53,13 +77,18 @@ export default function AiReportsList({
   scrollBody = false,
   combinedReportUrl = null,
   combinedReportPending = false,
+  enableAssessmentHandoff = false,
 }: {
   offeringId: string;
   scrollBody?: boolean;
   combinedReportUrl?: string | null;
   combinedReportPending?: boolean;
+  enableAssessmentHandoff?: boolean;
 }) {
   const [reports, setReports] = useState<Report[] | null>(null);
+  const [offeringState, setOfferingState] = useState<OfferingHandoffState | null>(
+    null,
+  );
 
   useEffect(() => {
     let unsub = () => {};
@@ -90,6 +119,40 @@ export default function AiReportsList({
     };
   }, [offeringId]);
 
+  useEffect(() => {
+    if (!enableAssessmentHandoff) return undefined;
+
+    let unsub = () => {};
+    let cancelled = false;
+    (async () => {
+      await getFirebaseAuth().authStateReady();
+      if (cancelled) return;
+      unsub = onSnapshot(
+        doc(getFirebaseDb(), 'offerings', offeringId),
+        (snap) => {
+          if (!snap.exists()) {
+            setOfferingState(null);
+            return;
+          }
+          const data = snap.data() as OfferingHandoffState;
+          setOfferingState({
+            status: data.status,
+            latestAiReportId: data.latestAiReportId ?? null,
+          });
+        },
+        (err) => {
+          console.error('offering handoff listener error', err);
+          setOfferingState(null);
+        },
+      );
+    })();
+
+    return () => {
+      cancelled = true;
+      unsub();
+    };
+  }, [enableAssessmentHandoff, offeringId]);
+
   if (reports === null) {
     return <p className="text-sm text-slate-400">กำลังโหลด…</p>;
   }
@@ -105,80 +168,189 @@ export default function AiReportsList({
           : 'mt-2 space-y-4'
       }
     >
-      {reports.map((r) => (
-        <div
-          key={r.id}
-          className={
-            scrollBody
-              ? 'rounded-xl border border-slate-200 bg-white'
-              : 'rounded-xl border border-slate-200 bg-white p-4'
-          }
-        >
+      {reports.map((r) => {
+        const createdAt = formatCreatedAt(r.createdAt);
+        const isLatestReport =
+          enableAssessmentHandoff &&
+          offeringState?.latestAiReportId === r.id &&
+          r.status === 'succeeded';
+        return (
           <div
+            key={r.id}
             className={
               scrollBody
-                ? 'flex items-center justify-between border-b border-slate-100 bg-white px-4 py-4 text-sm lg:sticky lg:top-0 lg:z-10'
-                : 'flex items-center justify-between text-sm'
+                ? 'rounded-xl border border-slate-200 bg-white'
+                : 'rounded-xl border border-slate-200 bg-white p-4'
             }
           >
-            <span className="font-medium text-slate-800">
-              รายงานเวอร์ชัน {r.version}
-            </span>
-            <span
+            <div
               className={
-                r.status === 'failed'
-                  ? 'text-xs font-medium text-red-600'
-                  : r.status === 'succeeded'
-                    ? 'text-xs font-medium text-green-700'
-                    : 'text-xs font-medium text-blue-600'
+                scrollBody
+                  ? 'flex items-center justify-between border-b border-slate-100 bg-white px-4 py-4 text-sm lg:sticky lg:top-0 lg:z-10'
+                  : 'flex items-center justify-between text-sm'
               }
             >
-              {REPORT_STATUS_TH[r.status] ?? r.status}
-            </span>
-          </div>
-
-          <div className={scrollBody ? 'px-4 pb-4 pt-3' : 'mt-2'}>
-            {r.status === 'running' && (
-              <p className="text-xs text-slate-500">
-                ระบบกำลังวิเคราะห์ทีละส่วน (4 ส่วน) — หน้านี้จะอัปเดตอัตโนมัติเมื่อเสร็จ
-              </p>
-            )}
-
-            {r.status === 'failed' && r.errorMessage && (
-              <p className="text-xs text-red-600">{r.errorMessage}</p>
-            )}
-
-            {r.status === 'succeeded' && r.structuredOutput && (
-              <ReportBody out={r.structuredOutput} />
-            )}
-
-            {(r.reportDownloadUrl || combinedReportUrl || combinedReportPending) && (
-              <div className="mt-3 flex flex-wrap items-center gap-3 text-sm">
-                {r.reportDownloadUrl && (
-                  <a
-                    href={r.reportDownloadUrl}
-                    className="font-medium text-mfu-primary hover:underline"
-                  >
-                    ดาวน์โหลดรายงาน PDF
-                  </a>
-                )}
-                {combinedReportUrl ? (
-                  <a
-                    href={combinedReportUrl}
-                    className="font-medium text-mfu-primary hover:underline"
-                  >
-                    ดาวน์โหลดรายงานรวมผลทวนสอบ
-                  </a>
-                ) : combinedReportPending ? (
-                  <span className="text-xs text-slate-400">
-                    รายงานรวมกำลังรอการสร้าง
-                  </span>
-                ) : null}
+              <div>
+                <span className="font-medium text-slate-800">
+                  รายงานเวอร์ชัน {r.version}
+                </span>
+                <p className="mt-0.5 text-xs text-slate-500">
+                  {r.academicYear ? `ปีการศึกษา ${r.academicYear}` : 'ปีการศึกษา —'}
+                  {' · '}
+                  {r.semester ? SEMESTER_LABEL[r.semester] : 'ภาคการศึกษา —'}
+                  {createdAt ? ` · สร้างเมื่อ ${createdAt}` : ''}
+                </p>
               </div>
-            )}
+              <span
+                className={
+                  r.status === 'failed'
+                    ? 'text-xs font-medium text-red-600'
+                    : r.status === 'succeeded'
+                      ? 'text-xs font-medium text-green-700'
+                      : 'text-xs font-medium text-blue-600'
+                }
+              >
+                {REPORT_STATUS_TH[r.status] ?? r.status}
+              </span>
+            </div>
+
+            <div className={scrollBody ? 'px-4 pb-4 pt-3' : 'mt-2'}>
+              {r.status === 'running' && (
+                <p className="text-xs text-slate-500">
+                  ระบบกำลังวิเคราะห์ทีละส่วน (4 ส่วน) — หน้านี้จะอัปเดตอัตโนมัติเมื่อเสร็จ
+                </p>
+              )}
+
+              {r.status === 'failed' && r.errorMessage && (
+                <p className="text-xs text-red-600">{r.errorMessage}</p>
+              )}
+
+              {r.status === 'succeeded' && r.structuredOutput && (
+                <ReportBody out={r.structuredOutput} />
+              )}
+
+              {isLatestReport && offeringState?.status === 'ai_complete' && (
+                <SendForAssessmentButton
+                  offeringId={offeringId}
+                  onSent={() =>
+                    setOfferingState((current) =>
+                      current
+                        ? { ...current, status: 'pending_assessment' }
+                        : current,
+                    )
+                  }
+                />
+              )}
+
+              {isLatestReport &&
+                ['pending_assessment', 'assessor_review', 'assessed'].includes(
+                  offeringState?.status ?? '',
+                ) && (
+                  <p className="mt-3 rounded-lg border border-violet-200 bg-violet-50 px-3 py-2 text-xs text-violet-700">
+                    ส่งผลการวิเคราะห์ให้ผู้ทวนสอบแล้ว
+                  </p>
+                )}
+
+              {(r.reportDownloadUrl || combinedReportUrl || combinedReportPending) && (
+                <div className="mt-3 flex flex-wrap items-center gap-3 text-sm">
+                  {r.reportDownloadUrl && (
+                    <a
+                      href={r.reportDownloadUrl}
+                      className="font-medium text-mfu-primary hover:underline"
+                    >
+                      ดาวน์โหลดรายงาน PDF
+                    </a>
+                  )}
+                  {combinedReportUrl ? (
+                    <a
+                      href={combinedReportUrl}
+                      className="font-medium text-mfu-primary hover:underline"
+                    >
+                      ดาวน์โหลดรายงานรวมผลทวนสอบ
+                    </a>
+                  ) : combinedReportPending ? (
+                    <span className="text-xs text-slate-400">
+                      รายงานรวมกำลังรอการสร้าง
+                    </span>
+                  ) : null}
+                </div>
+              )}
+            </div>
           </div>
-        </div>
-      ))}
+        );
+      })}
+    </div>
+  );
+}
+
+function SendForAssessmentButton({
+  offeringId,
+  onSent,
+}: {
+  offeringId: string;
+  onSent: () => void;
+}) {
+  const router = useRouter();
+  const confirm = useConfirm();
+  const toast = useToast();
+  const [busy, setBusy] = useState(false);
+
+  async function send() {
+    const ok = await confirm({
+      title: 'ส่งผลการวิเคราะห์ให้ผู้ทวนสอบ',
+      message:
+        'รายวิชานี้จะเข้าสู่คิวทวนสอบของผู้ทวนสอบ และจะไม่สามารถวิเคราะห์ใหม่ได้จากหน้านี้หลังส่งแล้ว หากต้องการแก้ไขภายหลังต้องให้ผู้ดูแลระบบหรือขั้นตอนงานที่เกี่ยวข้องปรับสถานะกลับ',
+      confirmLabel: 'ส่งผลเพื่อทวนสอบ',
+      cancelLabel: 'ยกเลิก',
+      variant: 'danger',
+    });
+    if (!ok) return;
+
+    setBusy(true);
+    try {
+      const res = await sendOfferingForAssessment(offeringId);
+      if (!res.ok) {
+        toast({
+          title: 'ส่งผลเพื่อทวนสอบไม่สำเร็จ',
+          description: res.error,
+          variant: 'error',
+        });
+        return;
+      }
+      onSent();
+      toast({
+        title: 'ส่งผลให้ผู้ทวนสอบแล้ว',
+        description: 'รายวิชานี้ปรากฏในหน้าผู้ทวนสอบเรียบร้อยแล้ว',
+        variant: 'success',
+      });
+      router.refresh();
+    } catch {
+      toast({
+        title: 'ส่งผลเพื่อทวนสอบไม่สำเร็จ',
+        description: 'เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์',
+        variant: 'error',
+      });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="mt-4 rounded-lg border border-violet-200 bg-violet-50 px-4 py-3">
+      <p className="text-sm font-medium text-violet-800">
+        รายงาน AI พร้อมส่งให้ผู้ทวนสอบ
+      </p>
+      <p className="mt-1 text-xs text-violet-700">
+        โปรดตรวจสอบผลวิเคราะห์ก่อนส่ง รายวิชาจะเข้าสู่คิวทวนสอบหลังยืนยัน
+      </p>
+      <button
+        type="button"
+        onClick={send}
+        disabled={busy}
+        className="mt-3 rounded-lg bg-mfu-primary px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:bg-slate-300 disabled:text-slate-600 disabled:opacity-100"
+      >
+        {busy ? 'กำลังส่ง…' : 'ส่งผลเพื่อทวนสอบ'}
+      </button>
     </div>
   );
 }
