@@ -12,7 +12,7 @@ semester for verification.
 - **Frontend:** Next.js 14 (App Router) + TypeScript + Tailwind CSS
 - **Auth:** Firebase Authentication, Google SSO restricted to `@mfu.ac.th`
 - **Database:** Cloud Firestore (security rules enforce the role matrix)
-- **AI:** Google Gemini 2.5 Pro (single-shot, with deterministic grade-stats hybrid)
+- **AI:** Google Gemini 2.5 Flash (single-shot, with deterministic grade-stats hybrid; override via `GEMINI_MODEL`)
 - **File storage:** Google Drive (owned by Academic & QA Department)
 - **Visibility mirror:** Google Sheets — lecturer-action log
 - **Notifications:** Gmail API (in-app inbox + email)

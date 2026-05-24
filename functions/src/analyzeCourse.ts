@@ -87,7 +87,7 @@ export const analyzeCourse = onCall(
       'utf-8',
     );
 
-    const model = process.env.GEMINI_MODEL || 'gemini-2.5-pro';
+    const model = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
 
     // ----- Create the aiReports doc (running) -------------------------
     const reportsRef = offeringRef.collection('aiReports');
