@@ -19,6 +19,11 @@ export interface BulkCreateInput {
   courseIds: string[];
 }
 
+export interface LecturerAssignmentInput {
+  offeringId: string;
+  lecturerRef: string | null;
+}
+
 export interface OfferingActionFailure {
   id: string;
   label: string;
@@ -56,6 +61,32 @@ async function academicProgramOf(
   return (snap.data()?.parentProgramId as string | undefined) ?? null;
 }
 
+async function academicProgramsOfCurriculums(
+  db: FirebaseFirestore.Firestore,
+  curriculumIds: string[],
+): Promise<Set<string>> {
+  const unique = [...new Set(curriculumIds.filter(Boolean))];
+  if (unique.length === 0) return new Set();
+  const curriculumSnaps = await Promise.all(
+    unique.map((id) => db.collection('programs').doc(id).get()),
+  );
+  const academicProgramIds = new Set(
+    curriculumSnaps
+      .map((snap) => snap.data()?.parentProgramId)
+      .filter((id): id is string => typeof id === 'string' && id.length > 0),
+  );
+
+  const directAcademicProgramIds = unique.filter((id, index) => !curriculumSnaps[index].exists);
+  const directSnaps = await Promise.all(
+    directAcademicProgramIds.map((id) => db.collection('academicPrograms').doc(id).get()),
+  );
+  directSnaps.forEach((snap) => {
+    if (snap.exists) academicProgramIds.add(snap.id);
+  });
+
+  return academicProgramIds;
+}
+
 function canAccess(access: Access, academicProgramId: string | null): boolean {
   if (access.isAdmin) return true;
   return !!academicProgramId && access.allowed.has(academicProgramId);
@@ -77,6 +108,27 @@ async function audit(
     before: null,
     after,
   });
+}
+
+async function grantLecturerRole(lecturerId: string | null | undefined) {
+  if (!lecturerId) return;
+  try {
+    await getAdminDb()
+      .collection('users')
+      .doc(lecturerId)
+      .update({ 'roles.isLecturer': true });
+  } catch {
+    // Non-fatal: validation already checked the user exists.
+  }
+}
+
+function parseLecturerRef(ref: string | null): { kind: 'user' | 'allowlist'; id: string } | null {
+  if (!ref) return null;
+  if (ref.startsWith('user:')) return { kind: 'user', id: ref.slice('user:'.length) };
+  if (ref.startsWith('allowlist:')) {
+    return { kind: 'allowlist', id: ref.slice('allowlist:'.length) };
+  }
+  return { kind: 'user', id: ref };
 }
 
 /** Load the curriculums + courses of an academic program for the dual-list,
@@ -171,6 +223,8 @@ export async function bulkCreateOfferings(
       section: DEFAULT_SECTION,
       lecturerId: null,
       lecturerEmail: null,
+      pendingLecturerEmail: null,
+      pendingLecturerAllowlistId: null,
       hasExamAssessment: true,
       assignedPloNumbers: [],
       status: 'draft' as OfferingStatus,
@@ -249,4 +303,162 @@ export async function deleteEmptyOfferings(
     revalidatePath('/admin/offering-manager');
   }
   return { ok: true, succeeded: deletedIds.length, failed };
+}
+
+export async function assignOfferingLecturers(
+  assignments: LecturerAssignmentInput[],
+): Promise<ManagerActionResult> {
+  const access = await resolveAccess();
+  if (!access) return { ok: false, error: 'ไม่มีสิทธิ์ดำเนินการ' };
+  if (assignments.length === 0) return { ok: true, succeeded: 0, failed: [] };
+
+  const db = getAdminDb();
+  const failed: OfferingActionFailure[] = [];
+  let succeeded = 0;
+  const updatedIds: string[] = [];
+
+  for (const assignment of assignments) {
+    const snap = await db.collection('offerings').doc(assignment.offeringId).get();
+    if (!snap.exists) {
+      failed.push({
+        id: assignment.offeringId,
+        label: assignment.offeringId,
+        reason: 'ไม่พบรายการ',
+      });
+      continue;
+    }
+    const offering = snap.data() as {
+      programId: string;
+      courseCode: string;
+      status: OfferingStatus;
+    };
+    const apId = await academicProgramOf(db, offering.programId);
+    if (!canAccess(access, apId)) {
+      failed.push({
+        id: assignment.offeringId,
+        label: offering.courseCode,
+        reason: 'ไม่มีสิทธิ์ในหลักสูตรนี้',
+      });
+      continue;
+    }
+
+    let lecturerId: string | null = null;
+    let lecturerEmail: string | null = null;
+    let pendingLecturerEmail: string | null = null;
+    let pendingLecturerAllowlistId: string | null = null;
+    const lecturerRef = parseLecturerRef(assignment.lecturerRef);
+    if (lecturerRef?.kind === 'user') {
+      const userSnap = await db.collection('users').doc(lecturerRef.id).get();
+      if (!userSnap.exists) {
+        failed.push({
+          id: assignment.offeringId,
+          label: offering.courseCode,
+          reason: 'ไม่พบอาจารย์ที่เลือก',
+        });
+        continue;
+      }
+      const user = userSnap.data() as {
+        email?: string;
+        roles?: { lecturerOf?: string[] };
+      };
+      const lecturerAcademicPrograms = await academicProgramsOfCurriculums(
+        db,
+        user.roles?.lecturerOf ?? [],
+      );
+      if (!apId || !lecturerAcademicPrograms.has(apId)) {
+        failed.push({
+          id: assignment.offeringId,
+          label: offering.courseCode,
+          reason: 'อาจารย์ไม่ได้อยู่ในหลักสูตรนี้',
+        });
+        continue;
+      }
+      lecturerEmail = user.email ?? null;
+      lecturerId = lecturerRef.id;
+    } else if (lecturerRef?.kind === 'allowlist') {
+      const allowSnap = await db.collection('allowlist').doc(lecturerRef.id).get();
+      if (!allowSnap.exists) {
+        failed.push({
+          id: assignment.offeringId,
+          label: offering.courseCode,
+          reason: 'ไม่พบรายชื่อรอลงทะเบียนที่เลือก',
+        });
+        continue;
+      }
+      const allow = allowSnap.data() as {
+        email?: string;
+        nameTh?: string;
+        consumedUid?: string | null;
+        presetLecturerAcademicProgramIds?: string[];
+      };
+      if (allow.consumedUid) {
+        const consumedUserSnap = await db.collection('users').doc(allow.consumedUid).get();
+        if (!consumedUserSnap.exists) {
+          failed.push({
+            id: assignment.offeringId,
+            label: offering.courseCode,
+            reason: 'บัญชีที่ลงทะเบียนแล้วไม่พบในระบบ',
+          });
+          continue;
+        }
+        const consumedUser = consumedUserSnap.data() as {
+          email?: string;
+          roles?: { lecturerOf?: string[] };
+        };
+        const lecturerAcademicPrograms = await academicProgramsOfCurriculums(
+          db,
+          consumedUser.roles?.lecturerOf ?? [],
+        );
+        if (!apId || !lecturerAcademicPrograms.has(apId)) {
+          failed.push({
+            id: assignment.offeringId,
+            label: offering.courseCode,
+            reason: 'อาจารย์ไม่ได้อยู่ในหลักสูตรนี้',
+          });
+          continue;
+        }
+        lecturerId = allow.consumedUid;
+        lecturerEmail = consumedUser.email ?? allow.email ?? lecturerRef.id;
+      } else {
+        const pendingAcademicIds = new Set(allow.presetLecturerAcademicProgramIds ?? []);
+        if (!apId || !pendingAcademicIds.has(apId)) {
+          failed.push({
+            id: assignment.offeringId,
+            label: offering.courseCode,
+            reason: 'อาจารย์รอลงทะเบียนไม่ได้อยู่ในหลักสูตรนี้',
+          });
+          continue;
+        }
+        lecturerEmail = allow.email ?? lecturerRef.id;
+        pendingLecturerEmail = allow.email ?? lecturerRef.id;
+        pendingLecturerAllowlistId = lecturerRef.id;
+      }
+    }
+
+    const nextStatus =
+      offering.status === 'draft' && lecturerRef
+        ? 'documents_pending'
+        : offering.status;
+    await snap.ref.update({
+      lecturerId,
+      lecturerEmail,
+      pendingLecturerEmail,
+      pendingLecturerAllowlistId,
+      status: nextStatus,
+      updatedAt: FieldValue.serverTimestamp(),
+      updatedBy: access.uid,
+    });
+    await grantLecturerRole(lecturerId);
+    succeeded++;
+    updatedIds.push(assignment.offeringId);
+  }
+
+  if (updatedIds.length > 0) {
+    await audit('offering_lecturers_assigned', access.uid, access.email, {
+      offeringIds: updatedIds,
+    });
+    revalidatePath('/admin/offering-manager');
+  }
+
+  return { ok: true, succeeded, failed };
 }

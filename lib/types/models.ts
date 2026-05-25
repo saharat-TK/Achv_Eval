@@ -79,8 +79,8 @@ export interface UserDoc {
   isActive: boolean;
   /**
    * Roles are denormalized onto the user doc so Firestore security rules
-   * can authorize via a single get() with no joins. The lecturer role is
-   * NOT here — it lives on each offering's `lecturerId`.
+   * can authorize via a single get() with no joins. Concrete teaching
+   * assignments still live on each offering's `lecturerId`.
    */
   roles: {
     /**
@@ -109,6 +109,7 @@ export interface UserDoc {
     directorOf: string[]; // curriculum ids
     assessorOf: string[]; // curriculum ids
     verifierOf: string[]; // curriculum ids
+    lecturerOf?: string[]; // curriculum ids
     /** Academic-program-scope role arrays (`academicPrograms/{id}` ids). */
     directorOfAcademicPrograms?: string[];
     assessorOfAcademicPrograms?: string[];
@@ -206,6 +207,10 @@ export interface AllowlistDoc {
   presetIsDirector?: boolean;
   /** Academic program id; older rows may contain a curriculum id. */
   presetDirectorProgramId?: string | null;
+  /** Academic-program ids applied as director roles when this pending user first signs in. */
+  presetDirectorAcademicProgramIds?: string[];
+  /** Academic-program ids expanded to `roles.lecturerOf` when this pending user first signs in. */
+  presetLecturerAcademicProgramIds?: string[];
   addedBy: string; // admin uid
   addedAt: Ts;
   consumedAt?: Ts | null;
@@ -249,6 +254,9 @@ export interface OfferingDoc {
   section: string;
   lecturerId: string | null;
   lecturerEmail: string | null;
+  /** Pending lecturer assignment before the allowlisted person first signs in. */
+  pendingLecturerEmail?: string | null;
+  pendingLecturerAllowlistId?: string | null;
   hasExamAssessment: boolean; // drives rubric item 3.4 applicability
   assignedPloNumbers: number[]; // PLOs this offering is responsible for
   status: OfferingStatus;

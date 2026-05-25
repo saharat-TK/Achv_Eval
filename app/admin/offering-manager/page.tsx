@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation';
 import { getCurrentProfile } from '@/lib/firebase/auth-server';
 import {
+  getLecturersForAcademicPrograms,
   getManagedAcademicPrograms,
   getOfferingsForAcademicPrograms,
 } from '@/lib/data/offeringManager';
@@ -17,7 +18,11 @@ export default async function OfferingManagerPage() {
   if (!isAdmin && !isDirector) redirect('/admin');
 
   const { programs } = await getManagedAcademicPrograms(profile);
-  const offerings = await getOfferingsForAcademicPrograms(programs.map((p) => p.id));
+  const academicProgramIds = programs.map((p) => p.id);
+  const [offerings, lecturers] = await Promise.all([
+    getOfferingsForAcademicPrograms(academicProgramIds),
+    getLecturersForAcademicPrograms(academicProgramIds),
+  ]);
 
   return (
     <div>
@@ -33,6 +38,7 @@ export default async function OfferingManagerPage() {
           code: p.code,
           nameTh: p.nameTh,
         }))}
+        lecturers={lecturers}
         isAdmin={isAdmin}
       />
     </div>

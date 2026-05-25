@@ -4,14 +4,17 @@ import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { httpsCallable } from 'firebase/functions';
 import { getFirebaseAuth, getFirebaseFunctions } from '@/lib/firebase/config';
-import { deleteEmptyOfferings } from '@/app/admin/offering-manager/actions';
+import {
+  assignOfferingLecturers,
+  deleteEmptyOfferings,
+} from '@/app/admin/offering-manager/actions';
 import BatchOfferingModal, {
   type ProgramOpt,
   type EditContext,
 } from '@/components/BatchOfferingModal';
 import { SEMESTER_LABEL } from '@/lib/constants';
 import type { Semester } from '@/lib/types/models';
-import type { ManagedOffering } from '@/lib/data/offeringManager';
+import type { ManagedLecturer, ManagedOffering } from '@/lib/data/offeringManager';
 
 interface ApBlock {
   academicProgramId: string | null;
@@ -28,13 +31,19 @@ interface YearGroup {
   semesters: SemGroup[];
 }
 
+function lecturerOptionValue(lecturer: ManagedLecturer): string {
+  return `${lecturer.kind}:${lecturer.id}`;
+}
+
 export default function OfferingManagerClient({
   offerings,
   academicPrograms,
+  lecturers,
   isAdmin,
 }: {
   offerings: ManagedOffering[];
   academicPrograms: ProgramOpt[];
+  lecturers: ManagedLecturer[];
   isAdmin: boolean;
 }) {
   const router = useRouter();
@@ -42,11 +51,25 @@ export default function OfferingManagerClient({
     null,
   );
   const [del, setDel] = useState<{ label: string; offeringIds: string[] } | null>(null);
+  const [assign, setAssign] = useState<{
+    label: string;
+    academicProgramId: string;
+    offerings: ManagedOffering[];
+    values: Record<string, string>;
+  } | null>(null);
   const [typed, setTyped] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [menuKey, setMenuKey] = useState<string | null>(null);
   const [menuDir, setMenuDir] = useState<'up' | 'down'>('down');
+  const assignAcademicProgramId = assign?.academicProgramId ?? null;
+
+  const assignEligibleLecturers = useMemo(() => {
+    if (!assignAcademicProgramId) return [];
+    return lecturers.filter((lecturer) =>
+      lecturer.academicProgramIds.includes(assignAcademicProgramId),
+    );
+  }, [assignAcademicProgramId, lecturers]);
 
   // Open the ⋮ menu, flipping it upward when there isn't room below.
   function toggleMenu(key: string, e: React.MouseEvent<HTMLElement>) {
@@ -158,6 +181,55 @@ export default function OfferingManagerClient({
       label: `${block.label} · ปีการศึกษา ${year} ${SEMESTER_LABEL[sem]}`,
       offeringIds: block.offerings.map((o) => o.id),
     });
+  }
+
+  function openAssign(block: ApBlock, year: number, sem: Semester) {
+    if (!block.academicProgramId) return;
+    setMenuKey(null);
+    setError(null);
+    setAssign({
+      label: `${block.label} · ปีการศึกษา ${year} ${SEMESTER_LABEL[sem]}`,
+      academicProgramId: block.academicProgramId,
+      offerings: block.offerings,
+      values: Object.fromEntries(
+        block.offerings.map((offering) => [
+          offering.id,
+          offering.lecturerId
+            ? `user:${offering.lecturerId}`
+            : offering.pendingLecturerAllowlistId
+              ? `allowlist:${offering.pendingLecturerAllowlistId}`
+              : '',
+        ]),
+      ),
+    });
+  }
+
+  async function confirmAssign() {
+    if (!assign) return;
+    setBusy(true);
+    setError(null);
+    const res = await assignOfferingLecturers(
+      assign.offerings.map((offering) => ({
+        offeringId: offering.id,
+        lecturerRef: assign.values[offering.id] || null,
+      })),
+    );
+    setBusy(false);
+    if (!res.ok) {
+      setError(res.error);
+      return;
+    }
+    if (res.failed.length) {
+      setError(
+        `มอบหมายบางรายการไม่ได้ — ${res.failed
+          .map((f) => `${f.label}: ${f.reason}`)
+          .join(', ')}`,
+      );
+      router.refresh();
+      return;
+    }
+    setAssign(null);
+    router.refresh();
   }
 
   async function confirmDelete() {
@@ -299,7 +371,7 @@ export default function OfferingManagerClient({
                                   </button>
                                   {menuKey === key && (
                                     <div
-                                      className={`absolute right-0 z-30 w-32 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-lg ${
+                                      className={`absolute right-0 z-30 w-40 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-lg ${
                                         menuDir === 'up'
                                           ? 'bottom-full mb-1'
                                           : 'top-full mt-1'
@@ -311,6 +383,13 @@ export default function OfferingManagerClient({
                                         className="block w-full px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50"
                                       >
                                         แก้ไข
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => openAssign(block, g.year, s.sem)}
+                                        className="block w-full px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50"
+                                      >
+                                        มอบหมายอาจารย์
                                       </button>
                                       <button
                                         type="button"
@@ -413,6 +492,137 @@ export default function OfferingManagerClient({
                 className="rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-50"
               >
                 {busy ? 'กำลังลบ…' : 'ลบทั้งภาค'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {assign && (
+        <div
+          className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4"
+          onClick={() => !busy && setAssign(null)}
+          role="dialog"
+          aria-modal="true"
+        >
+          <div
+            className="my-8 w-full max-w-2xl rounded-xl bg-white p-5 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h2 className="text-base font-semibold text-slate-800">
+                  มอบหมายอาจารย์
+                </h2>
+                <p className="mt-1 text-sm text-slate-500">{assign.label}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setAssign(null)}
+                disabled={busy}
+                className="text-sm text-slate-500 hover:text-slate-800 disabled:opacity-50"
+              >
+                ปิด
+              </button>
+            </div>
+
+            <div className="mt-4 overflow-hidden rounded-lg border border-slate-200">
+              <div className="grid grid-cols-[1fr_1.2fr] bg-slate-50 px-3 py-2 text-xs font-medium text-slate-500">
+                <span>รายวิชา</span>
+                <span>อาจารย์ผู้รับผิดชอบ</span>
+              </div>
+              <div className="divide-y divide-slate-100">
+                {assign.offerings.map((offering) => {
+                  const selectedValue = assign.values[offering.id] ?? '';
+                  const selectedExists =
+                    selectedValue === '' ||
+                    assignEligibleLecturers.some(
+                      (lecturer) => lecturerOptionValue(lecturer) === selectedValue,
+                    );
+                  return (
+                    <div
+                      key={offering.id}
+                      className="grid grid-cols-[1fr_1.2fr] items-center gap-3 px-3 py-2"
+                    >
+                      <div>
+                        <p className="text-sm font-medium text-slate-700">
+                          {offering.courseCode}
+                        </p>
+                        <p className="truncate text-xs text-slate-500">
+                          {offering.courseNameTh}
+                        </p>
+                      </div>
+                      <select
+                        value={selectedValue}
+                        onChange={(e) =>
+                          setAssign((current) =>
+                            current
+                              ? {
+                                  ...current,
+                                  values: {
+                                    ...current.values,
+                                    [offering.id]: e.target.value,
+                                  },
+                                }
+                              : current,
+                          )
+                        }
+                        className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-mfu-primary focus:outline-none"
+                      >
+                        <option value="">— ยังไม่มอบหมาย —</option>
+                        {!selectedExists && selectedValue && (
+                          <option value={selectedValue}>
+                            ปัจจุบัน:{' '}
+                            {offering.lecturerEmail ??
+                              offering.pendingLecturerEmail ??
+                              selectedValue}
+                          </option>
+                        )}
+                        {assignEligibleLecturers.map((lecturer) => (
+                          <option
+                            key={`${lecturer.kind}:${lecturer.id}`}
+                            value={lecturerOptionValue(lecturer)}
+                          >
+                            {lecturer.nameTh} ({lecturer.email}) ·{' '}
+                            {lecturer.isActive ? 'ใช้งาน' : 'รอลงทะเบียน'}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {assignEligibleLecturers.length === 0 && (
+              <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                ยังไม่มีอาจารย์ที่มอบหมายให้หลักสูตรนี้ กรุณาเพิ่มจากหน้า
+                มอบหมายอาจารย์ประจำหลักสูตรก่อน
+              </p>
+            )}
+
+            {error && (
+              <p className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                {error}
+              </p>
+            )}
+
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setAssign(null)}
+                disabled={busy}
+                className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+              >
+                ยกเลิก
+              </button>
+              <button
+                type="button"
+                onClick={confirmAssign}
+                disabled={busy}
+                className="rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-50"
+              >
+                {busy ? 'กำลังมอบหมาย…' : 'มอบหมายอาจารย์'}
               </button>
             </div>
           </div>

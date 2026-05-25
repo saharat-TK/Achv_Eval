@@ -8,6 +8,8 @@ export interface DualListItem {
   nameTh: string;
 }
 
+type SelectionStyle = 'checkbox' | 'row';
+
 /**
  * Two-column add/remove selector. The available (left) list is supplied by
  * the parent (it can change — e.g. when switching curriculum); the selected
@@ -18,12 +20,24 @@ export default function DualListSelector({
   available,
   selected,
   alreadyOffered,
+  availableTitle = 'รายวิชาที่เลือกได้',
+  selectedTitle = 'รายวิชาที่จะเปิดสอน',
+  emptyAvailableText = 'ไม่มีรายวิชา',
+  emptySelectedText = 'ยังไม่ได้เลือกรายวิชา',
+  showCode = true,
+  selectionStyle = 'checkbox',
   onAdd,
   onRemove,
 }: {
   available: DualListItem[];
   selected: DualListItem[];
   alreadyOffered?: Set<string>;
+  availableTitle?: string;
+  selectedTitle?: string;
+  emptyAvailableText?: string;
+  emptySelectedText?: string;
+  showCode?: boolean;
+  selectionStyle?: SelectionStyle;
   onAdd: (items: DualListItem[]) => void;
   onRemove: (ids: string[]) => void;
 }) {
@@ -56,32 +70,66 @@ export default function DualListSelector({
   const head = 'border-b border-slate-100 bg-slate-50 px-3 py-2 text-xs font-medium text-slate-500';
   const body = 'max-h-72 overflow-y-auto';
   const row = 'flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-slate-50';
+  const rowButton =
+    'flex w-full items-center gap-2 border-l-4 px-3 py-1.5 text-left text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-inset focus:ring-mfu-primary/40';
+  const rowSelected =
+    'border-l-[#00704A] bg-[#00704A]/10 text-[#00704A] hover:bg-[#00704A]/15';
+  const rowUnselected =
+    'border-l-transparent bg-white text-slate-700 hover:bg-slate-50';
+
+  function renderItem(item: DualListItem) {
+    return showCode ? (
+      <>
+        <span className="font-medium">{item.code}</span>
+        <span className="truncate text-slate-500">{item.nameTh}</span>
+      </>
+    ) : (
+      <span className="truncate font-medium">{item.nameTh || item.code}</span>
+    );
+  }
 
   return (
     <div className="flex flex-col gap-2 sm:flex-row sm:items-stretch">
       {/* Available */}
       <div className={col}>
-        <div className={head}>รายวิชาที่เลือกได้ ({availableNotSelected.length})</div>
+        <div className={head}>{availableTitle} ({availableNotSelected.length})</div>
         <div className={body}>
           {availableNotSelected.length === 0 ? (
-            <p className="px-3 py-4 text-xs text-slate-400">ไม่มีรายวิชา</p>
+            <p className="px-3 py-4 text-xs text-slate-400">{emptyAvailableText}</p>
           ) : (
-            availableNotSelected.map((a) => (
-              <label key={a.id} className={row}>
-                <input
-                  type="checkbox"
-                  checked={availChecked.has(a.id)}
-                  onChange={() => setAvailChecked((s) => toggle(s, a.id))}
-                />
-                <span className="font-medium text-slate-700">{a.code}</span>
-                <span className="truncate text-slate-500">{a.nameTh}</span>
-                {alreadyOffered?.has(a.id) && (
-                  <span className="ml-auto shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] text-amber-700">
-                    เปิดสอนแล้ว
-                  </span>
-                )}
-              </label>
-            ))
+            availableNotSelected.map((a) => {
+              const checked = availChecked.has(a.id);
+              return selectionStyle === 'row' ? (
+                <button
+                  key={a.id}
+                  type="button"
+                  aria-pressed={checked}
+                  onClick={() => setAvailChecked((s) => toggle(s, a.id))}
+                  className={`${rowButton} ${checked ? rowSelected : rowUnselected}`}
+                >
+                  {renderItem(a)}
+                  {alreadyOffered?.has(a.id) && (
+                    <span className="ml-auto shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] text-amber-700">
+                      เปิดสอนแล้ว
+                    </span>
+                  )}
+                </button>
+              ) : (
+                <label key={a.id} className={row}>
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={() => setAvailChecked((s) => toggle(s, a.id))}
+                  />
+                  <span className="text-slate-700">{renderItem(a)}</span>
+                  {alreadyOffered?.has(a.id) && (
+                    <span className="ml-auto shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] text-amber-700">
+                      เปิดสอนแล้ว
+                    </span>
+                  )}
+                </label>
+              );
+            })
           )}
         </div>
       </div>
@@ -108,22 +156,34 @@ export default function DualListSelector({
 
       {/* Selected */}
       <div className={col}>
-        <div className={head}>รายวิชาที่จะเปิดสอน ({selected.length})</div>
+        <div className={head}>{selectedTitle} ({selected.length})</div>
         <div className={body}>
           {selected.length === 0 ? (
-            <p className="px-3 py-4 text-xs text-slate-400">ยังไม่ได้เลือกรายวิชา</p>
+            <p className="px-3 py-4 text-xs text-slate-400">{emptySelectedText}</p>
           ) : (
-            selected.map((s) => (
-              <label key={s.id} className={row}>
-                <input
-                  type="checkbox"
-                  checked={selChecked.has(s.id)}
-                  onChange={() => setSelChecked((set) => toggle(set, s.id))}
-                />
-                <span className="font-medium text-slate-700">{s.code}</span>
-                <span className="truncate text-slate-500">{s.nameTh}</span>
-              </label>
-            ))
+            selected.map((s) => {
+              const checked = selChecked.has(s.id);
+              return selectionStyle === 'row' ? (
+                <button
+                  key={s.id}
+                  type="button"
+                  aria-pressed={checked}
+                  onClick={() => setSelChecked((set) => toggle(set, s.id))}
+                  className={`${rowButton} ${checked ? rowSelected : rowUnselected}`}
+                >
+                  {renderItem(s)}
+                </button>
+              ) : (
+                <label key={s.id} className={row}>
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={() => setSelChecked((set) => toggle(set, s.id))}
+                  />
+                  <span className="text-slate-700">{renderItem(s)}</span>
+                </label>
+              );
+            })
           )}
         </div>
       </div>

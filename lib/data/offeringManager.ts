@@ -4,6 +4,7 @@ import type {
   OfferingDoc,
   ProgramDoc,
   AcademicProgramDoc,
+  AllowlistDoc,
   CourseDoc,
   Semester,
   OfferingStatus,
@@ -59,7 +60,10 @@ export interface ManagedOffering {
   semester: Semester;
   section: string;
   status: OfferingStatus;
+  lecturerId: string | null;
   lecturerEmail: string | null;
+  pendingLecturerEmail: string | null;
+  pendingLecturerAllowlistId: string | null;
   isActive: boolean;
   /** Curriculum (programs collection) this offering belongs to. */
   curriculumId: string;
@@ -124,7 +128,10 @@ export async function getOfferingsForAcademicPrograms(
         semester: o.semester,
         section: o.section,
         status: o.status,
+        lecturerId: o.lecturerId ?? null,
         lecturerEmail: o.lecturerEmail ?? null,
+        pendingLecturerEmail: o.pendingLecturerEmail ?? null,
+        pendingLecturerAllowlistId: o.pendingLecturerAllowlistId ?? null,
         isActive: o.isActive !== false,
         curriculumId: o.programId,
         curriculumNameTh: meta?.nameTh ?? '(ไม่พบเล่มหลักสูตร)',
@@ -134,6 +141,99 @@ export async function getOfferingsForAcademicPrograms(
     }
   }
   return offerings;
+}
+
+export interface ManagedLecturer {
+  kind: 'user' | 'allowlist';
+  id: string;
+  nameTh: string;
+  email: string;
+  isActive: boolean;
+  academicProgramIds: string[];
+}
+
+/**
+ * Lecturers assigned to the given academic programs. Registered users can be
+ * written directly to `lecturerId`; pending allowlist rows are written as
+ * pending lecturer assignments and materialized on first sign-in.
+ */
+export async function getLecturersForAcademicPrograms(
+  academicProgramIds: string[],
+): Promise<ManagedLecturer[]> {
+  if (academicProgramIds.length === 0) return [];
+  const db = getAdminDb();
+  const requestedAcademicProgramIds = new Set(academicProgramIds);
+  const curriculumSnaps = await Promise.all(
+    chunk(academicProgramIds).map((ids) =>
+      db.collection('programs').where('parentProgramId', 'in', ids).get(),
+    ),
+  );
+  const curriculumToAcademicProgram = new Map<string, string>();
+  curriculumSnaps.forEach((snap) => {
+    snap.docs.forEach((doc) => {
+      const data = doc.data() as ProgramDoc;
+      if (data.parentProgramId) curriculumToAcademicProgram.set(doc.id, data.parentProgramId);
+    });
+  });
+  const allowedCurriculumIds = new Set(curriculumToAcademicProgram.keys());
+  if (allowedCurriculumIds.size === 0) return [];
+
+  const [usersSnap, allowlistSnap] = await Promise.all([
+    db.collection('users').orderBy('email').get(),
+    db.collection('allowlist').orderBy('email').get(),
+  ]);
+  const registeredEmails = new Set<string>();
+  const registeredLecturers = usersSnap.docs.flatMap((doc): ManagedLecturer[] => {
+    const data = doc.data() as {
+      email?: string;
+      nameTh?: string;
+      isActive?: boolean;
+      roles?: { lecturerOf?: string[] };
+    };
+    const academicIds = [
+      ...new Set(
+        (data.roles?.lecturerOf ?? [])
+          .map((id) => curriculumToAcademicProgram.get(id) ?? id)
+          .filter((id) => requestedAcademicProgramIds.has(id))
+          .filter((id): id is string => Boolean(id)),
+      ),
+    ];
+    if (academicIds.length === 0 || !data.email) return [];
+    registeredEmails.add(data.email.trim().toLowerCase());
+    return [
+      {
+        kind: 'user',
+        id: doc.id,
+        nameTh: data.nameTh || data.email,
+        email: data.email,
+        isActive: data.isActive !== false,
+        academicProgramIds: academicIds,
+      },
+    ];
+  });
+
+  const pendingLecturers = allowlistSnap.docs.flatMap((doc): ManagedLecturer[] => {
+    const data = doc.data() as AllowlistDoc;
+    if (data.consumedAt || !data.email) return [];
+    if (registeredEmails.has(data.email.trim().toLowerCase())) return [];
+    const academicIds = (data.presetLecturerAcademicProgramIds ?? []).filter((id) =>
+      requestedAcademicProgramIds.has(id),
+    );
+    if (academicIds.length === 0) return [];
+    return [
+      {
+        kind: 'allowlist',
+        id: doc.id,
+        nameTh: data.nameTh || data.email,
+        email: data.email,
+        isActive: false,
+        academicProgramIds: [...new Set(academicIds)],
+      },
+    ];
+  });
+
+  return [...registeredLecturers, ...pendingLecturers]
+    .sort((a, b) => (a.nameTh || a.email).localeCompare(b.nameTh || b.email, 'th'));
 }
 
 export interface CurriculumWithCourses {
