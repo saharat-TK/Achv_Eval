@@ -4,6 +4,10 @@ import { revalidatePath } from 'next/cache';
 import { FieldValue } from 'firebase-admin/firestore';
 import { getAdminDb } from '@/lib/firebase/admin';
 import { getSessionUser, getCurrentProfile } from '@/lib/firebase/auth-server';
+import {
+  getCurriculumsWithCourses,
+  type CurriculumWithCourses,
+} from '@/lib/data/offeringManager';
 import type { OfferingStatus, Semester } from '@/lib/types/models';
 
 const DEFAULT_SECTION = '01';
@@ -73,6 +77,23 @@ async function audit(
     before: null,
     after,
   });
+}
+
+/** Load the curriculums + courses of an academic program for the dual-list,
+ *  enforcing the actor's access scope. */
+export async function loadCurriculumsWithCourses(
+  academicProgramId: string,
+): Promise<
+  | { ok: true; curriculums: CurriculumWithCourses[] }
+  | { ok: false; error: string }
+> {
+  const access = await resolveAccess();
+  if (!access) return { ok: false, error: 'ไม่มีสิทธิ์ดำเนินการ' };
+  if (!canAccess(access, academicProgramId)) {
+    return { ok: false, error: 'ไม่มีสิทธิ์ในหลักสูตรนี้' };
+  }
+  const curriculums = await getCurriculumsWithCourses(academicProgramId);
+  return { ok: true, curriculums };
 }
 
 /**
