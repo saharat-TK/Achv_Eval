@@ -57,6 +57,12 @@ export default async function AdminUsersPage() {
           ผู้ใช้งานปัจจุบัน
         </Link>
         <Link
+          href="/admin/users/program-assignments"
+          className="border-b-2 border-transparent pb-2 text-slate-600 hover:border-mfu-primary hover:text-mfu-primary"
+        >
+          มอบหมายอาจารย์ประจำหลักสูตร
+        </Link>
+        <Link
           href="/admin/users/allowlist"
           className="border-b-2 border-transparent pb-2 text-slate-600 hover:border-mfu-primary hover:text-mfu-primary"
         >

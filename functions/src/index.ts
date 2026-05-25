@@ -8,3 +8,4 @@ export { generateFinalVerificationReport } from './generateFinalVerificationRepo
 export { purgeProgram } from './purgeProgram';
 export { purgeCourse } from './purgeCourse';
 export { purgeDepartment } from './purgeDepartment';
+export { purgeOffering } from './purgeOffering';

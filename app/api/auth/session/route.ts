@@ -8,6 +8,55 @@ export const runtime = 'nodejs'; // firebase-admin needs the Node runtime
 const SESSION_COOKIE = 'session';
 const EXPIRES_IN_MS = 60 * 60 * 24 * 5 * 1000; // 5 days
 
+async function materializePendingLecturerAssignments(
+  db: FirebaseFirestore.Firestore,
+  uid: string,
+  email: string,
+  allowlistId: string,
+) {
+  const normalizedEmail = email.trim().toLowerCase();
+  const emailValues = [...new Set([email, normalizedEmail])];
+  const [byAllowlist, byEmail] = await Promise.all([
+    db.collection('offerings').where('pendingLecturerAllowlistId', '==', allowlistId).get(),
+    db.collection('offerings').where('pendingLecturerEmail', 'in', emailValues).get(),
+  ]);
+
+  const docs = new Map<string, FirebaseFirestore.QueryDocumentSnapshot>();
+  byAllowlist.docs.forEach((doc) => docs.set(doc.id, doc));
+  byEmail.docs.forEach((doc) => docs.set(doc.id, doc));
+  if (docs.size === 0) return;
+
+  const batch = db.batch();
+  docs.forEach((doc) => {
+    const status = doc.data().status;
+    batch.update(doc.ref, {
+      lecturerId: uid,
+      lecturerEmail: email,
+      pendingLecturerEmail: null,
+      pendingLecturerAllowlistId: null,
+      status: status === 'draft' ? 'documents_pending' : status,
+      updatedAt: FieldValue.serverTimestamp(),
+      updatedBy: uid,
+    });
+  });
+  await batch.commit();
+
+  await db.collection('auditLog').add({
+    occurredAt: FieldValue.serverTimestamp(),
+    actorId: uid,
+    actorEmail: email,
+    action: 'pending_offering_lecturers_materialized',
+    entityType: 'offerings',
+    entityId: 'bulk',
+    before: null,
+    after: {
+      offeringIds: [...docs.keys()],
+      pendingLecturerAllowlistId: allowlistId,
+      pendingLecturerEmail: normalizedEmail,
+    },
+  });
+}
+
 /**
  * POST /api/auth/session
  * Exchanges a Firebase ID token for an httpOnly session cookie.
@@ -54,6 +103,7 @@ export async function POST(request: NextRequest) {
   //  • New user with no allowlist entry: refuse with `not_authorized`.
   try {
     const db = getAdminDb();
+    const emailId = decoded.email!.trim().toLowerCase();
     const userRef = db.collection('users').doc(decoded.uid);
     const snap = await userRef.get();
     if (snap.exists) {
@@ -61,7 +111,6 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'account_deactivated' }, { status: 403 });
       }
     } else {
-      const emailId = decoded.email!.trim().toLowerCase();
       const allowRef = db.collection('allowlist').doc(emailId);
       const allowSnap = await allowRef.get();
       if (!allowSnap.exists) {
@@ -73,14 +122,20 @@ export async function POST(request: NextRequest) {
         presetIsLecturer?: boolean;
         presetIsDirector?: boolean;
         presetDirectorProgramId?: string | null;
+        presetDirectorAcademicProgramIds?: string[];
+        presetLecturerAcademicProgramIds?: string[];
       };
       const fallback = decoded.email!.split('@')[0] ?? decoded.email!;
       // Apply preset roles. Lecturer defaults true. Older allowlist rows may
       // still store a curriculum id, so we also derive the academic-program id
-      // and keep the curriculum array as a compatibility mirror.
-      const isLecturer = allow.presetIsLecturer !== false;
+      // and keep curriculum arrays as compatibility mirrors.
+      const directorAcademicSet = new Set(
+        (allow.presetDirectorAcademicProgramIds ?? []).filter(Boolean),
+      );
+      const lecturerAcademicSet = new Set(
+        (allow.presetLecturerAcademicProgramIds ?? []).filter(Boolean),
+      );
       let directorOf: string[] = [];
-      let directorOfAcademicPrograms: string[] = [];
       if (allow.presetIsDirector === true && allow.presetDirectorProgramId) {
         const prog = await db
           .collection('programs')
@@ -90,7 +145,7 @@ export async function POST(request: NextRequest) {
           directorOf = [allow.presetDirectorProgramId];
           const parentProgramId = prog.data()?.parentProgramId;
           if (typeof parentProgramId === 'string' && parentProgramId) {
-            directorOfAcademicPrograms = [parentProgramId];
+            directorAcademicSet.add(parentProgramId);
           }
         } else {
           const academicProgram = await db
@@ -98,15 +153,35 @@ export async function POST(request: NextRequest) {
             .doc(allow.presetDirectorProgramId)
             .get();
           if (academicProgram.exists) {
-            directorOfAcademicPrograms = [allow.presetDirectorProgramId];
-            const curriculums = await db
-              .collection('programs')
-              .where('parentProgramId', '==', allow.presetDirectorProgramId)
-              .get();
-            directorOf = curriculums.docs.map((doc) => doc.id);
+            directorAcademicSet.add(allow.presetDirectorProgramId);
           }
         }
       }
+      const directorOfAcademicPrograms = [...directorAcademicSet].sort((a, b) =>
+        a.localeCompare(b),
+      );
+      const lecturerOfAcademicPrograms = [...lecturerAcademicSet].sort((a, b) =>
+        a.localeCompare(b),
+      );
+      const expandAcademicPrograms = async (ids: string[]): Promise<string[]> => {
+        if (ids.length === 0) return [];
+        const snaps = await Promise.all(
+          ids.map((id) =>
+            db.collection('programs').where('parentProgramId', '==', id).get(),
+          ),
+        );
+        return [
+          ...new Set(snaps.flatMap((snap) => snap.docs.map((doc) => doc.id))),
+        ].sort((a, b) => a.localeCompare(b));
+      };
+      directorOf = [
+        ...new Set([
+          ...directorOf,
+          ...(await expandAcademicPrograms(directorOfAcademicPrograms)),
+        ]),
+      ].sort((a, b) => a.localeCompare(b));
+      const lecturerOf = await expandAcademicPrograms(lecturerOfAcademicPrograms);
+      const isLecturer = allow.presetIsLecturer !== false || lecturerOf.length > 0;
       await userRef.set({
         email: decoded.email,
         nameTh: allow.nameTh?.trim() || fallback,
@@ -119,6 +194,7 @@ export async function POST(request: NextRequest) {
           directorOf,
           assessorOf: [],
           verifierOf: [],
+          lecturerOf,
           directorOfAcademicPrograms,
           assessorOfAcademicPrograms: [],
           verifierOfAcademicPrograms: [],
@@ -131,6 +207,7 @@ export async function POST(request: NextRequest) {
         consumedUid: decoded.uid,
       });
     }
+    await materializePendingLecturerAssignments(db, decoded.uid, decoded.email!, emailId);
   } catch {
     return NextResponse.json({ error: 'profile_failed' }, { status: 500 });
   }

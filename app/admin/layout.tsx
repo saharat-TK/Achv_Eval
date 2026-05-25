@@ -78,6 +78,15 @@ export default async function AdminLayout({
                   หลักสูตร
                 </Link>
               )}
+              {(profile.roles.isAdmin ||
+                (profile.roles.directorOfAcademicPrograms?.length ?? 0) > 0) && (
+                <Link
+                  href="/admin/offering-manager"
+                  className="border-b-2 border-transparent py-3 text-slate-600 hover:border-mfu-primary hover:text-mfu-primary"
+                >
+                  จัดการการเปิดสอน
+                </Link>
+              )}
               <Link
                 href="/verification"
                 className="border-b-2 border-transparent py-3 text-slate-600 hover:border-mfu-primary hover:text-mfu-primary"

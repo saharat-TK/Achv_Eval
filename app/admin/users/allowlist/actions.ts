@@ -152,6 +152,10 @@ export async function addToAllowlist(
     presetIsLecturer: presetRes.presets.presetIsLecturer,
     presetIsDirector: presetRes.presets.presetIsDirector,
     presetDirectorProgramId: presetRes.presets.presetDirectorProgramId,
+    presetDirectorAcademicProgramIds: presetRes.presets.presetDirectorProgramId
+      ? [presetRes.presets.presetDirectorProgramId]
+      : [],
+    presetLecturerAcademicProgramIds: [],
     addedBy: user.uid,
     addedAt: FieldValue.serverTimestamp(),
     consumedAt: null,
@@ -162,6 +166,7 @@ export async function addToAllowlist(
     nameTh: input.nameTh ?? '',
   });
   revalidatePath('/admin/users/allowlist');
+  revalidatePath('/admin/users/program-assignments');
   return { ok: true, id };
 }
 
@@ -233,6 +238,10 @@ export async function bulkAddToAllowlist(
       presetIsLecturer: preset.presets.presetIsLecturer,
       presetIsDirector: preset.presets.presetIsDirector,
       presetDirectorProgramId: preset.presets.presetDirectorProgramId,
+      presetDirectorAcademicProgramIds: preset.presets.presetDirectorProgramId
+        ? [preset.presets.presetDirectorProgramId]
+        : [],
+      presetLecturerAcademicProgramIds: [],
       addedBy: user.uid,
       addedAt: now,
       consumedAt: null,
@@ -251,6 +260,7 @@ export async function bulkAddToAllowlist(
       emails: addedIds,
     });
     revalidatePath('/admin/users/allowlist');
+    revalidatePath('/admin/users/program-assignments');
   }
 
   return { ok: true, added, duplicates, invalid };
@@ -289,11 +299,15 @@ export async function updateAllowlistPresets(
     presetIsLecturer: presetRes.presets.presetIsLecturer,
     presetIsDirector: presetRes.presets.presetIsDirector,
     presetDirectorProgramId: presetRes.presets.presetDirectorProgramId,
+    presetDirectorAcademicProgramIds: presetRes.presets.presetDirectorProgramId
+      ? [presetRes.presets.presetDirectorProgramId]
+      : [],
   });
   await audit('allowlist_presets_updated', id, user.uid, user.email ?? null, {
     ...presetRes.presets,
   });
   revalidatePath('/admin/users/allowlist');
+  revalidatePath('/admin/users/program-assignments');
   return { ok: true, id };
 }
 
@@ -321,5 +335,6 @@ export async function removeFromAllowlist(
   await ref.delete();
   await audit('allowlist_removed', id, user.uid, user.email ?? null);
   revalidatePath('/admin/users/allowlist');
+  revalidatePath('/admin/users/program-assignments');
   return { ok: true, id };
 }

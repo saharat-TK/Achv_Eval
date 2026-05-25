@@ -1,5 +1,6 @@
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import * as admin from 'firebase-admin';
+import { purgeOfferingCore } from './purgeOfferingCore';
 
 const REGION = 'asia-southeast1';
 
@@ -51,9 +52,7 @@ export const purgeCourse = onCall(
     let reviewsCount = 0;
     let filesDeletedCount = 0;
 
-    const bucket = admin.storage().bucket();
-
-    // 1. List offerings of this course.
+    // 1. Purge each offering of this course via the shared core.
     const offeringsSnap = await db
       .collection('offerings')
       .where('courseId', '==', courseId)
@@ -61,97 +60,13 @@ export const purgeCourse = onCall(
     offeringsCount = offeringsSnap.size;
 
     for (const offeringDoc of offeringsSnap.docs) {
-      const offeringId = offeringDoc.id;
-      const offeringRef = db.collection('offerings').doc(offeringId);
-
-      // A. aiReports + Storage
-      const aiReportsSnap = await offeringRef.collection('aiReports').get();
-      aiReportsCount += aiReportsSnap.size;
-      for (const reportDoc of aiReportsSnap.docs) {
-        const data = reportDoc.data();
-        if (data.reportStoragePath) {
-          try {
-            await bucket.file(data.reportStoragePath as string).delete();
-            filesDeletedCount += 1;
-          } catch (e) {
-            console.error(
-              `Failed to delete AI report file ${data.reportStoragePath}:`,
-              e,
-            );
-          }
-        }
-        await reportDoc.ref.delete();
-      }
-
-      // B. assessments + Storage
-      const assessmentsSnap = await offeringRef.collection('assessments').get();
-      assessmentsCount += assessmentsSnap.size;
-      for (const assessmentDoc of assessmentsSnap.docs) {
-        const data = assessmentDoc.data();
-        if (data.signedPdfStoragePath) {
-          try {
-            await bucket.file(data.signedPdfStoragePath as string).delete();
-            filesDeletedCount += 1;
-          } catch (e) {
-            console.error(
-              `Failed to delete assessment file ${data.signedPdfStoragePath}:`,
-              e,
-            );
-          }
-        }
-        await assessmentDoc.ref.delete();
-      }
-
-      // C. verifications + Storage
-      const verificationsSnap = await offeringRef
-        .collection('verifications')
-        .get();
-      verificationsCount += verificationsSnap.size;
-      for (const verificationDoc of verificationsSnap.docs) {
-        const data = verificationDoc.data();
-        if (data.finalPdfStoragePath) {
-          try {
-            await bucket.file(data.finalPdfStoragePath as string).delete();
-            filesDeletedCount += 1;
-          } catch (e) {
-            console.error(
-              `Failed to delete verification file ${data.finalPdfStoragePath}:`,
-              e,
-            );
-          }
-        }
-        await verificationDoc.ref.delete();
-      }
-
-      // D. notifications linked to this offering
-      const notificationsSnap = await db
-        .collection('notifications')
-        .where('relatedOfferingId', '==', offeringId)
-        .get();
-      notificationsCount += notificationsSnap.size;
-      for (const notifDoc of notificationsSnap.docs) {
-        await notifDoc.ref.delete();
-      }
-
-      // E. implementationReviews referencing this offering (either side).
-      const prevSnap = await db
-        .collection('implementationReviews')
-        .where('previousOfferingId', '==', offeringId)
-        .get();
-      const newSnap = await db
-        .collection('implementationReviews')
-        .where('newOfferingId', '==', offeringId)
-        .get();
-      const seenReviewIds = new Set<string>();
-      for (const reviewDoc of [...prevSnap.docs, ...newSnap.docs]) {
-        if (seenReviewIds.has(reviewDoc.id)) continue;
-        seenReviewIds.add(reviewDoc.id);
-        await reviewDoc.ref.delete();
-        reviewsCount += 1;
-      }
-
-      // F. Delete the offering doc.
-      await offeringRef.delete();
+      const c = await purgeOfferingCore(db, offeringDoc.id);
+      aiReportsCount += c.aiReports;
+      assessmentsCount += c.assessments;
+      verificationsCount += c.verifications;
+      notificationsCount += c.notifications;
+      reviewsCount += c.reviews;
+      filesDeletedCount += c.filesDeleted;
     }
 
     // 2. Delete the course doc.
