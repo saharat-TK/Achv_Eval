@@ -65,6 +65,7 @@ complete; Phase 6B (notification email) deferred.
 - [x] Allowlist sign-in gating + preset roles (lecturer / program director) + `/not-authorized` page
 - [x] Super Admin tier — the only role that can manage admins
 - [x] Lecturer role + cross-workspace switcher
+- [ ] Offering lifecycle (soft-delete / guarded hard-delete / purge) — see plan below
 
 ## Organization & access model
 
@@ -128,6 +129,76 @@ academic-program selections to the legacy curriculum arrays
 `roles.directorOf[]`, `roles.assessorOf[]`, and `roles.verifierOf[]`.
 Bootstrap the first super admin with `npm run assign-role -- <email> superadmin`.
 The full role × capability matrix lives in [`docs/ROLE_MATRIX.md`](docs/ROLE_MATRIX.md).
+
+## Offering Lifecycle — Implementation Plan (pending)
+
+Offerings currently have **no per-offering management** — only add / edit /
+clone / bulk-create. `isActive` is set *only* by cascade from the parent
+course/program; there is no way to deactivate or remove a single offering.
+The only way to delete offering data is `purgeCourse`, which destroys the
+whole course. This plan adds an offering lifecycle mirroring the course one.
+
+### Current behavior (for reference)
+- **Soft-closing a course** cascades `isActive=false` to its offerings →
+  they disappear from the lecturer / assessor / verification workspaces
+  (those filter `isActive !== false`), **but still appear on the admin
+  offerings page** (`getOfferingsForProgram` does not filter `isActive`,
+  and the row shows no inactive indicator — a UX gap).
+
+### Proposed three modes (on the offering detail page)
+
+**Mode 1 — Soft-delete / restore.** `offering.isActive = false`, hides it
+from the workspaces; reversible. Caveat: a later course/program *restore*
+re-activates all offerings via `cascadeOfferingsActive`, overriding an
+individually-deactivated one (same blind-cascade as today).
+
+**Mode 2 — Guarded hard-delete.** Allowed only when the offering has no
+`aiReports` / `assessments` / `verifications` (e.g. `draft`,
+`documents_pending`) — just deletes the offering doc. Refuses otherwise,
+pointing to purge.
+
+**Mode 3 — Purge (destructive, ANY status).** New `purgeOffering` Cloud
+Function: removes the offering + its subcollections (`aiReports`,
+`assessments`, `verifications`) + Storage PDFs + related `notifications`
++ `implementationReviews`, regardless of status. Typed-confirmation +
+checkbox gate. This is the "remove even when ai_complete / assessed"
+requirement.
+
+### Permissions
+- Modes 1–2: admin / super-admin (+ program director — TBD).
+- Mode 3 (purge): super-admin, admin, **and program director**
+  (`directorOf` includes `offering.programId`). NOTE: first time a
+  director gets destructive purge power — confirm before building.
+
+### Files to touch
+- `functions/src/purgeCourse.ts` — extract the per-offering cascade into a
+  shared `purgeOfferingCore(db, bucket, offeringId)`; `purgeCourse` reuses it.
+- `functions/src/purgeOffering.ts` (new) — callable; auth = admin OR
+  director of the program; calls `purgeOfferingCore`; **nulls
+  `previousOfferingId` on any successor offering** that pointed at the
+  purged one; audit `offering_purged`. Export from `functions/src/index.ts`.
+- `app/admin/programs/[programId]/offerings/actions.ts` —
+  `softDeleteOffering` / `restoreOffering` / `deleteOffering` (guarded).
+- `components/OfferingLifecyclePanel.tsx` (new, mirrors
+  `CourseLifecyclePanel`) on the offering edit page.
+- Offerings list page — add an "ปิดใช้งาน" badge for `isActive===false`
+  rows (fixes the Q1 gap).
+
+### Edge cases
+- Carry-forward chain: null `previousOfferingId` on the successor when its
+  predecessor is purged (avoid dangling links).
+- An `implementationReview` links two offerings — deleting it drops the
+  cross-semester verification record for *both*; call this out in the
+  confirm copy.
+- Storage PDF delete failure is non-fatal (log + continue), as in
+  `purgeCourse`.
+
+### Open questions (decide before building)
+1. Should program directors be able to **purge** (Mode 3), or only
+   soft-delete + guarded hard-delete?
+2. Include Mode 1 (offering-level soft-delete) given the blind-cascade
+   caveat, or only Modes 2 & 3?
+3. Purge confirmation token: course code, section, or a fixed keyword?
 
 ## Prerequisites
 
