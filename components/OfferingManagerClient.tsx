@@ -46,6 +46,19 @@ export default function OfferingManagerClient({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [menuKey, setMenuKey] = useState<string | null>(null);
+  const [menuDir, setMenuDir] = useState<'up' | 'down'>('down');
+
+  // Open the ⋮ menu, flipping it upward when there isn't room below.
+  function toggleMenu(key: string, e: React.MouseEvent<HTMLElement>) {
+    if (menuKey === key) {
+      setMenuKey(null);
+      return;
+    }
+    const rect = e.currentTarget.getBoundingClientRect();
+    const spaceBelow = window.innerHeight - rect.bottom;
+    setMenuDir(spaceBelow < 120 ? 'up' : 'down');
+    setMenuKey(key);
+  }
 
   const apLabel = useMemo(() => {
     const m = new Map<string, string>();
@@ -245,7 +258,7 @@ export default function OfferingManagerClient({
           {groups.map((g) => (
             <section
               key={g.year}
-              className="overflow-hidden rounded-xl border border-[#00704A]/20 border-l-4 border-l-[#00704A] bg-[#00704A]/[0.04]"
+              className="rounded-xl border border-[#00704A]/20 border-l-4 border-l-[#00704A] bg-[#00704A]/[0.04]"
             >
               <div className="flex items-center justify-between px-4 py-3">
                 <h2 className="text-base font-semibold text-[#00704A]">
@@ -278,16 +291,20 @@ export default function OfferingManagerClient({
                                 <div className="relative">
                                   <button
                                     type="button"
-                                    onClick={() =>
-                                      setMenuKey(menuKey === key ? null : key)
-                                    }
+                                    onClick={(e) => toggleMenu(key, e)}
                                     className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
                                     aria-label="จัดการ"
                                   >
                                     ⋮
                                   </button>
                                   {menuKey === key && (
-                                    <div className="absolute right-0 z-20 mt-1 w-32 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-lg">
+                                    <div
+                                      className={`absolute right-0 z-30 w-32 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-lg ${
+                                        menuDir === 'up'
+                                          ? 'bottom-full mb-1'
+                                          : 'top-full mt-1'
+                                      }`}
+                                    >
                                       <button
                                         type="button"
                                         onClick={() => openEdit(block, g.year, s.sem)}
