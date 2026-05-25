@@ -200,6 +200,75 @@ requirement.
    caveat, or only Modes 2 & 3?
 3. Purge confirmation token: course code, section, or a fixed keyword?
 
+## Offering Course Manager — Implementation Plan (pending)
+
+A new top-level console (admin + program director) for **planning offerings
+a whole term at a time**, separate from the per-curriculum offerings page
+(which stays for one-by-one tweaks: lecturer, section, PLOs). Depends on the
+offering-purge core from the Offering Lifecycle plan above.
+
+### Scope & data
+- Hierarchy: `academicProgram → curriculum (programs, via parentProgramId) →
+  course → offering`. An offering's `programId` is the **curriculum** id, so
+  "offerings of an academic program" is a two-hop query.
+- Access scope: **director** → `directorOfAcademicPrograms`; **admin /
+  super-admin** → all academic programs.
+
+### Page UX
+- Nav tab (admin + director), e.g. "จัดการการเปิดสอน".
+- **Year cards** (latest first); inside each: **semester** sub-groups
+  (summer → 2nd → 1st), then **academic-program** blocks. All offerings of a
+  year live in that year's card.
+- **Default view: latest 2 academic years**, with **year / semester /
+  academic-program filters**.
+- Each (year, semester, academic-program) block has a **⋮ menu** → Edit / Delete.
+
+### Batch-add modal (dual-list)
+- Fields: Academic program (director defaults to/limited to assigned; admin
+  any), Academic year (default current BE year, ±5), Semester.
+- **Curriculum switcher** drives the left "available courses" list; the right
+  "selected" list **persists across curriculum switches** (accumulates).
+- Dual-list **shows courses already offered that term** (not hidden).
+- Confirm → one offering per selected course (`programId` = course's
+  curriculum, chosen year/semester, **section default `01`**, lecturer null),
+  deduped against existing offerings.
+
+### Edit / Delete (⋮)
+- **Edit** → reopens the dual-list pre-loaded with the group's current
+  offerings; on confirm, diff → added courses created, **removed courses
+  deleted/purged** per the rules below.
+- **Delete** → removes all offerings in that (academic program, year,
+  semester) group; gated by typing **ยืนยัน** + confirm.
+
+### Removal rules (decided)
+An offering is **"safe to delete"** when it has **no data** — no
+`aiReports` / `assessments` / `verifications`, i.e. status is `draft` (ร่าง)
+or `documents_pending` (รอเอกสาร).
+- **Admin / super-admin:** may **purge** any offering, including those with
+  data (destructive cascade, with confirmation).
+- **Program director:** may delete **only safe (no-data) offerings**.
+  Delete/edit-remove **skips** offerings that have data and reports them as
+  needing an admin purge.
+
+### Reuse / new pieces
+- Generalize `bulkCreateOfferingsFromCourses` → `bulkCreateOfferings(courseIds,
+  { academicYear, semester, section })`, resolving each course's curriculum +
+  checking academic-program access.
+- `purgeOfferingsBulk(offeringIds)` (admin/super) and a safe
+  `deleteEmptyOfferingsBulk(offeringIds)` (director) — both gated.
+- New: `OfferingManagerPage`, `BatchOfferingModal`, reusable
+  `DualListSelector`, group `⋮` menu + typed-ยืนยัน delete.
+- Data: `getAcademicProgramsForScope`, `getOfferingsForAcademicPrograms`
+  (chunk `in` queries / bound by year), `getCurriculumsWithCourses`.
+
+### Sequence
+1. Offering-purge core (`purgeOfferingCore` + `purgeOffering`) — prereq.
+2. Data layer + scope helpers.
+3. Bulk create/delete/purge actions.
+4. Page + filters + year-card grouping.
+5. Batch modal + dual-list + curriculum switcher.
+6. Edit (diff) + typed-confirm delete.
+
 ## Prerequisites
 
 - Node.js 20.6+ (the `seed` script uses `--env-file`)
