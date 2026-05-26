@@ -17,11 +17,62 @@ import {
 import type { DashboardTrendPoint } from '@/lib/data/dashboard';
 
 const GREEN = '#00704A';
-const HOUSE_GREEN = '#1E3932';
 const LIGHT_GREEN = '#7FB39C';
 const AMBER = '#D97706';
 const SLATE_200 = '#e2e8f0';
-const SLATE_300 = '#cbd5e1';
+const SLATE_400 = '#94a3b8'; // darker "not assessed" bar — was #cbd5e1
+
+type StackedPoint = DashboardTrendPoint & {
+  assessedPct: number;
+  notAssessedPct: number;
+};
+
+/** Custom tooltip for the left ComposedChart. Shows percentage + course count for bar series. */
+function ProgressTooltip({
+  active,
+  payload,
+  label,
+}: {
+  active?: boolean;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  payload?: Array<{ name: string; value: number | null; color: string; payload: StackedPoint }>;
+  label?: string;
+}) {
+  if (!active || !payload || payload.length === 0) return null;
+  const pt = payload[0].payload;
+
+  return (
+    <div
+      className="rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-md"
+      style={{ fontSize: 11 }}
+    >
+      <p className="mb-1.5 font-semibold text-slate-700">{label}</p>
+      {payload.map((entry) => {
+        if (entry.value === null || entry.value === undefined) return null;
+        let detail: string;
+        if (entry.name === 'ทวนสอบแล้ว') {
+          detail = `${entry.value}% (${pt.assessedCount} วิชา)`;
+        } else if (entry.name === 'ยังไม่ทวนสอบ') {
+          detail = `${entry.value}% (${pt.totalOfferings - pt.assessedCount} วิชา)`;
+        } else {
+          // Average score line — value may be null when no signed assessments
+          detail = entry.value !== null ? `${entry.value}%` : '—';
+        }
+        return (
+          <div key={entry.name} className="flex items-center gap-1.5">
+            <span
+              className="inline-block h-2 w-2 shrink-0 rounded-sm"
+              style={{ background: entry.color }}
+            />
+            <span style={{ color: entry.color }}>
+              {entry.name}&nbsp;:&nbsp;{detail}
+            </span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 
 /**
  * Cross-semester trend charts: average verification score and completion
@@ -41,16 +92,12 @@ export default function DashboardTrends({
   }
 
   // Pre-compute 100%-stack values for each trend point.
-  const stackedTrend = trend.map((pt) => {
+  const stackedTrend: StackedPoint[] = trend.map((pt) => {
     const assessed =
       pt.totalOfferings > 0
         ? Math.round((pt.assessedCount / pt.totalOfferings) * 100)
         : 0;
-    return {
-      ...pt,
-      assessedPct: assessed,
-      notAssessedPct: 100 - assessed,
-    };
+    return { ...pt, assessedPct: assessed, notAssessedPct: 100 - assessed };
   });
 
   return (
@@ -73,7 +120,16 @@ export default function DashboardTrends({
                 tick={{ fontSize: 11 }}
                 tickFormatter={(v: number) => `${v}%`}
               />
-              <Tooltip formatter={(value) => `${value}%`} />
+              <Tooltip
+                content={(props) => (
+                  <ProgressTooltip
+                    active={props.active}
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    payload={props.payload as any}
+                    label={props.label as string}
+                  />
+                )}
+              />
               <Legend wrapperStyle={{ fontSize: 12 }} />
               {/* 100% stacked bars */}
               <Bar
@@ -87,7 +143,7 @@ export default function DashboardTrends({
                 dataKey="notAssessedPct"
                 name="ยังไม่ทวนสอบ"
                 stackId="completion"
-                fill={SLATE_300}
+                fill={SLATE_400}
                 isAnimationActive={false}
               />
               {/* Average score line overlay */}
@@ -116,7 +172,11 @@ export default function DashboardTrends({
               <CartesianGrid strokeDasharray="3 3" stroke={SLATE_200} />
               <XAxis dataKey="label" tick={{ fontSize: 11 }} />
               <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
-              <Tooltip />
+              <Tooltip
+                contentStyle={{ fontSize: 11 }}
+                itemStyle={{ fontSize: 11 }}
+                labelStyle={{ fontSize: 11, fontWeight: 600 }}
+              />
               <Legend wrapperStyle={{ fontSize: 12 }} />
               <Bar dataKey="excellent" name="ดีเยี่ยม" stackId="band" fill={GREEN} />
               <Bar dataKey="good" name="ดี" stackId="band" fill={LIGHT_GREEN} />
