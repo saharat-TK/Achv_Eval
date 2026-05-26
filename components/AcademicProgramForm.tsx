@@ -43,6 +43,7 @@ export default function AcademicProgramForm({
   const [form, setForm] = useState<AcademicProgramFormData>(initial ?? EMPTY);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [codeError, setCodeError] = useState<string | null>(null);
 
   function set<K extends keyof AcademicProgramFormData>(
     key: K,
@@ -51,7 +52,29 @@ export default function AcademicProgramForm({
     setForm((f) => ({ ...f, [key]: value }));
   }
 
+  function handleCodeChange(raw: string) {
+    // Strip every non-digit character and cap at 7.
+    const digits = raw.replace(/\D/g, '').slice(0, 7);
+    set('code', digits);
+    if (digits.length > 0 && digits.length < 7) {
+      setCodeError(`ต้องการ 7 หลัก (ป้อนแล้ว ${digits.length} หลัก)`);
+    } else {
+      setCodeError(null);
+    }
+  }
+
+  function validateCode(): boolean {
+    const code = form.code.trim();
+    if (!/^\d{7}$/.test(code)) {
+      setCodeError('รหัสหลักสูตรต้องเป็นตัวเลข 7 หลักพอดี เช่น 3180800');
+      return false;
+    }
+    setCodeError(null);
+    return true;
+  }
+
   async function submit() {
+    if (!validateCode()) return;
     setBusy(true);
     setError(null);
     const res =
@@ -75,10 +98,21 @@ export default function AcademicProgramForm({
           <label className="text-sm text-slate-600">
             รหัสหลักสูตร
             <input
-              className={inputCls}
+              className={`${inputCls} font-mono tracking-widest ${codeError ? 'border-red-400 focus:border-red-500' : ''}`}
               value={form.code}
-              onChange={(e) => set('code', e.target.value)}
+              onChange={(e) => handleCodeChange(e.target.value)}
+              onBlur={validateCode}
+              inputMode="numeric"
+              maxLength={7}
+              placeholder="เช่น 3180800"
+              autoComplete="off"
+              spellCheck={false}
             />
+            {codeError ? (
+              <p className="mt-1 text-xs text-red-600">{codeError}</p>
+            ) : (
+              <p className="mt-1 text-xs text-slate-400">ตัวเลข 7 หลัก เช่น 3180800</p>
+            )}
           </label>
           <label className="text-sm text-slate-600">
             สาขาวิชา

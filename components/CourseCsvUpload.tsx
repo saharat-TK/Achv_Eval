@@ -86,6 +86,8 @@ export default function CourseCsvUpload({ programId }: { programId: string }) {
       <p className="mt-1 text-xs text-slate-500">
         คอลัมน์ (แถวแรกเป็นหัวตาราง): <code>{COLUMNS.join(', ')}</code>
         <br />
+        <code>code</code> ต้องเป็นตัวเลข 7 หลักพอดี เช่น <code>1808102</code> — แถวที่รหัสไม่ถูกต้องจะถูกข้าม
+        <br />
         ค่า <code>type</code> ใช้: theory, theory_practice, practice, field, s_u
         <br />
         ค่า <code>semester</code> ใช้: 1, 2, 3 (เว้นว่างได้)

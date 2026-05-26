@@ -66,9 +66,30 @@ export default function ProgramForm({
   const [form, setForm] = useState<ProgramFormData>(initial ?? EMPTY);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [codeError, setCodeError] = useState<string | null>(null);
 
   function set<K extends keyof ProgramFormData>(key: K, value: ProgramFormData[K]) {
     setForm((f) => ({ ...f, [key]: value }));
+  }
+
+  function handleCodeChange(raw: string) {
+    const digits = raw.replace(/\D/g, '').slice(0, 9);
+    set('code', digits);
+    if (digits.length > 0 && digits.length < 9) {
+      setCodeError(`ต้องการ 9 หลัก (ป้อนแล้ว ${digits.length} หลัก)`);
+    } else {
+      setCodeError(null);
+    }
+  }
+
+  function validateCode(): boolean {
+    const code = form.code.trim();
+    if (!/^\d{9}$/.test(code)) {
+      setCodeError('รหัสหลักสูตรต้องเป็นตัวเลข 9 หลักพอดี เช่น 673180800');
+      return false;
+    }
+    setCodeError(null);
+    return true;
   }
 
   function setPlo(index: number, patch: Partial<ProgramFormData['plos'][number]>) {
@@ -98,6 +119,7 @@ export default function ProgramForm({
   }
 
   async function submit() {
+    if (!validateCode()) return;
     setBusy(true);
     setError(null);
     const res =
@@ -122,10 +144,21 @@ export default function ProgramForm({
           <label className="text-sm text-slate-600">
             รหัสหลักสูตร
             <input
-              className={inputCls}
+              className={`${inputCls} font-mono tracking-widest ${codeError ? 'border-red-400 focus:border-red-500' : ''}`}
               value={form.code}
-              onChange={(e) => set('code', e.target.value)}
+              onChange={(e) => handleCodeChange(e.target.value)}
+              onBlur={validateCode}
+              inputMode="numeric"
+              maxLength={9}
+              placeholder="เช่น 673180800"
+              autoComplete="off"
+              spellCheck={false}
             />
+            {codeError ? (
+              <p className="mt-1 text-xs text-red-600">{codeError}</p>
+            ) : (
+              <p className="mt-1 text-xs text-slate-400">ตัวเลข 9 หลัก เช่น 673180800</p>
+            )}
           </label>
           <label className="text-sm text-slate-600">
             สำนักวิชา

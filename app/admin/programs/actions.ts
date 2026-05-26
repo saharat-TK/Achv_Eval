@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { FieldValue, type DocumentReference } from 'firebase-admin/firestore';
 import { getAdminDb } from '@/lib/firebase/admin';
 import { getSessionUser, getCurrentProfile } from '@/lib/firebase/auth-server';
+import { toDocId } from '@/lib/utils/ids';
 import type { ProgramLevel, PloSchema, ProgramPlo } from '@/lib/types/models';
 
 export interface ProgramFormData {
@@ -27,6 +28,8 @@ export type ActionResult =
 
 function validate(data: ProgramFormData): string | null {
   if (!data.code?.trim()) return 'กรุณาระบุรหัสหลักสูตร';
+  if (!/^\d{9}$/.test(data.code.trim()))
+    return 'รหัสหลักสูตรต้องเป็นตัวเลข 9 หลักพอดี เช่น 673180800';
   if (!data.nameTh?.trim()) return 'กรุณาระบุชื่อหลักสูตร (ไทย)';
   if (!data.nameEn?.trim()) return 'กรุณาระบุชื่อหลักสูตร (อังกฤษ)';
   for (const plo of data.plos) {
@@ -181,15 +184,34 @@ export async function createProgram(data: ProgramFormData): Promise<ActionResult
   const deptErr = await validateDepartment(data);
   if (deptErr) return { ok: false, error: deptErr };
 
-  const now = FieldValue.serverTimestamp();
-  const ref = await getAdminDb()
-    .collection('programs')
-    .add({ ...normalize(data), isActive: true, createdAt: now, updatedAt: now });
-  await syncCurriculumRoleMirrors(ref.id, null, data.parentProgramId ?? null);
+  const db = getAdminDb();
+  const id = toDocId(data.code);
 
-  await writeAudit('program_created', ref.id, user.uid, user.email ?? null);
+  // Uniqueness — doc-ID check covers new readable-ID docs; code-field check
+  // covers legacy docs that still carry random Firestore IDs.
+  const docSnap = await db.collection('programs').doc(id).get();
+  if (docSnap.exists) {
+    return { ok: false, error: `รหัสหลักสูตร ${id} มีอยู่ในระบบแล้ว` };
+  }
+  const codeSnap = await db
+    .collection('programs')
+    .where('code', '==', id)
+    .limit(1)
+    .get();
+  if (!codeSnap.empty) {
+    return { ok: false, error: `รหัสหลักสูตร ${id} มีอยู่ในระบบแล้ว` };
+  }
+
+  const now = FieldValue.serverTimestamp();
+  await db
+    .collection('programs')
+    .doc(id)
+    .set({ ...normalize(data), isActive: true, createdAt: now, updatedAt: now });
+  await syncCurriculumRoleMirrors(id, null, data.parentProgramId ?? null);
+
+  await writeAudit('program_created', id, user.uid, user.email ?? null);
   revalidatePath('/admin');
-  return { ok: true, id: ref.id };
+  return { ok: true, id };
 }
 
 /** Update a program. Admin, or the director of that program. */
