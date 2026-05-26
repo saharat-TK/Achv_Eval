@@ -2,7 +2,9 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { getCurrentProfile } from '@/lib/firebase/auth-server';
 import { getAllPrograms, getProgramsByIds } from '@/lib/data/programs';
+import { getAllAcademicPrograms } from '@/lib/data/academicPrograms';
 import { getExecutiveDashboardData } from '@/lib/data/dashboard';
+import { consolidateByAcademicProgram } from '@/lib/utils/dashboardConsolidate';
 import { SEMESTER_LABEL } from '@/lib/constants';
 import type { Semester } from '@/lib/types/models';
 import PrintButton from '@/components/PrintButton';
@@ -28,6 +30,8 @@ export default async function DashboardPrintPage({
   searchParams,
 }: {
   searchParams: {
+    departmentId?: string | string[];
+    academicProgramId?: string | string[];
     programId?: string | string[];
     academicYear?: string | string[];
     semester?: string | string[];
@@ -37,10 +41,13 @@ export default async function DashboardPrintPage({
   if (!profile) redirect('/login');
 
   const isAdmin = profile.roles.isAdmin;
-  const programs = isAdmin
-    ? await getAllPrograms()
-    : await getProgramsByIds(profile.roles.directorOf ?? []);
+  const [programs, allAcademicPrograms] = await Promise.all([
+    isAdmin ? getAllPrograms() : getProgramsByIds(profile.roles.directorOf ?? []),
+    getAllAcademicPrograms(),
+  ]);
 
+  const rawDepartmentId = readValue(searchParams.departmentId);
+  const rawAcademicProgramId = readValue(searchParams.academicProgramId);
   const rawProgramId = readValue(searchParams.programId);
   const programId = programs.some((program) => program.id === rawProgramId)
     ? rawProgramId
@@ -55,10 +62,14 @@ export default async function DashboardPrintPage({
       : undefined;
 
   const data = await getExecutiveDashboardData(programs, {
+    departmentId: rawDepartmentId || undefined,
+    academicProgramId: rawAcademicProgramId || undefined,
     programId,
     academicYear,
     semester,
   });
+
+  const apRows = consolidateByAcademicProgram(data.programRows, programs, allAcademicPrograms);
 
   const context = {
     programLabel: programId
@@ -139,20 +150,23 @@ export default async function DashboardPrintPage({
             </Tr>
           </thead>
           <tbody>
-            {data.programRows.map((program) => (
-              <Tr key={program.programId}>
+            {apRows.map((row) => (
+              <Tr key={row.academicProgramId ?? row.code}>
                 <Td>
-                  {program.code}
-                  <span className="block text-xs text-slate-500">
-                    {program.nameTh}
-                  </span>
+                  {row.code}
+                  <span className="block text-xs text-slate-500">{row.nameTh}</span>
+                  {row.programCount > 1 && (
+                    <span className="block text-xs text-slate-400">
+                      {row.programCount} หลักสูตร
+                    </span>
+                  )}
                 </Td>
-                <Td>{program.totalOfferings}</Td>
-                <Td>{program.aiCompleted}</Td>
-                <Td>{program.assessed}</Td>
-                <Td>{program.finalVerified}</Td>
-                <Td>{program.needsFollowUp}</Td>
-                <Td>{scoreText(program.averagePercentScore)}</Td>
+                <Td>{row.totalOfferings}</Td>
+                <Td>{row.aiCompleted}</Td>
+                <Td>{row.assessed}</Td>
+                <Td>{row.finalVerified}</Td>
+                <Td>{row.needsFollowUp}</Td>
+                <Td>{scoreText(row.averagePercentScore)}</Td>
               </Tr>
             ))}
           </tbody>

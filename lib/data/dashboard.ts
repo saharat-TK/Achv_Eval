@@ -24,6 +24,8 @@ export interface DashboardProgramRow {
   finalVerified: number;
   needsFollowUp: number;
   averagePercentScore: number | null;
+  /** # offerings with a signed assessment — denominator used when averaging scores. */
+  signedCount: number;
 }
 
 export interface DashboardAttentionItem {
@@ -55,6 +57,7 @@ export interface DashboardTrendPoint {
   academicYear: number;
   semester: Semester;
   totalOfferings: number;
+  assessedCount: number; // # offerings in an assessed/verified state
   completionRate: number; // 0–100, assessed ÷ total
   averagePercentScore: number | null;
   excellent: number;
@@ -106,6 +109,8 @@ export interface ExecutiveDashboardData {
 }
 
 export interface DashboardFilters {
+  departmentId?: string;
+  academicProgramId?: string; // parentProgramId on ProgramDoc
   programId?: string;
   academicYear?: number;
   semester?: Semester;
@@ -239,6 +244,7 @@ function buildTrend(
         academicYear,
         semester,
         totalOfferings: group.length,
+        assessedCount,
         completionRate: Math.round((assessedCount / group.length) * 1000) / 10,
         averagePercentScore: average(signed.map((a) => a.percentScore)),
         excellent: bands.excellent,
@@ -384,14 +390,27 @@ export async function getExecutiveDashboardData(
   programs: ProgramWithId[],
   filters: DashboardFilters = {},
 ): Promise<ExecutiveDashboardData> {
-  const programIds = programs.map((program) => program.id);
+  // Apply department / academic-program filters first to narrow the program scope.
+  let scopedPrograms = programs;
+  if (filters.departmentId) {
+    scopedPrograms = scopedPrograms.filter(
+      (p) => p.departmentId === filters.departmentId,
+    );
+  }
+  if (filters.academicProgramId) {
+    scopedPrograms = scopedPrograms.filter(
+      (p) => p.parentProgramId === filters.academicProgramId,
+    );
+  }
+
+  const programIds = scopedPrograms.map((program) => program.id);
   const allOfferings = await getOfferingsForPrograms(programIds);
   const availableAcademicYears = [
     ...new Set(allOfferings.map((offering) => offering.academicYear)),
   ].sort((a, b) => b - a);
   const visiblePrograms = filters.programId
-    ? programs.filter((program) => program.id === filters.programId)
-    : programs;
+    ? scopedPrograms.filter((program) => program.id === filters.programId)
+    : scopedPrograms;
   // Program-scoped (but every term): the basis for the cross-semester trend.
   const programScopedOfferings = filters.programId
     ? allOfferings.filter((offering) => offering.programId === filters.programId)
@@ -474,6 +493,7 @@ export async function getExecutiveDashboardData(
       needsFollowUp: programOfferings.filter((o) => FOLLOW_UP_STATUSES.includes(o.status))
         .length,
       averagePercentScore: average(programScores),
+      signedCount: programScores.length,
     };
   });
 
