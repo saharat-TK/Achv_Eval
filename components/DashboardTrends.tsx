@@ -35,7 +35,6 @@ function ProgressTooltip({
   label,
 }: {
   active?: boolean;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   payload?: Array<{ name: string; value: number | null; color: string; payload: StackedPoint }>;
   label?: string;
 }) {
@@ -129,8 +128,14 @@ export default function DashboardTrends({
                 content={(props) => (
                   <ProgressTooltip
                     active={props.active}
-                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                    payload={props.payload as any}
+                    payload={
+                      (props.payload as unknown) as Array<{
+                        name: string;
+                        value: number | null;
+                        color: string;
+                        payload: StackedPoint;
+                      }>
+                    }
                     label={props.label as string}
                   />
                 )}

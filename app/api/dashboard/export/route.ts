@@ -1,11 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getCurrentProfile } from '@/lib/firebase/auth-server';
 import { getAllPrograms, getProgramsByIds } from '@/lib/data/programs';
+import { getAllAcademicPrograms } from '@/lib/data/academicPrograms';
 import {
   getExecutiveDashboardData,
   type DashboardFilters,
   type ExecutiveDashboardData,
 } from '@/lib/data/dashboard';
+import {
+  consolidateByAcademicProgram,
+  type ApConsolidatedRow,
+} from '@/lib/utils/dashboardConsolidate';
 import { SEMESTER_LABEL } from '@/lib/constants';
 import type { Semester } from '@/lib/types/models';
 
@@ -28,6 +33,7 @@ function scoreText(score: number | null): string {
 
 function buildCsv(
   data: ExecutiveDashboardData,
+  apRows: ApConsolidatedRow[],
   context: { programLabel: string; yearLabel: string; semesterLabel: string },
 ): string {
   const lines: string[] = [];
@@ -62,19 +68,20 @@ function buildCsv(
 
   lines.push(row('[ภาพรวมตามหลักสูตร]'));
   lines.push(
-    row('รหัส', 'ชื่อหลักสูตร', 'รายวิชา', 'AI', 'ทวนสอบ', 'รับรอง', 'ติดตาม', 'คะแนนเฉลี่ย'),
+    row('รหัส', 'ชื่อหลักสูตร (AP)', 'จำนวนหลักสูตร', 'รายวิชา', 'AI', 'ทวนสอบ', 'รับรอง', 'ติดตาม', 'คะแนนเฉลี่ย'),
   );
-  for (const program of data.programRows) {
+  for (const apRow of apRows) {
     lines.push(
       row(
-        program.code,
-        program.nameTh,
-        program.totalOfferings,
-        program.aiCompleted,
-        program.assessed,
-        program.finalVerified,
-        program.needsFollowUp,
-        scoreText(program.averagePercentScore),
+        apRow.code,
+        apRow.nameTh,
+        apRow.programCount,
+        apRow.totalOfferings,
+        apRow.aiCompleted,
+        apRow.assessed,
+        apRow.finalVerified,
+        apRow.needsFollowUp,
+        scoreText(apRow.averagePercentScore),
       ),
     );
   }
@@ -136,9 +143,10 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'not_authorized' }, { status: 403 });
   }
 
-  const programs = isAdmin
-    ? await getAllPrograms()
-    : await getProgramsByIds(directorOf);
+  const [programs, allAcademicPrograms] = await Promise.all([
+    isAdmin ? getAllPrograms() : getProgramsByIds(directorOf),
+    getAllAcademicPrograms(),
+  ]);
 
   const sp = request.nextUrl.searchParams;
   const rawDepartmentId = sp.get('departmentId') ?? undefined;
@@ -166,8 +174,9 @@ export async function GET(request: NextRequest) {
     semester,
   };
   const data = await getExecutiveDashboardData(programs, filters);
+  const apRows = consolidateByAcademicProgram(data.programRows, programs, allAcademicPrograms);
 
-  const csvText = buildCsv(data, {
+  const csvText = buildCsv(data, apRows, {
     programLabel: programId
       ? (programs.find((p) => p.id === programId)?.nameTh ?? programId)
       : 'ทุกหลักสูตร',

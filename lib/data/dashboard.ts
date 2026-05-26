@@ -24,6 +24,8 @@ export interface DashboardProgramRow {
   finalVerified: number;
   needsFollowUp: number;
   averagePercentScore: number | null;
+  /** # offerings with a signed assessment — denominator used when averaging scores. */
+  signedCount: number;
 }
 
 export interface DashboardAttentionItem {
@@ -491,6 +493,7 @@ export async function getExecutiveDashboardData(
       needsFollowUp: programOfferings.filter((o) => FOLLOW_UP_STATUSES.includes(o.status))
         .length,
       averagePercentScore: average(programScores),
+      signedCount: programScores.length,
     };
   });
 

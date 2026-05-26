@@ -5,6 +5,7 @@ import { getAllPrograms, getProgramsByIds } from '@/lib/data/programs';
 import { getAllDepartments } from '@/lib/data/departments';
 import { getAllAcademicPrograms } from '@/lib/data/academicPrograms';
 import { getExecutiveDashboardData } from '@/lib/data/dashboard';
+import { consolidateByAcademicProgram } from '@/lib/utils/dashboardConsolidate';
 import { OFFERING_STATUS, SEMESTER_LABEL } from '@/lib/constants';
 import type { AssessmentBand, OfferingStatus, Semester } from '@/lib/types/models';
 import StatusBadge from '@/components/StatusBadge';
@@ -117,6 +118,8 @@ export default async function AdminDashboardPage({
     academicYear: selectedAcademicYear,
     semester: selectedSemester,
   });
+
+  const apRows = consolidateByAcademicProgram(data.programRows, programs, academicPrograms);
 
   const visibleStatuses = STATUS_ORDER.filter(
     (status) => (data.statusCounts[status] ?? 0) > 0,
@@ -242,32 +245,24 @@ export default async function AdminDashboardPage({
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {data.programRows.map((program) => (
-                  <tr key={program.programId} className="hover:bg-slate-50">
+                {apRows.map((row) => (
+                  <tr key={row.academicProgramId ?? row.code} className="hover:bg-slate-50">
                     <td className="px-4 py-3">
-                      <Link
-                        href={`/admin/programs/${program.programId}`}
-                        className="font-medium text-mfu-primary hover:underline"
-                      >
-                        {program.code}
-                      </Link>
-                      <div className="mt-0.5 text-xs text-slate-500">
-                        {program.nameTh}
-                      </div>
+                      <span className="font-medium text-slate-800">{row.code}</span>
+                      <div className="mt-0.5 text-xs text-slate-500">{row.nameTh}</div>
+                      {row.programCount > 1 && (
+                        <div className="mt-0.5 text-xs text-slate-400">
+                          {row.programCount} หลักสูตร
+                        </div>
+                      )}
                     </td>
+                    <td className="px-4 py-3 text-slate-700">{row.totalOfferings}</td>
+                    <td className="px-4 py-3 text-slate-700">{row.aiCompleted}</td>
+                    <td className="px-4 py-3 text-slate-700">{row.assessed}</td>
+                    <td className="px-4 py-3 text-slate-700">{row.finalVerified}</td>
+                    <td className="px-4 py-3 text-slate-700">{row.needsFollowUp}</td>
                     <td className="px-4 py-3 text-slate-700">
-                      {program.totalOfferings}
-                    </td>
-                    <td className="px-4 py-3 text-slate-700">{program.aiCompleted}</td>
-                    <td className="px-4 py-3 text-slate-700">{program.assessed}</td>
-                    <td className="px-4 py-3 text-slate-700">
-                      {program.finalVerified}
-                    </td>
-                    <td className="px-4 py-3 text-slate-700">
-                      {program.needsFollowUp}
-                    </td>
-                    <td className="px-4 py-3 text-slate-700">
-                      {scoreText(program.averagePercentScore)}
+                      {scoreText(row.averagePercentScore)}
                     </td>
                   </tr>
                 ))}
