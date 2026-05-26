@@ -30,10 +30,15 @@ const COURSE_TYPES: CourseType[] = [
   's_u',
 ];
 
-/** Parses the leading number of a credit structure ("2(2-0-4)" → 2). */
+/**
+ * Parses the leading number of a credit structure ("2(2-0-4)" → 2).
+ * Returns -1 when the string does not start with a number at all, so that
+ * callers can distinguish "0 credits" (valid for non-credit courses) from
+ * "no number found" (malformed input).
+ */
 function parseCredits(structure: string): number {
   const m = structure.trim().match(/^(\d+(?:\.\d+)?)/);
-  return m ? parseFloat(m[1]) : 0;
+  return m ? parseFloat(m[1]) : -1;
 }
 
 async function authorize(programId: string) {
@@ -77,8 +82,8 @@ function validate(data: CourseFormData): string | null {
   if (!data.nameTh?.trim()) return 'กรุณาระบุชื่อวิชา (ไทย)';
   if (!data.nameEn?.trim()) return 'กรุณาระบุชื่อวิชา (อังกฤษ)';
   if (!data.creditStructure?.trim()) return 'กรุณาระบุโครงสร้างหน่วยกิต';
-  if (parseCredits(data.creditStructure) <= 0)
-    return 'โครงสร้างหน่วยกิตไม่ถูกต้อง (เช่น 2(2-0-4))';
+  if (parseCredits(data.creditStructure) < 0)
+    return 'โครงสร้างหน่วยกิตไม่ถูกต้อง (เช่น 2(2-0-4) หรือ 0(2-0-4))';
   return null;
 }
 
