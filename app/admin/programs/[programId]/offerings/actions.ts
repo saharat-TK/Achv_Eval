@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { FieldValue } from 'firebase-admin/firestore';
 import { getAdminDb } from '@/lib/firebase/admin';
 import { getSessionUser, getCurrentProfile } from '@/lib/firebase/auth-server';
+import { toDocId } from '@/lib/utils/ids';
 import type { Semester, OfferingStatus, OfferingDoc } from '@/lib/types/models';
 
 const ANALYSIS_ATTEMPT_LIMIT = 4;
@@ -117,10 +118,32 @@ export async function createOffering(
   const refs = await resolveRefs(programId, data);
   if ('error' in refs) return { ok: false, error: refs.error };
 
+  const db = getAdminDb();
+  const section = data.section.trim();
+  const id = `${data.courseId}_${data.academicYear}_${data.semester}_${section}`;
+
+  // Doc-ID check: catches exact-duplicate offering for new readable-ID docs.
+  const docSnap = await db.collection('offerings').doc(id).get();
+  if (docSnap.exists) {
+    return { ok: false, error: 'รายวิชาที่เปิดสอนนี้มีอยู่แล้ว' };
+  }
+  // Dedup where() query: catches legacy offerings that still carry random IDs.
+  const dupSnap = await db
+    .collection('offerings')
+    .where('courseId', '==', data.courseId)
+    .where('academicYear', '==', data.academicYear)
+    .where('semester', '==', data.semester)
+    .where('section', '==', section)
+    .limit(1)
+    .get();
+  if (!dupSnap.empty) {
+    return { ok: false, error: 'รายวิชาที่เปิดสอนนี้มีอยู่แล้ว' };
+  }
+
   const now = FieldValue.serverTimestamp();
   const status: OfferingStatus = data.lecturerId ? 'documents_pending' : 'draft';
 
-  const ref = await getAdminDb().collection('offerings').add({
+  await db.collection('offerings').doc(id).set({
     courseId: data.courseId,
     programId,
     courseCode: refs.courseCode,
@@ -128,7 +151,7 @@ export async function createOffering(
     courseNameEn: refs.courseNameEn,
     academicYear: data.academicYear,
     semester: data.semester,
-    section: data.section.trim(),
+    section,
     lecturerId: data.lecturerId ?? null,
     lecturerEmail: refs.lecturerEmail,
     hasExamAssessment: data.hasExamAssessment,
@@ -147,9 +170,9 @@ export async function createOffering(
   });
 
   await grantLecturerRole(data.lecturerId);
-  await audit('offering_created', ref.id, user.uid, user.email ?? null);
+  await audit('offering_created', id, user.uid, user.email ?? null);
   revalidatePath(`/admin/programs/${programId}/offerings`);
-  return { ok: true, id: ref.id };
+  return { ok: true, id };
 }
 
 export async function updateOffering(
@@ -238,7 +261,15 @@ export async function cloneOfferings(
       skipped++;
       continue;
     }
-    await db.collection('offerings').add({
+    const cloneId = `${src.courseId}_${toYear}_${toSemester}_${src.section}`;
+    // Doc-ID check: extra guard against readable-ID collisions not captured
+    // by the in-memory targetKeys set (which is built before any writes).
+    const cloneSnap = await db.collection('offerings').doc(cloneId).get();
+    if (cloneSnap.exists) {
+      skipped++;
+      continue;
+    }
+    await db.collection('offerings').doc(cloneId).set({
       courseId: src.courseId,
       programId,
       courseCode: src.courseCode,
@@ -408,7 +439,19 @@ export async function bulkCreateOfferingsFromCourses(
       });
       continue;
     }
-    const ref = await db.collection('offerings').add({
+    const offeringId = `${c.id}_${input.academicYear}_${input.semester}_${section}`;
+    // Doc-ID check: catches a collision with an existing readable-ID offering
+    // that the where() dedup above may not have found (different section etc).
+    const idSnap = await db.collection('offerings').doc(offeringId).get();
+    if (idSnap.exists) {
+      failed.push({
+        courseId: c.id,
+        code: c.code,
+        reason: 'ซ้ำกับการเปิดสอนเดิม',
+      });
+      continue;
+    }
+    await db.collection('offerings').doc(offeringId).set({
       courseId: c.id,
       programId,
       courseCode: c.code,
@@ -433,7 +476,7 @@ export async function bulkCreateOfferingsFromCourses(
       createdBy: user.uid,
       updatedBy: user.uid,
     });
-    createdIds.push(ref.id);
+    createdIds.push(offeringId);
   }
 
   if (createdIds.length > 0) {

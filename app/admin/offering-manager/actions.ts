@@ -198,7 +198,16 @@ export async function bulkCreateOfferings(
       continue;
     }
 
-    // Dedupe against an existing offering for this term + section.
+    const offeringId = `${courseId}_${input.academicYear}_${input.semester}_${DEFAULT_SECTION}`;
+
+    // Doc-ID check: fast path for readable-ID collision detection.
+    const idSnap = await db.collection('offerings').doc(offeringId).get();
+    if (idSnap.exists) {
+      failed.push({ id: courseId, label: course.code, reason: 'ซ้ำกับการเปิดสอนเดิม' });
+      continue;
+    }
+
+    // Dedupe where() query: catches legacy offerings that carry random IDs.
     const dup = await db
       .collection('offerings')
       .where('courseId', '==', courseId)
@@ -212,7 +221,7 @@ export async function bulkCreateOfferings(
       continue;
     }
 
-    const ref = await db.collection('offerings').add({
+    await db.collection('offerings').doc(offeringId).set({
       courseId,
       programId: curriculumId,
       courseCode: course.code,
@@ -237,7 +246,7 @@ export async function bulkCreateOfferings(
       createdBy: access.uid,
       updatedBy: access.uid,
     });
-    createdIds.push(ref.id);
+    createdIds.push(offeringId);
   }
 
   if (createdIds.length > 0) {

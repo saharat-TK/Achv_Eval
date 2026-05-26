@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { FieldValue } from 'firebase-admin/firestore';
 import { getAdminDb } from '@/lib/firebase/admin';
 import { getSessionUser, getCurrentProfile } from '@/lib/firebase/auth-server';
+import { toDocId } from '@/lib/utils/ids';
 import type { CourseType, Semester } from '@/lib/types/models';
 
 export interface CourseFormData {
@@ -125,20 +126,31 @@ export async function createCourse(
   const err = validate(data);
   if (err) return { ok: false, error: err };
 
-  // C4: uniqueness check
+  // C4: uniqueness check (code-field query covers legacy random-ID docs)
   const existing = await existingCodesForProgram(programId);
   if (existing.has(data.code.trim().toLowerCase())) {
     return { ok: false, error: `รหัสวิชา ${data.code.trim()} มีอยู่ในหลักสูตรนี้แล้ว` };
   }
 
-  const now = FieldValue.serverTimestamp();
-  const ref = await getAdminDb()
-    .collection('courses')
-    .add({ ...toDoc(programId, data), isActive: true, createdAt: now, updatedAt: now });
+  const db = getAdminDb();
+  const id = `${programId}_${toDocId(data.code)}`;
 
-  await audit('course_created', ref.id, user.uid, user.email ?? null);
+  // Doc-ID check: catches a collision when a readable-ID doc already exists
+  // with the same compound key (e.g. created from an earlier session).
+  const docSnap = await db.collection('courses').doc(id).get();
+  if (docSnap.exists) {
+    return { ok: false, error: `รหัสวิชา ${data.code.trim()} มีอยู่ในหลักสูตรนี้แล้ว` };
+  }
+
+  const now = FieldValue.serverTimestamp();
+  await db
+    .collection('courses')
+    .doc(id)
+    .set({ ...toDoc(programId, data), isActive: true, createdAt: now, updatedAt: now });
+
+  await audit('course_created', id, user.uid, user.email ?? null);
   revalidatePath(`/admin/programs/${programId}/courses`);
-  return { ok: true, id: ref.id };
+  return { ok: true, id };
 }
 
 export async function updateCourse(
@@ -186,7 +198,7 @@ export async function batchUploadCourses(
   const errors: string[] = [];
   const existing = await existingCodesForProgram(programId);
   const seenInBatch = new Set<string>();
-  const toCreate: { tempId: string; doc: Record<string, unknown>; lineRow: number }[] = [];
+  const toCreate: { id: string; doc: Record<string, unknown>; lineRow: number }[] = [];
 
   for (let i = 0; i < rows.length; i += 1) {
     const r = rows[i];
@@ -230,9 +242,9 @@ export async function batchUploadCourses(
       );
     }
     seenInBatch.add(normalizedCode);
-    const ref = db.collection('courses').doc();
+    const courseId = `${programId}_${toDocId(data.code)}`;
     toCreate.push({
-      tempId: ref.id,
+      id: courseId,
       doc: {
         ...toDoc(programId, data),
         createdAt: FieldValue.serverTimestamp(),
@@ -250,14 +262,14 @@ export async function batchUploadCourses(
     const chunk = toCreate.slice(start, start + 200);
     const batch = db.batch();
     for (const item of chunk) {
-      batch.set(db.collection('courses').doc(item.tempId), item.doc);
+      batch.set(db.collection('courses').doc(item.id), item.doc);
       batch.set(db.collection('auditLog').doc(), {
         occurredAt: FieldValue.serverTimestamp(),
         actorId: user.uid,
         actorEmail: user.email ?? null,
         action: 'course_created',
         entityType: 'courses',
-        entityId: item.tempId,
+        entityId: item.id,
         before: null,
         after: { via: 'csv_batch', programId, line: item.lineRow },
       });

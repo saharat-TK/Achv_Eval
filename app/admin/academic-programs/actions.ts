@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { FieldValue } from 'firebase-admin/firestore';
 import { getAdminDb } from '@/lib/firebase/admin';
 import { getSessionUser, getCurrentProfile } from '@/lib/firebase/auth-server';
+import { toDocId } from '@/lib/utils/ids';
 import type { ProgramLevel } from '@/lib/types/models';
 
 export interface AcademicProgramFormData {
@@ -54,6 +55,9 @@ async function audit(
 
 function validate(data: AcademicProgramFormData): string | null {
   if (!data.code?.trim()) return 'กรุณาระบุรหัสหลักสูตร';
+  const id = toDocId(data.code);
+  if (!id) return 'รหัสหลักสูตรต้องมีตัวอักษรหรือตัวเลข (A–Z, 0–9) อย่างน้อย 1 ตัว';
+  if (id.length > 7) return 'รหัสหลักสูตรต้องไม่เกิน 7 ตัวอักษร (A–Z, 0–9)';
   if (!data.nameTh?.trim()) return 'กรุณาระบุชื่อหลักสูตร (ไทย)';
   if (!data.nameEn?.trim()) return 'กรุณาระบุชื่อหลักสูตร (อังกฤษ)';
   return null;
@@ -90,14 +94,33 @@ export async function createAcademicProgram(
   const deptErr = await validateDepartment(data.departmentId);
   if (deptErr) return { ok: false, error: deptErr };
 
-  const now = FieldValue.serverTimestamp();
-  const ref = await getAdminDb()
-    .collection('academicPrograms')
-    .add({ ...normalize(data), isActive: true, createdAt: now, updatedAt: now });
+  const db = getAdminDb();
+  const id = toDocId(data.code);
 
-  await audit('academic_program_created', ref.id, user.uid, user.email ?? null);
+  // Uniqueness — doc-ID check covers new readable-ID docs; code-field check
+  // covers legacy docs that still carry random Firestore IDs.
+  const docSnap = await db.collection('academicPrograms').doc(id).get();
+  if (docSnap.exists) {
+    return { ok: false, error: `รหัสหลักสูตร ${id} มีอยู่ในระบบแล้ว` };
+  }
+  const codeSnap = await db
+    .collection('academicPrograms')
+    .where('code', '==', id)
+    .limit(1)
+    .get();
+  if (!codeSnap.empty) {
+    return { ok: false, error: `รหัสหลักสูตร ${id} มีอยู่ในระบบแล้ว` };
+  }
+
+  const now = FieldValue.serverTimestamp();
+  await db
+    .collection('academicPrograms')
+    .doc(id)
+    .set({ ...normalize(data), isActive: true, createdAt: now, updatedAt: now });
+
+  await audit('academic_program_created', id, user.uid, user.email ?? null);
   revalidatePath('/admin/academic-programs');
-  return { ok: true, id: ref.id };
+  return { ok: true, id };
 }
 
 /** Update an academic program. Admin only. */
