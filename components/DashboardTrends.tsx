@@ -20,7 +20,7 @@ const GREEN = '#00704A';
 const LIGHT_GREEN = '#7FB39C';
 const AMBER = '#D97706';
 const SLATE_200 = '#e2e8f0';
-const SLATE_400 = '#94a3b8'; // darker "not assessed" bar — was #cbd5e1
+const SLATE_300 = '#cbd5e1'; // "not assessed" bar
 
 type StackedPoint = DashboardTrendPoint & {
   assessedPct: number;
@@ -143,7 +143,7 @@ export default function DashboardTrends({
                 dataKey="notAssessedPct"
                 name="ยังไม่ทวนสอบ"
                 stackId="completion"
-                fill={SLATE_400}
+                fill={SLATE_300}
                 isAnimationActive={false}
               />
               {/* Average score line overlay */}
