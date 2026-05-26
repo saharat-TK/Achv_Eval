@@ -20,7 +20,8 @@ const GREEN = '#00704A';
 const LIGHT_GREEN = '#7FB39C';
 const AMBER = '#D97706';
 const SLATE_200 = '#e2e8f0';
-const SLATE_300 = '#cbd5e1'; // "not assessed" bar
+const SLATE_300 = '#cbd5e1'; // "not assessed" bar fill
+const SLATE_450 = '#7c8ba1'; // mid-point between slate-400 and slate-500 — label text only
 
 type StackedPoint = DashboardTrendPoint & {
   assessedPct: number;
@@ -58,13 +59,17 @@ function ProgressTooltip({
           // Average score line — value may be null when no signed assessments
           detail = entry.value !== null ? `${entry.value}%` : '—';
         }
+        // Use a darker label color for the light "not assessed" bar so the
+        // text is legible on the white tooltip background.
+        const labelColor =
+          entry.name === 'ยังไม่ทวนสอบ' ? SLATE_450 : entry.color;
         return (
           <div key={entry.name} className="flex items-center gap-1.5">
             <span
               className="inline-block h-2 w-2 shrink-0 rounded-sm"
               style={{ background: entry.color }}
             />
-            <span style={{ color: entry.color }}>
+            <span style={{ color: labelColor }}>
               {entry.name}&nbsp;:&nbsp;{detail}
             </span>
           </div>
