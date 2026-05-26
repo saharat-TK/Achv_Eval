@@ -28,6 +28,8 @@ export default async function DashboardPrintPage({
   searchParams,
 }: {
   searchParams: {
+    departmentId?: string | string[];
+    academicProgramId?: string | string[];
     programId?: string | string[];
     academicYear?: string | string[];
     semester?: string | string[];
@@ -41,6 +43,8 @@ export default async function DashboardPrintPage({
     ? await getAllPrograms()
     : await getProgramsByIds(profile.roles.directorOf ?? []);
 
+  const rawDepartmentId = readValue(searchParams.departmentId);
+  const rawAcademicProgramId = readValue(searchParams.academicProgramId);
   const rawProgramId = readValue(searchParams.programId);
   const programId = programs.some((program) => program.id === rawProgramId)
     ? rawProgramId
@@ -55,6 +59,8 @@ export default async function DashboardPrintPage({
       : undefined;
 
   const data = await getExecutiveDashboardData(programs, {
+    departmentId: rawDepartmentId || undefined,
+    academicProgramId: rawAcademicProgramId || undefined,
     programId,
     academicYear,
     semester,

@@ -2,11 +2,14 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { getCurrentProfile } from '@/lib/firebase/auth-server';
 import { getAllPrograms, getProgramsByIds } from '@/lib/data/programs';
+import { getAllDepartments } from '@/lib/data/departments';
+import { getAllAcademicPrograms } from '@/lib/data/academicPrograms';
 import { getExecutiveDashboardData } from '@/lib/data/dashboard';
 import { OFFERING_STATUS, SEMESTER_LABEL } from '@/lib/constants';
 import type { AssessmentBand, OfferingStatus, Semester } from '@/lib/types/models';
 import StatusBadge from '@/components/StatusBadge';
 import DashboardTrends from '@/components/DashboardTrends';
+import DashboardFilterBar from '@/components/DashboardFilterBar';
 
 export const dynamic = 'force-dynamic';
 
@@ -64,6 +67,8 @@ export default async function AdminDashboardPage({
   searchParams,
 }: {
   searchParams: {
+    departmentId?: string | string[];
+    academicProgramId?: string | string[];
     programId?: string | string[];
     academicYear?: string | string[];
     semester?: string | string[];
@@ -73,16 +78,41 @@ export default async function AdminDashboardPage({
   if (!profile) redirect('/login');
 
   const isAdmin = profile.roles.isAdmin;
-  const programs = isAdmin
-    ? await getAllPrograms()
-    : await getProgramsByIds(profile.roles.directorOf ?? []);
+  const [programs, allDepartments, allAcademicPrograms] = await Promise.all([
+    isAdmin ? getAllPrograms() : getProgramsByIds(profile.roles.directorOf ?? []),
+    getAllDepartments(),
+    getAllAcademicPrograms(),
+  ]);
+
+  // Non-admins only see departments and APs relevant to their own programs.
+  const accessibleDeptIds = new Set(programs.map((p) => p.departmentId).filter(Boolean) as string[]);
+  const accessibleApIds = new Set(programs.map((p) => p.parentProgramId).filter(Boolean) as string[]);
+  const departments = isAdmin
+    ? allDepartments
+    : allDepartments.filter((d) => accessibleDeptIds.has(d.id));
+  const academicPrograms = isAdmin
+    ? allAcademicPrograms
+    : allAcademicPrograms.filter((ap) => accessibleApIds.has(ap.id));
+
+  const selectedDepartmentId = readSearchValue(searchParams.departmentId);
+  const selectedAcademicProgramId = readSearchValue(searchParams.academicProgramId);
   const selectedProgramId = readSearchValue(searchParams.programId);
   const selectedAcademicYear = readAcademicYear(searchParams.academicYear);
   const selectedSemester = readSemester(searchParams.semester);
+
+  const departmentFilter = departments.some((d) => d.id === selectedDepartmentId)
+    ? selectedDepartmentId
+    : undefined;
+  const academicProgramFilter = academicPrograms.some((ap) => ap.id === selectedAcademicProgramId)
+    ? selectedAcademicProgramId
+    : undefined;
   const programFilter = programs.some((program) => program.id === selectedProgramId)
     ? selectedProgramId
     : undefined;
+
   const data = await getExecutiveDashboardData(programs, {
+    departmentId: departmentFilter,
+    academicProgramId: academicProgramFilter,
     programId: programFilter,
     academicYear: selectedAcademicYear,
     semester: selectedSemester,
@@ -93,6 +123,8 @@ export default async function AdminDashboardPage({
   );
 
   const exportParams = new URLSearchParams();
+  if (departmentFilter) exportParams.set('departmentId', departmentFilter);
+  if (academicProgramFilter) exportParams.set('academicProgramId', academicProgramFilter);
   if (programFilter) exportParams.set('programId', programFilter);
   if (selectedAcademicYear) {
     exportParams.set('academicYear', String(selectedAcademicYear));
@@ -135,73 +167,20 @@ export default async function AdminDashboardPage({
         </div>
       </div>
 
-      <form
-        action="/admin/dashboard"
-        className="mt-4 grid gap-3 rounded-lg border border-slate-200 bg-white p-4 md:grid-cols-[1.3fr_0.8fr_0.8fr_auto]"
-      >
-        <label className="text-sm">
-          <span className="text-xs font-medium text-slate-500">หลักสูตร</span>
-          <select
-            name="programId"
-            defaultValue={programFilter ?? ''}
-            className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700"
-          >
-            <option value="">ทุกหลักสูตร</option>
-            {programs.map((program) => (
-              <option key={program.id} value={program.id}>
-                {program.code} — {program.nameTh}
-              </option>
-            ))}
-          </select>
-        </label>
-
-        <label className="text-sm">
-          <span className="text-xs font-medium text-slate-500">ปีการศึกษา</span>
-          <select
-            name="academicYear"
-            defaultValue={selectedAcademicYear ?? ''}
-            className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700"
-          >
-            <option value="">ทุกปี</option>
-            {data.availableAcademicYears.map((year) => (
-              <option key={year} value={year}>
-                {year}
-              </option>
-            ))}
-          </select>
-        </label>
-
-        <label className="text-sm">
-          <span className="text-xs font-medium text-slate-500">ภาคการศึกษา</span>
-          <select
-            name="semester"
-            defaultValue={selectedSemester ?? ''}
-            className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700"
-          >
-            <option value="">ทุกภาค</option>
-            {(Object.keys(SEMESTER_LABEL) as Semester[]).map((semester) => (
-              <option key={semester} value={semester}>
-                {SEMESTER_LABEL[semester]}
-              </option>
-            ))}
-          </select>
-        </label>
-
-        <div className="flex items-end gap-2">
-          <button
-            type="submit"
-            className="rounded-lg bg-mfu-primary px-4 py-2 text-sm font-medium text-white hover:opacity-90"
-          >
-            กรองข้อมูล
-          </button>
-          <Link
-            href="/admin/dashboard"
-            className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
-          >
-            ล้าง
-          </Link>
-        </div>
-      </form>
+      <DashboardFilterBar
+        departments={departments.map((d) => ({ id: d.id, nameTh: d.nameTh }))}
+        academicPrograms={academicPrograms.map((ap) => ({
+          id: ap.id,
+          code: ap.code,
+          nameTh: ap.nameTh,
+          departmentId: ap.departmentId,
+        }))}
+        availableAcademicYears={data.availableAcademicYears}
+        defaultDepartmentId={departmentFilter}
+        defaultAcademicProgramId={academicProgramFilter}
+        defaultAcademicYear={selectedAcademicYear}
+        defaultSemester={selectedSemester}
+      />
 
       <div className="mt-6 grid gap-3 md:grid-cols-4">
         <MetricCard

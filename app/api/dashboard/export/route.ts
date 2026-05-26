@@ -141,6 +141,8 @@ export async function GET(request: NextRequest) {
     : await getProgramsByIds(directorOf);
 
   const sp = request.nextUrl.searchParams;
+  const rawDepartmentId = sp.get('departmentId') ?? undefined;
+  const rawAcademicProgramId = sp.get('academicProgramId') ?? undefined;
   const rawProgramId = sp.get('programId') ?? undefined;
   const programId = programs.some((program) => program.id === rawProgramId)
     ? rawProgramId
@@ -156,7 +158,13 @@ export async function GET(request: NextRequest) {
       ? rawSemester
       : undefined;
 
-  const filters: DashboardFilters = { programId, academicYear, semester };
+  const filters: DashboardFilters = {
+    departmentId: rawDepartmentId || undefined,
+    academicProgramId: rawAcademicProgramId || undefined,
+    programId,
+    academicYear,
+    semester,
+  };
   const data = await getExecutiveDashboardData(programs, filters);
 
   const csvText = buildCsv(data, {

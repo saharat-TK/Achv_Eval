@@ -4,9 +4,9 @@ import {
   Bar,
   BarChart,
   CartesianGrid,
+  ComposedChart,
   Legend,
   Line,
-  LineChart,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -20,6 +20,8 @@ const GREEN = '#00704A';
 const HOUSE_GREEN = '#1E3932';
 const LIGHT_GREEN = '#7FB39C';
 const AMBER = '#D97706';
+const SLATE_200 = '#e2e8f0';
+const SLATE_300 = '#cbd5e1';
 
 /**
  * Cross-semester trend charts: average verification score and completion
@@ -38,41 +40,72 @@ export default function DashboardTrends({
     );
   }
 
+  // Pre-compute 100%-stack values for each trend point.
+  const stackedTrend = trend.map((pt) => {
+    const assessed =
+      pt.totalOfferings > 0
+        ? Math.round((pt.assessedCount / pt.totalOfferings) * 100)
+        : 0;
+    return {
+      ...pt,
+      assessedPct: assessed,
+      notAssessedPct: 100 - assessed,
+    };
+  });
+
   return (
     <div className="grid gap-6 lg:grid-cols-2">
+      {/* Left chart: 100% stacked bar (assessed vs not assessed) + average score line */}
       <div>
         <h3 className="text-sm font-medium text-slate-600">
-          คะแนนเฉลี่ยและความคืบหน้า (%)
+          ความคืบหน้าการทวนสอบ (%) และคะแนนเฉลี่ย
         </h3>
         <div className="mt-2 h-64">
           <ResponsiveContainer width="100%" height="100%" minWidth={0}>
-            <LineChart data={trend} margin={{ top: 8, right: 8, bottom: 4, left: -16 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+            <ComposedChart
+              data={stackedTrend}
+              margin={{ top: 8, right: 8, bottom: 4, left: -16 }}
+            >
+              <CartesianGrid strokeDasharray="3 3" stroke={SLATE_200} />
               <XAxis dataKey="label" tick={{ fontSize: 11 }} />
-              <YAxis domain={[0, 100]} tick={{ fontSize: 11 }} />
-              <Tooltip />
+              <YAxis
+                domain={[0, 100]}
+                tick={{ fontSize: 11 }}
+                tickFormatter={(v: number) => `${v}%`}
+              />
+              <Tooltip formatter={(value) => `${value}%`} />
               <Legend wrapperStyle={{ fontSize: 12 }} />
+              {/* 100% stacked bars */}
+              <Bar
+                dataKey="assessedPct"
+                name="ทวนสอบแล้ว"
+                stackId="completion"
+                fill={GREEN}
+                isAnimationActive={false}
+              />
+              <Bar
+                dataKey="notAssessedPct"
+                name="ยังไม่ทวนสอบ"
+                stackId="completion"
+                fill={SLATE_300}
+                isAnimationActive={false}
+              />
+              {/* Average score line overlay */}
               <Line
                 type="monotone"
                 dataKey="averagePercentScore"
                 name="คะแนนเฉลี่ย"
-                stroke={GREEN}
+                stroke={AMBER}
                 strokeWidth={2}
+                dot={{ r: 3 }}
                 connectNulls
               />
-              <Line
-                type="monotone"
-                dataKey="completionRate"
-                name="ความคืบหน้าการทวนสอบ"
-                stroke={HOUSE_GREEN}
-                strokeWidth={2}
-                strokeDasharray="5 3"
-              />
-            </LineChart>
+            </ComposedChart>
           </ResponsiveContainer>
         </div>
       </div>
 
+      {/* Right chart: band distribution */}
       <div>
         <h3 className="text-sm font-medium text-slate-600">
           การกระจายระดับผลทวนสอบ (จำนวนรายวิชา)
@@ -80,7 +113,7 @@ export default function DashboardTrends({
         <div className="mt-2 h-64">
           <ResponsiveContainer width="100%" height="100%" minWidth={0}>
             <BarChart data={trend} margin={{ top: 8, right: 8, bottom: 4, left: -16 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+              <CartesianGrid strokeDasharray="3 3" stroke={SLATE_200} />
               <XAxis dataKey="label" tick={{ fontSize: 11 }} />
               <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
               <Tooltip />
