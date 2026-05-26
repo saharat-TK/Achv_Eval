@@ -3,7 +3,12 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { collection, doc, query, orderBy, onSnapshot } from 'firebase/firestore';
-import { getFirebaseAuth, getFirebaseDb } from '@/lib/firebase/config';
+import { httpsCallable } from 'firebase/functions';
+import {
+  getFirebaseAuth,
+  getFirebaseDb,
+  getFirebaseFunctions,
+} from '@/lib/firebase/config';
 import { REPORT_STATUS_TH, SEMESTER_LABEL } from '@/lib/constants';
 import { sendOfferingForAssessment } from '@/app/lecturer/[offeringId]/actions';
 import { useConfirm } from '@/components/ConfirmDialogProvider';
@@ -43,6 +48,9 @@ interface Report {
   structuredOutput?: StructuredOutput | null;
   reportDownloadUrl?: string | null;
   createdAt?: { toDate: () => Date } | null;
+  tqf3Status?: 'generating' | 'succeeded' | 'failed' | null;
+  tqf3DownloadUrl?: string | null;
+  tqf3ErrorMessage?: string | null;
 }
 
 interface OfferingHandoffState {
@@ -217,7 +225,7 @@ export default function AiReportsList({
             <div className={scrollBody ? 'px-4 pb-4 pt-3' : 'mt-2'}>
               {r.status === 'running' && (
                 <p className="text-xs text-slate-500">
-                  ระบบกำลังวิเคราะห์ทีละส่วน (4 ส่วน) — หน้านี้จะอัปเดตอัตโนมัติเมื่อเสร็จ
+                  ระบบกำลังวิเคราะห์ทีละส่วน — หน้านี้จะอัปเดตอัตโนมัติเมื่อเสร็จ
                 </p>
               )}
 
@@ -274,6 +282,16 @@ export default function AiReportsList({
                     </span>
                   ) : null}
                 </div>
+              )}
+
+              {r.status === 'succeeded' && r.reportDownloadUrl && (
+                <Tqf3DraftControl
+                  offeringId={offeringId}
+                  reportId={r.id}
+                  tqf3Status={r.tqf3Status ?? null}
+                  tqf3DownloadUrl={r.tqf3DownloadUrl ?? null}
+                  tqf3ErrorMessage={r.tqf3ErrorMessage ?? null}
+                />
               )}
             </div>
           </div>
@@ -351,6 +369,83 @@ function SendForAssessmentButton({
       >
         {busy ? 'กำลังส่ง…' : 'ส่งผลเพื่อทวนสอบ'}
       </button>
+    </div>
+  );
+}
+
+/**
+ * Bottom-right control to generate / download the on-demand revised มคอ.3 draft.
+ * One successful draft per report; status updates live via the Firestore
+ * subscription in the parent, so this only needs to fire the callable.
+ */
+function Tqf3DraftControl({
+  offeringId,
+  reportId,
+  tqf3Status,
+  tqf3DownloadUrl,
+  tqf3ErrorMessage,
+}: {
+  offeringId: string;
+  reportId: string;
+  tqf3Status: 'generating' | 'succeeded' | 'failed' | null;
+  tqf3DownloadUrl: string | null;
+  tqf3ErrorMessage: string | null;
+}) {
+  const toast = useToast();
+  const [starting, setStarting] = useState(false);
+
+  // 'starting' bridges the gap between the click and the first snapshot that
+  // shows tqf3Status === 'generating'.
+  const generating = starting || tqf3Status === 'generating';
+
+  async function generate() {
+    setStarting(true);
+    try {
+      const callable = httpsCallable<
+        { offeringId: string; reportId: string },
+        { ok: boolean; downloadUrl: string }
+      >(getFirebaseFunctions(), 'generateTqf3Draft');
+      await callable({ offeringId, reportId });
+      toast({
+        title: 'เริ่มสร้างร่าง มคอ.3 แล้ว',
+        description: 'ระบบกำลังจัดทำร่าง — ปุ่มจะอัปเดตอัตโนมัติเมื่อเสร็จ',
+        variant: 'success',
+      });
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : 'เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์';
+      toast({ title: 'สร้างร่าง มคอ.3 ไม่สำเร็จ', description: message, variant: 'error' });
+    } finally {
+      setStarting(false);
+    }
+  }
+
+  return (
+    <div className="mt-3 flex flex-col items-end gap-1">
+      {tqf3Status === 'succeeded' && tqf3DownloadUrl ? (
+        <a
+          href={tqf3DownloadUrl}
+          className="rounded-lg border border-mfu-primary px-3 py-2 text-sm font-medium text-mfu-primary hover:bg-slate-50"
+        >
+          ดาวน์โหลดร่าง มคอ.3 (PDF)
+        </a>
+      ) : (
+        <button
+          type="button"
+          onClick={generate}
+          disabled={generating}
+          className="rounded-lg bg-mfu-primary px-3 py-2 text-sm font-medium text-white hover:opacity-90 disabled:bg-slate-300 disabled:text-slate-600 disabled:opacity-100"
+        >
+          {generating
+            ? 'กำลังสร้างร่าง มคอ.3…'
+            : tqf3Status === 'failed'
+              ? 'ลองสร้างร่าง มคอ.3 อีกครั้ง'
+              : 'ร่าง มคอ.3 ฉบับใหม่'}
+        </button>
+      )}
+      {tqf3Status === 'failed' && tqf3ErrorMessage && !generating && (
+        <p className="text-xs text-red-600">{tqf3ErrorMessage}</p>
+      )}
     </div>
   );
 }

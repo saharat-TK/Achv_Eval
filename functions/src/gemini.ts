@@ -15,12 +15,15 @@ export interface RubricItemResult {
   improvements: string;
 }
 
-/** Structured result of one full analysis run (assembled from 4 section calls). */
+/** Structured result of one full analysis run (assembled from section calls).
+ *  `section3RevisedTqf3` is no longer produced during analysis — the revised
+ *  มคอ.3 draft is generated on demand by `runTqf3Draft` / generateTqf3Draft.
+ *  The field stays optional so older stored reports still render it. */
 export interface AnalysisResult {
   courseCodeDetected: string;
   section1Grading: string;
   section2Quality: string;
-  section3RevisedTqf3: string;
+  section3RevisedTqf3?: string;
   section4Verification: {
     items: RubricItemResult[];
     totalScore: number;
@@ -268,9 +271,14 @@ function extractFirstJsonObject(text: string): string | null {
 }
 
 /**
- * Runs the full course analysis as four focused, section-by-section Gemini
- * calls (run in parallel). Each section gets the model's full attention,
+ * Runs the full course analysis as three focused, section-by-section Gemini
+ * calls (run in parallel): grading (§1), course-quality (§2), and the 7-item
+ * verification rubric (§4). Each section gets the model's full attention,
  * which yields far more detail than a single combined pass.
+ *
+ * The revised มคอ.3 draft (formerly §3) is intentionally NOT generated here —
+ * it is the largest, most failure-prone output and is now produced on demand
+ * by `runTqf3Draft`.
  */
 export async function runAnalysis(args: {
   apiKey: string;
@@ -326,24 +334,6 @@ export async function runAnalysis(args: {
       '"courseCodeDetected": "<รหัสวิชาที่พบในเอกสาร>" }',
   });
 
-  // --- Section 3: revised TQF3 draft -------------------------------
-  const call3 = callJson<{ content: string }>({
-    genAI,
-    model,
-    label: 'ส่วนที่ 3',
-    schemaHint: '{ "content": "<Markdown ร่าง มคอ.3 ฉบับปรับปรุง>" }',
-    systemInstruction: system,
-    files,
-    userText:
-      'จัดทำเฉพาะ "ส่วนที่ 3 — ร่าง มคอ.3 ฉบับปรับปรุง" อย่างละเอียด ' +
-      'แก้ไขทุกจุดอ่อนที่พบ คงจุดเด่นไว้ ประกอบด้วยบทสรุปการเปลี่ยนแปลง ' +
-      'และร่างข้อความฉบับสมบูรณ์ — หมวดที่ 4 (แผนการสอน) ต้องเป็น ' +
-      'ตารางสมบูรณ์ครบทุกสัปดาห์. ' +
-      'ห้ามใช้ Markdown code fence. ค่า content ต้องเป็น JSON string เดียวเท่านั้น ' +
-      'และต้อง escape เครื่องหมาย " และ line break เป็น \\n. ' +
-      'ส่งผลเป็น JSON: { "content": "<Markdown ร่าง มคอ.3 ฉบับปรับปรุง>" }',
-  });
-
   // --- Section 4: 7-item verification rubric -----------------------
   const call4 = callJson<{
     items: RubricItemResult[];
@@ -377,13 +367,12 @@ export async function runAnalysis(args: {
       '"band": "improve"|"good"|"excellent" }',
   });
 
-  const [r1, r2, r3, r4] = await Promise.all([call1, call2, call3, call4]);
+  const [r1, r2, r4] = await Promise.all([call1, call2, call4]);
 
   const result: AnalysisResult = {
     courseCodeDetected: r2.data.courseCodeDetected ?? '',
     section1Grading: r1.data.content ?? '',
     section2Quality: r2.data.content ?? '',
-    section3RevisedTqf3: r3.data.content ?? '',
     section4Verification: {
       items: r4.data.items ?? [],
       totalScore: r4.data.totalScore ?? 0,
@@ -398,17 +387,83 @@ export async function runAnalysis(args: {
   validate(result);
 
   const usage: Usage = {
-    input: r1.usage.input + r2.usage.input + r3.usage.input + r4.usage.input,
-    output: r1.usage.output + r2.usage.output + r3.usage.output + r4.usage.output,
+    input: r1.usage.input + r2.usage.input + r4.usage.input,
+    output: r1.usage.output + r2.usage.output + r4.usage.output,
   };
   return { result, usage };
 }
 
 function validate(r: AnalysisResult): void {
-  if (!r.section1Grading || !r.section2Quality || !r.section3RevisedTqf3) {
+  if (!r.section1Grading || !r.section2Quality) {
     throw new Error('Analysis result is missing one or more required sections');
   }
   if (!Array.isArray(r.section4Verification.items) || r.section4Verification.items.length !== 7) {
     throw new Error('Analysis result must contain exactly 7 rubric items');
   }
+}
+
+/** Context from a completed analysis, fed to the on-demand TQF3 draft so the
+ *  model knows exactly which weaknesses to fix while it rewrites the document. */
+export interface Tqf3Findings {
+  section1Grading?: string;
+  section2Quality?: string;
+  overallSummary?: string;
+  criticalIssues?: string[];
+}
+
+/**
+ * Generates a full revised มคอ.3 draft on demand, in a single Gemini call.
+ *
+ * Re-feeds the original มคอ.3 files (so the model can rewrite the real
+ * document, not reconstruct it) plus the analysis findings (so it fixes the
+ * identified weaknesses). Returns Markdown for `buildTqf3Html` to render.
+ */
+export async function runTqf3Draft(args: {
+  apiKey: string;
+  model: string;
+  guideline: string;
+  files: InputFile[];
+  findings: Tqf3Findings;
+}): Promise<{ content: string; usage: Usage }> {
+  const { apiKey, model, guideline, files, findings } = args;
+  const genAI = new GoogleGenerativeAI(apiKey);
+  const system = `${guideline}\n${AUTOMATED_MODE}`;
+
+  const findingsContext = [
+    findings.overallSummary ? `## บทสรุปผู้บริหาร\n${findings.overallSummary}` : '',
+    findings.criticalIssues?.length
+      ? `## ประเด็นสำคัญที่ต้องแก้ไข\n${findings.criticalIssues
+          .map((c) => `- ${c}`)
+          .join('\n')}`
+      : '',
+    findings.section1Grading
+      ? `## ผลการประเมินส่วนที่ 1 (การตัดเกรด)\n${findings.section1Grading}`
+      : '',
+    findings.section2Quality
+      ? `## ผลการประเมินส่วนที่ 2 (คุณภาพรายวิชา)\n${findings.section2Quality}`
+      : '',
+  ]
+    .filter(Boolean)
+    .join('\n\n');
+
+  const { data, usage } = await callJson<{ content: string }>({
+    genAI,
+    model,
+    label: 'ร่าง มคอ.3',
+    schemaHint: '{ "content": "<Markdown ร่าง มคอ.3 ฉบับปรับปรุง>" }',
+    systemInstruction: system,
+    files,
+    userText:
+      'จัดทำ "ร่าง มคอ.3 ฉบับปรับปรุง" ฉบับสมบูรณ์ โดยอ้างอิงเอกสาร มคอ.3 ต้นฉบับที่แนบมา ' +
+      'แก้ไขทุกจุดอ่อนที่ระบุไว้ในผลการวิเคราะห์ด้านล่าง และคงจุดเด่นไว้ทั้งหมด. ' +
+      'ต้องนำเสนอร่างฉบับสมบูรณ์ครบทุกหมวด — หมวดที่ 4 (แผนการสอน) ต้องเป็นตารางครบทุกสัปดาห์ ' +
+      'ในรูปแบบเดียวกับ มคอ.3 ต้นฉบับ ห้ามนำเสนอเฉพาะจุดที่เปลี่ยนแปลง. ' +
+      'ห้ามใช้ Markdown code fence. ค่า content ต้องเป็น JSON string เดียวเท่านั้น ' +
+      'และต้อง escape เครื่องหมาย " และ line break เป็น \\n.\n\n' +
+      '=== ผลการวิเคราะห์ของระบบ (ใช้เป็นแนวทางการแก้ไข) ===\n' +
+      findingsContext +
+      '\n\nส่งผลเป็น JSON: { "content": "<Markdown ร่าง มคอ.3 ฉบับปรับปรุง>" }',
+  });
+
+  return { content: data.content ?? '', usage };
 }

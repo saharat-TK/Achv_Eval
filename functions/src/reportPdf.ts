@@ -4,10 +4,19 @@ import { renderHtmlToPdf, storePdf } from './pdf';
 import { buildReportHtml, type ReportMeta } from './reportHtml';
 import {
   getProgramCode,
+  offeringInputsDir,
   offeringReportDir,
   offeringReportFileName,
 } from './storagePaths';
 import type { AnalysisResult } from './gemini';
+
+/** Minimal shape of an uploaded input file (base64 payload from the caller). */
+export interface InputFilePayload {
+  type: string;
+  filename: string;
+  mimeType: string;
+  dataBase64: string;
+}
 
 const SEMESTER_LABEL: Record<string, string> = {
   '1': 'ภาคต้น',
@@ -33,8 +42,11 @@ export async function generateAndStoreReport(args: {
   reportRef: admin.firestore.DocumentReference;
   result: AnalysisResult;
   logSheetId: string;
+  /** Original uploaded files, persisted so the on-demand TQF3 draft can
+   *  re-feed the real มคอ.3 to Gemini. */
+  inputFiles?: InputFilePayload[];
 }): Promise<void> {
-  const { offeringId, reportId, reportRef, result, logSheetId } = args;
+  const { offeringId, reportId, reportRef, result, logSheetId, inputFiles = [] } = args;
   const db = admin.firestore();
 
   // ----- Metadata ----------------------------------------------------
@@ -77,9 +89,6 @@ export async function generateAndStoreReport(args: {
     generatedAt,
   };
 
-  // ----- Render HTML → PDF → Storage --------------------------------
-  const html = buildReportHtml(result, meta);
-  const pdf = await renderHtmlToPdf(html);
   const programCode = await getProgramCode(db, offering.programId);
   const pathParts = {
     programCode,
@@ -89,6 +98,39 @@ export async function generateAndStoreReport(args: {
     section: offering.section,
   };
   const dir = offeringReportDir(pathParts);
+
+  // ----- Persist original input files -------------------------------
+  // Done before PDF rendering so the originals survive even if Chromium
+  // fails. They power the on-demand revised-มคอ.3 draft.
+  if (inputFiles.length > 0) {
+    try {
+      const bucket = admin.storage().bucket();
+      const inputsDir = offeringInputsDir(pathParts, reportId);
+      const inputFileRefs = await Promise.all(
+        inputFiles.map(async (f, i) => {
+          const safeName = f.filename.replace(/[^A-Za-z0-9._-]+/g, '_') || 'file';
+          const storagePath = `${inputsDir}/${i}-${safeName}`;
+          await bucket.file(storagePath).save(Buffer.from(f.dataBase64, 'base64'), {
+            metadata: { contentType: f.mimeType },
+          });
+          return {
+            storagePath,
+            filename: f.filename,
+            mimeType: f.mimeType,
+            type: f.type,
+          };
+        }),
+      );
+      await reportRef.update({ inputFileRefs });
+    } catch (e) {
+      // Non-fatal: only the TQF3-draft feature is affected.
+      console.error('failed to persist input files (non-fatal)', e);
+    }
+  }
+
+  // ----- Render HTML → PDF → Storage --------------------------------
+  const html = buildReportHtml(result, meta);
+  const pdf = await renderHtmlToPdf(html);
   const { filePath, downloadUrl } = await storePdf(
     pdf,
     `${dir}/ai-report-${reportId}.pdf`,

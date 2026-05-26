@@ -43,12 +43,22 @@ export async function purgeOfferingCore(
   counts.aiReports += aiReportsSnap.size;
   for (const reportDoc of aiReportsSnap.docs) {
     const data = reportDoc.data();
-    if (data.reportStoragePath) {
+    const paths: string[] = [];
+    if (data.reportStoragePath) paths.push(data.reportStoragePath as string);
+    if (data.tqf3StoragePath) paths.push(data.tqf3StoragePath as string);
+    if (Array.isArray(data.inputFileRefs)) {
+      for (const ref of data.inputFileRefs) {
+        if (ref && typeof ref.storagePath === 'string' && ref.storagePath) {
+          paths.push(ref.storagePath);
+        }
+      }
+    }
+    for (const path of paths) {
       try {
-        await bucket.file(data.reportStoragePath as string).delete();
+        await bucket.file(path).delete();
         counts.filesDeleted += 1;
       } catch (e) {
-        console.error(`Failed to delete AI report file ${data.reportStoragePath}:`, e);
+        console.error(`Failed to delete AI report file ${path}:`, e);
       }
     }
     await reportDoc.ref.delete();

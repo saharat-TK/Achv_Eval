@@ -36,7 +36,7 @@ export const analyzeCourse = onCall(
   {
     region: REGION,
     secrets: [GEMINI_API_KEY],
-    // Four section-by-section Gemini calls (~60-120s) plus headless-Chromium
+    // Three section-by-section Gemini calls (~60-120s) plus headless-Chromium
     // PDF rendering. 2 GiB is required for Chromium.
     timeoutSeconds: 540,
     memory: '2GiB',
@@ -244,6 +244,7 @@ export const analyzeCourse = onCall(
           reportRef,
           result,
           logSheetId: LOG_SHEET_ID.value(),
+          inputFiles: files,
         });
       } catch (pdfErr) {
         console.error('generateAndStoreReport failed (non-fatal)', pdfErr);
@@ -290,14 +291,30 @@ async function deleteOlderReports(
   const bucket = admin.storage().bucket();
   await Promise.all(
     oldReports.map(async (doc) => {
-      const path = doc.data()?.reportStoragePath;
-      if (typeof path === 'string' && path) {
-        try {
-          await bucket.file(path).delete({ ignoreNotFound: true });
-        } catch (err) {
-          console.error(`failed to delete old AI report PDF ${path}`, err);
+      const data = doc.data() ?? {};
+      const paths: string[] = [];
+      if (typeof data.reportStoragePath === 'string' && data.reportStoragePath) {
+        paths.push(data.reportStoragePath);
+      }
+      if (typeof data.tqf3StoragePath === 'string' && data.tqf3StoragePath) {
+        paths.push(data.tqf3StoragePath);
+      }
+      if (Array.isArray(data.inputFileRefs)) {
+        for (const ref of data.inputFileRefs) {
+          if (ref && typeof ref.storagePath === 'string' && ref.storagePath) {
+            paths.push(ref.storagePath);
+          }
         }
       }
+      await Promise.all(
+        paths.map(async (path) => {
+          try {
+            await bucket.file(path).delete({ ignoreNotFound: true });
+          } catch (err) {
+            console.error(`failed to delete old AI report file ${path}`, err);
+          }
+        }),
+      );
     }),
   );
 
