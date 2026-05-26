@@ -63,22 +63,42 @@ export function esc(s: string): string {
 
 /**
  * Repairs common Markdown-table malformations from the LLM before parsing.
- * LLMs (especially on long, wide tables like the มคอ.3 weekly plan) sometimes
- * emit the header row and the `:---` delimiter row on a single line, which
- * makes `marked` treat the whole thing as a paragraph instead of a table.
+ * On long, wide tables (the มคอ.3 weekly plan) the model produces delimiter
+ * rows that `marked` rejects — e.g. a single runaway dash run
+ * (`| :------…------ |`) instead of per-column `| :--- | :--- |` cells, or
+ * the header and delimiter merged onto one line. A rejected delimiter makes
+ * the whole table render as a paragraph (a flood of dashes).
+ *
  * Idempotent — well-formed tables pass through unchanged.
  */
 export function normalizeMarkdownTables(src: string): string {
-  let out = src ?? '';
-  // 1) Split a merged "header | | :--- | delimiter" line into two lines.
-  out = out.replace(/\|[ \t]+(\|(?:[ \t]*:?-{2,}:?[ \t]*\|)+)/g, '|\n$1');
-  // 2) Insert a blank line before a table glued to a preceding paragraph,
-  //    so the header row isn't absorbed into that paragraph.
-  out = out.replace(
-    /([^\n|])\n(\|[^\n]*\|)\n(\|[ \t]*:?-{2,})/g,
-    '$1\n\n$2\n$3',
-  );
-  return out;
+  let text = src ?? '';
+
+  // (a) Collapse runaway dash padding the model adds to delimiter cells.
+  //     Safe: prose almost never contains 6+ consecutive dashes.
+  text = text.replace(/-{6,}/g, '---');
+
+  // (b) Split a merged "header | | :--- | delimiter" line into two lines.
+  text = text.replace(/\|[ \t]+(\|(?:[ \t]*:?-{1,}:?[ \t]*\|)+)/g, '|\n$1');
+
+  // (c) Rebuild a delimiter row to match its header's column count, so a
+  //     malformed delimiter (wrong cell count / single dash run) still parses.
+  const lines = text.split('\n');
+  const isDelimiterish = (l: string): boolean =>
+    l.includes('|') && /^[\s|:-]+$/.test(l.trim()) && l.includes('-');
+  const columnCount = (l: string): number =>
+    l.trim().replace(/^\||\|$/g, '').split('|').length;
+  for (let i = 0; i < lines.length - 1; i++) {
+    if (
+      lines[i].includes('|') &&
+      !isDelimiterish(lines[i]) &&
+      isDelimiterish(lines[i + 1])
+    ) {
+      const n = columnCount(lines[i]);
+      if (n >= 1) lines[i + 1] = '| ' + Array(n).fill('---').join(' | ') + ' |';
+    }
+  }
+  return lines.join('\n');
 }
 
 export function md(src: string): string {
