@@ -72,8 +72,9 @@ AUTOMATED MODE — OVERRIDES (take precedence over the guideline above)
   body as plain Markdown text only — no JSON wrapper and no code fences.
 - Base every statement on the attached documents and the analysis findings
   provided. If evidence is missing, write "ไม่พบหลักฐานในเอกสารที่ได้รับ".
-- Be thorough and detailed. Do not summarise away substance — this output
-  feeds an official quality-assurance report.`;
+- Produce ONE single, clean, complete document. Be detailed where needed,
+  but do NOT repeat sections or pad — write each part exactly once. The
+  output budget is limited; excessive length gets truncated.`;
 
 function fileParts(files: InputFile[]): Part[] {
   return files.map((f) => ({
@@ -524,12 +525,16 @@ export async function runTqf3Draft(args: {
     systemInstruction: system,
     files,
     userText:
-      'จัดทำ "ร่าง มคอ.3 ฉบับปรับปรุง" ฉบับสมบูรณ์ โดยอ้างอิงเอกสาร มคอ.3 ต้นฉบับที่แนบมา ' +
-      'แก้ไขทุกจุดอ่อนที่ระบุไว้ในผลการวิเคราะห์ด้านล่าง และคงจุดเด่นไว้ทั้งหมด. ' +
-      'ต้องนำเสนอร่างฉบับสมบูรณ์ครบทุกหมวด — หมวดที่ 4 (แผนการสอน) ต้องเป็นตารางครบทุกสัปดาห์ ' +
-      'ในรูปแบบเดียวกับ มคอ.3 ต้นฉบับ ห้ามนำเสนอเฉพาะจุดที่เปลี่ยนแปลง. ' +
-      'ตอบกลับเป็น Markdown ล้วนเท่านั้น — ห้ามครอบด้วย JSON และห้ามใช้ code fence.\n\n' +
-      '=== ผลการวิเคราะห์ของระบบ (ใช้เป็นแนวทางการแก้ไข) ===\n' +
+      'จัดทำ "เอกสาร มคอ.3 ฉบับปรับปรุง" ที่สมบูรณ์และพร้อมใช้งานจริง โดยอ้างอิงเอกสาร ' +
+      'มคอ.3 ต้นฉบับที่แนบมา และนำผลการวิเคราะห์ด้านล่างมาแก้ไขทุกจุดอ่อนโดยตรง พร้อมคงจุดเด่นไว้.\n\n' +
+      'ขอบเขตผลลัพธ์ (สำคัญมาก):\n' +
+      '- ตอบกลับเป็น "ตัวเอกสาร มคอ.3 ฉบับปรับปรุง" เท่านั้น เรียงตามหมวดที่ 1 ถึง 6 ของ มคอ.3.\n' +
+      '- ห้ามใส่บทวิเคราะห์ / ตารางเปรียบเทียบก่อน-หลัง / เหตุผลรายข้อ / Change Summary ' +
+      'เพราะมีอยู่ในรายงานวิเคราะห์แล้ว — ให้นำผลวิเคราะห์ไปใช้แก้ไขเนื้อหาโดยตรง.\n' +
+      '- เขียนแต่ละหมวดเพียงครั้งเดียว ห้ามทำซ้ำเนื้อหา เขียนกระชับแต่ครบถ้วน.\n' +
+      '- หมวดที่ 4 (แผนการสอน) ต้องเป็นตารางครบทุกสัปดาห์ ในรูปแบบเดียวกับ มคอ.3 ต้นฉบับ.\n' +
+      '- ตอบกลับเป็น Markdown ล้วนเท่านั้น ไม่มี JSON และไม่มี code fence.\n\n' +
+      '=== ผลการวิเคราะห์ของระบบ (ใช้เป็นแนวทางการแก้ไข ไม่ต้องคัดลอกลงในเอกสาร) ===\n' +
       findingsContext,
   });
 
