@@ -70,7 +70,10 @@ async function audit(
 }
 
 function validate(data: CourseFormData): string | null {
-  if (!data.code?.trim()) return 'กรุณาระบุรหัสวิชา';
+  const code = data.code?.trim() ?? '';
+  if (!code) return 'กรุณาระบุรหัสวิชา';
+  if (!/^\d{7}$/.test(code))
+    return 'รหัสวิชาต้องเป็นตัวเลข 7 หลักพอดี เช่น 1808102';
   if (!data.nameTh?.trim()) return 'กรุณาระบุชื่อวิชา (ไทย)';
   if (!data.nameEn?.trim()) return 'กรุณาระบุชื่อวิชา (อังกฤษ)';
   if (!data.creditStructure?.trim()) return 'กรุณาระบุโครงสร้างหน่วยกิต';
