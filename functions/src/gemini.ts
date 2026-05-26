@@ -60,6 +60,21 @@ AUTOMATED MODE — OVERRIDES (take precedence over the guideline above)
 - Be thorough and detailed. Do not summarise away substance — this output
   feeds an official quality-assurance report.`;
 
+/** Override footer for plain-text (non-JSON) generations such as the revised
+ *  มคอ.3 draft, which is too large to survive JSON-string escaping. */
+const AUTOMATED_MODE_TEXT = `
+=====================================================================
+AUTOMATED MODE — OVERRIDES (take precedence over the guideline above)
+=====================================================================
+- Output language: ภาษาไทย. Do NOT ask the user to choose a language;
+  ignore "ขั้นตอนที่ 0" and proceed directly.
+- Do NOT produce a .docx file and do NOT return JSON. Return the document
+  body as plain Markdown text only — no JSON wrapper and no code fences.
+- Base every statement on the attached documents and the analysis findings
+  provided. If evidence is missing, write "ไม่พบหลักฐานในเอกสารที่ได้รับ".
+- Be thorough and detailed. Do not summarise away substance — this output
+  feeds an official quality-assurance report.`;
+
 function fileParts(files: InputFile[]): Part[] {
   return files.map((f) => ({
     inlineData: { mimeType: f.mimeType, data: f.dataBase64 },
@@ -141,6 +156,50 @@ async function callJson<T>(args: {
 
     throw new Error(`${args.label}: ${message}`);
   }
+}
+
+/**
+ * One Gemini call that returns raw text (no JSON wrapper). Used for large
+ * free-form outputs (the revised มคอ.3 draft) where wrapping ~600 KB of
+ * Markdown in a single JSON string is the dominant failure mode — JSON
+ * escaping breaks and the repair round-trip is too large to fetch.
+ */
+async function callText(args: {
+  genAI: GoogleGenerativeAI;
+  model: string;
+  label: string;
+  systemInstruction: string;
+  userText: string;
+  files: InputFile[];
+}): Promise<{ text: string; usage: Usage }> {
+  const model = args.genAI.getGenerativeModel({
+    model: args.model,
+    systemInstruction: args.systemInstruction,
+    generationConfig: {
+      responseMimeType: 'text/plain',
+      temperature: 0.3,
+      maxOutputTokens: 65536,
+    },
+  });
+
+  const resp = await model.generateContent({
+    contents: [
+      { role: 'user', parts: [{ text: args.userText }, ...fileParts(args.files)] },
+    ],
+  });
+
+  const finishReason = resp.response.candidates?.[0]?.finishReason;
+  if (finishReason === 'MAX_TOKENS') {
+    throw new Error(`${args.label}: Gemini output was cut off before completion`);
+  }
+
+  return {
+    text: resp.response.text(),
+    usage: {
+      input: resp.response.usageMetadata?.promptTokenCount ?? 0,
+      output: resp.response.usageMetadata?.candidatesTokenCount ?? 0,
+    },
+  };
 }
 
 async function repairJson<T>(args: {
@@ -439,7 +498,7 @@ export async function runTqf3Draft(args: {
 }): Promise<{ content: string; usage: Usage }> {
   const { apiKey, model, guideline, files, findings } = args;
   const genAI = new GoogleGenerativeAI(apiKey);
-  const system = `${guideline}\n${AUTOMATED_MODE}`;
+  const system = `${guideline}\n${AUTOMATED_MODE_TEXT}`;
 
   const findingsContext = [
     findings.overallSummary ? `## บทสรุปผู้บริหาร\n${findings.overallSummary}` : '',
@@ -458,11 +517,10 @@ export async function runTqf3Draft(args: {
     .filter(Boolean)
     .join('\n\n');
 
-  const { data, usage } = await callJson<{ content: string }>({
+  const { text, usage } = await callText({
     genAI,
     model,
     label: 'ร่าง มคอ.3',
-    schemaHint: '{ "content": "<Markdown ร่าง มคอ.3 ฉบับปรับปรุง>" }',
     systemInstruction: system,
     files,
     userText:
@@ -470,12 +528,13 @@ export async function runTqf3Draft(args: {
       'แก้ไขทุกจุดอ่อนที่ระบุไว้ในผลการวิเคราะห์ด้านล่าง และคงจุดเด่นไว้ทั้งหมด. ' +
       'ต้องนำเสนอร่างฉบับสมบูรณ์ครบทุกหมวด — หมวดที่ 4 (แผนการสอน) ต้องเป็นตารางครบทุกสัปดาห์ ' +
       'ในรูปแบบเดียวกับ มคอ.3 ต้นฉบับ ห้ามนำเสนอเฉพาะจุดที่เปลี่ยนแปลง. ' +
-      'ห้ามใช้ Markdown code fence. ค่า content ต้องเป็น JSON string เดียวเท่านั้น ' +
-      'และต้อง escape เครื่องหมาย " และ line break เป็น \\n.\n\n' +
+      'ตอบกลับเป็น Markdown ล้วนเท่านั้น — ห้ามครอบด้วย JSON และห้ามใช้ code fence.\n\n' +
       '=== ผลการวิเคราะห์ของระบบ (ใช้เป็นแนวทางการแก้ไข) ===\n' +
-      findingsContext +
-      '\n\nส่งผลเป็น JSON: { "content": "<Markdown ร่าง มคอ.3 ฉบับปรับปรุง>" }',
+      findingsContext,
   });
 
-  return { content: data.content ?? '', usage };
+  // The model may still wrap the answer in a ```markdown fence; strip it.
+  const trimmed = text.trim();
+  const content = stripCodeFence(trimmed) ?? trimmed;
+  return { content, usage };
 }
