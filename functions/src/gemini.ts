@@ -209,6 +209,13 @@ function preview(text: string): string {
   return text.replace(/\s+/g, ' ').slice(0, 300);
 }
 
+/** Removes a leading heading that merely repeats the section title
+ *  (e.g. "## ส่วนที่ 2 — ..."), which the report template / UI already render —
+ *  otherwise the title shows up twice. */
+function stripLeadingSectionHeading(content: string): string {
+  return content.replace(/^\s*(?:#{1,6}\s*|\*\*\s*)?ส่วนที่\s*\d+[^\n]*\n+/u, '');
+}
+
 function parseJson<T>(raw: string): T {
   const text = raw.trim();
   if (!text) {
@@ -299,7 +306,8 @@ export async function runAnalysis(args: {
     systemInstruction: system,
     files,
     userText:
-      'จัดทำเฉพาะ "ส่วนที่ 1 — การประเมินผลและการตัดเกรด" อย่างละเอียด ' +
+      'จัดทำเฉพาะเนื้อหาของ "ส่วนที่ 1 — การประเมินผลและการตัดเกรด" อย่างละเอียด ' +
+      'ห้ามใส่หัวข้อ "ส่วนที่ 1 ..." ซ้ำในเนื้อหา (ระบบจะใส่หัวข้อให้แล้ว). ' +
       'ครอบคลุมทุกหัวข้อย่อย: สรุปข้อมูลคะแนน/เกรด, การตรวจสอบตามแนวปฏิบัติ ' +
       '(สัดส่วน 90/10, เกณฑ์การตัดเกรด, ประเด็นเฉพาะ, กระบวนการทบทวน) ' +
       'พร้อมระดับ ✅/⚠️/❌ และจุดเด่น/จุดอ่อน/ข้อเสนอแนะ. ' +
@@ -324,10 +332,14 @@ export async function runAnalysis(args: {
     systemInstruction: system,
     files,
     userText:
-      'จัดทำเฉพาะ "ส่วนที่ 2 — การประเมินคุณภาพรายวิชา" อย่างละเอียด ' +
+      'จัดทำเฉพาะเนื้อหาของ "ส่วนที่ 2 — การประเมินคุณภาพรายวิชา" อย่างละเอียด ' +
+      'ห้ามใส่หัวข้อ "ส่วนที่ 2 ..." ซ้ำในเนื้อหา (ระบบจะใส่หัวข้อให้แล้ว). ' +
       'ประเมินทีละหมวด (หมวดที่ 1 ถึง 6) ตามแนวทาง พร้อมวิเคราะห์ CLO, ' +
-      'PLO–CLO mapping, ความสอดคล้องของวิธีประเมินกับ Bloom, ' +
-      'และสรุปจุดเด่น/จุดอ่อนพร้อมระดับความรุนแรง (Critical/Major/Minor). ' +
+      'PLO–CLO mapping, ความสอดคล้องของวิธีประเมินกับ Bloom. ' +
+      '**บังคับ: ทุกหมวด (หมวดที่ 1 ถึง 6) ต้องปิดท้ายด้วยบทสรุป 2 บรรทัดเสมอ คือ ' +
+      '"จุดเด่นของหมวดนี้:" และ "จุดที่ควรพัฒนาของหมวดนี้:" ' +
+      '(หากไม่พบให้ระบุว่า "ไม่พบ").** ' +
+      'จากนั้นสรุปจุดเด่น/จุดอ่อนภาพรวมพร้อมระดับความรุนแรง (Critical/Major/Minor). ' +
       'ส่งผลเป็น JSON: { "content": "<Markdown รายละเอียดของส่วนที่ 2>", ' +
       '"overallSummary": "<บทสรุปผู้บริหารแบบ Markdown>", ' +
       '"criticalIssues": ["<ประเด็น Critical>", ...], ' +
@@ -371,8 +383,8 @@ export async function runAnalysis(args: {
 
   const result: AnalysisResult = {
     courseCodeDetected: r2.data.courseCodeDetected ?? '',
-    section1Grading: r1.data.content ?? '',
-    section2Quality: r2.data.content ?? '',
+    section1Grading: stripLeadingSectionHeading(r1.data.content ?? ''),
+    section2Quality: stripLeadingSectionHeading(r2.data.content ?? ''),
     section4Verification: {
       items: r4.data.items ?? [],
       totalScore: r4.data.totalScore ?? 0,
