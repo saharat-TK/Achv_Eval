@@ -28,9 +28,8 @@ export type ActionResult =
 
 function validate(data: ProgramFormData): string | null {
   if (!data.code?.trim()) return 'กรุณาระบุรหัสหลักสูตร';
-  const id = toDocId(data.code);
-  if (!id) return 'รหัสหลักสูตรต้องมีตัวอักษรหรือตัวเลข (A–Z, 0–9) อย่างน้อย 1 ตัว';
-  if (id.length > 9) return 'รหัสหลักสูตรต้องไม่เกิน 9 ตัวอักษร (A–Z, 0–9)';
+  if (!/^\d{9}$/.test(data.code.trim()))
+    return 'รหัสหลักสูตรต้องเป็นตัวเลข 9 หลักพอดี เช่น 673180800';
   if (!data.nameTh?.trim()) return 'กรุณาระบุชื่อหลักสูตร (ไทย)';
   if (!data.nameEn?.trim()) return 'กรุณาระบุชื่อหลักสูตร (อังกฤษ)';
   for (const plo of data.plos) {

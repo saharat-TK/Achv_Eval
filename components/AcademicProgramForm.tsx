@@ -53,11 +53,11 @@ export default function AcademicProgramForm({
   }
 
   function handleCodeChange(raw: string) {
-    // Strip every non-digit character and cap at 9.
-    const digits = raw.replace(/\D/g, '').slice(0, 9);
+    // Strip every non-digit character and cap at 7.
+    const digits = raw.replace(/\D/g, '').slice(0, 7);
     set('code', digits);
-    if (digits.length > 0 && digits.length < 9) {
-      setCodeError(`ต้องการ 9 หลัก (ป้อนแล้ว ${digits.length} หลัก)`);
+    if (digits.length > 0 && digits.length < 7) {
+      setCodeError(`ต้องการ 7 หลัก (ป้อนแล้ว ${digits.length} หลัก)`);
     } else {
       setCodeError(null);
     }
@@ -65,8 +65,8 @@ export default function AcademicProgramForm({
 
   function validateCode(): boolean {
     const code = form.code.trim();
-    if (!/^\d{9}$/.test(code)) {
-      setCodeError('รหัสหลักสูตรต้องเป็นตัวเลข 9 หลักพอดี เช่น 673180800');
+    if (!/^\d{7}$/.test(code)) {
+      setCodeError('รหัสหลักสูตรต้องเป็นตัวเลข 7 หลักพอดี เช่น 3180800');
       return false;
     }
     setCodeError(null);
@@ -103,15 +103,15 @@ export default function AcademicProgramForm({
               onChange={(e) => handleCodeChange(e.target.value)}
               onBlur={validateCode}
               inputMode="numeric"
-              maxLength={9}
-              placeholder="เช่น 673180800"
+              maxLength={7}
+              placeholder="เช่น 3180800"
               autoComplete="off"
               spellCheck={false}
             />
             {codeError ? (
               <p className="mt-1 text-xs text-red-600">{codeError}</p>
             ) : (
-              <p className="mt-1 text-xs text-slate-400">ตัวเลข 9 หลัก เช่น 673180800</p>
+              <p className="mt-1 text-xs text-slate-400">ตัวเลข 7 หลัก เช่น 3180800</p>
             )}
           </label>
           <label className="text-sm text-slate-600">

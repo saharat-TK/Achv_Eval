@@ -56,8 +56,8 @@ async function audit(
 function validate(data: AcademicProgramFormData): string | null {
   const code = data.code?.trim() ?? '';
   if (!code) return 'กรุณาระบุรหัสหลักสูตร';
-  if (!/^\d{9}$/.test(code))
-    return 'รหัสหลักสูตรต้องเป็นตัวเลข 9 หลักพอดี เช่น 673180800';
+  if (!/^\d{7}$/.test(code))
+    return 'รหัสหลักสูตรต้องเป็นตัวเลข 7 หลักพอดี เช่น 3180800';
   if (!data.nameTh?.trim()) return 'กรุณาระบุชื่อหลักสูตร (ไทย)';
   if (!data.nameEn?.trim()) return 'กรุณาระบุชื่อหลักสูตร (อังกฤษ)';
   return null;
