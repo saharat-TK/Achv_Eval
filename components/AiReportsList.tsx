@@ -281,17 +281,22 @@ export default function AiReportsList({
                       รายงานรวมกำลังรอการสร้าง
                     </span>
                   ) : null}
-                </div>
-              )}
 
-              {r.status === 'succeeded' && r.reportDownloadUrl && (
-                <Tqf3DraftControl
-                  offeringId={offeringId}
-                  reportId={r.id}
-                  tqf3Status={r.tqf3Status ?? null}
-                  tqf3DownloadUrl={r.tqf3DownloadUrl ?? null}
-                  tqf3ErrorMessage={r.tqf3ErrorMessage ?? null}
-                />
+                  {/* On-demand revised มคอ.3 draft. Hidden for older reports that
+                      already embed the draft as section 3 (those predate this
+                      feature and have no persisted source files to re-feed). */}
+                  {r.status === 'succeeded' &&
+                    r.reportDownloadUrl &&
+                    !r.structuredOutput?.section3RevisedTqf3 && (
+                      <Tqf3DraftControl
+                        offeringId={offeringId}
+                        reportId={r.id}
+                        tqf3Status={r.tqf3Status ?? null}
+                        tqf3DownloadUrl={r.tqf3DownloadUrl ?? null}
+                        tqf3ErrorMessage={r.tqf3ErrorMessage ?? null}
+                      />
+                    )}
+                </div>
               )}
             </div>
           </div>
@@ -420,33 +425,38 @@ function Tqf3DraftControl({
     }
   }
 
+  if (tqf3Status === 'succeeded' && tqf3DownloadUrl) {
+    return (
+      <a
+        href={tqf3DownloadUrl}
+        className="rounded-lg bg-orange-500 px-3 py-1.5 text-sm font-medium text-white hover:bg-orange-600"
+      >
+        ดาวน์โหลดร่าง มคอ.3 (PDF)
+      </a>
+    );
+  }
+
   return (
-    <div className="mt-3 flex flex-col items-end gap-1">
-      {tqf3Status === 'succeeded' && tqf3DownloadUrl ? (
-        <a
-          href={tqf3DownloadUrl}
-          className="rounded-lg border border-mfu-primary px-3 py-2 text-sm font-medium text-mfu-primary hover:bg-slate-50"
-        >
-          ดาวน์โหลดร่าง มคอ.3 (PDF)
-        </a>
-      ) : (
-        <button
-          type="button"
-          onClick={generate}
-          disabled={generating}
-          className="rounded-lg bg-mfu-primary px-3 py-2 text-sm font-medium text-white hover:opacity-90 disabled:bg-slate-300 disabled:text-slate-600 disabled:opacity-100"
-        >
-          {generating
-            ? 'กำลังสร้างร่าง มคอ.3…'
-            : tqf3Status === 'failed'
-              ? 'ลองสร้างร่าง มคอ.3 อีกครั้ง'
-              : 'ร่าง มคอ.3 ฉบับใหม่'}
-        </button>
-      )}
+    <span className="inline-flex items-center gap-2">
+      <button
+        type="button"
+        onClick={generate}
+        disabled={generating}
+        title={
+          tqf3Status === 'failed' && tqf3ErrorMessage ? tqf3ErrorMessage : undefined
+        }
+        className="rounded-lg bg-orange-500 px-3 py-1.5 text-sm font-medium text-white hover:bg-orange-600 disabled:bg-slate-300 disabled:text-slate-600 disabled:opacity-100"
+      >
+        {generating
+          ? 'กำลังสร้างร่าง มคอ.3…'
+          : tqf3Status === 'failed'
+            ? 'ลองสร้างร่าง มคอ.3 อีกครั้ง'
+            : 'ร่าง มคอ.3 ฉบับใหม่'}
+      </button>
       {tqf3Status === 'failed' && tqf3ErrorMessage && !generating && (
-        <p className="text-xs text-red-600">{tqf3ErrorMessage}</p>
+        <span className="text-xs text-red-600">{tqf3ErrorMessage}</span>
       )}
-    </div>
+    </span>
   );
 }
 
