@@ -167,6 +167,17 @@ export const generateTqf3Draft = onCall(
         throw new Error('Gemini returned an empty TQF3 draft');
       }
 
+      // TEMP DEBUG (Step 0): inspect how the model formatted the weekly table.
+      // Remove once §4 table rendering is confirmed.
+      const planIdx = content.search(/แผนการสอน|หมวดที่\s*4/);
+      console.log('TQF3 draft raw markdown', {
+        length: content.length,
+        section4Preview:
+          planIdx >= 0
+            ? content.slice(planIdx, planIdx + 1500)
+            : content.slice(0, 1500),
+      });
+
       // ----- Render → PDF → Storage ----------------------------------
       let lecturerName = offering.lecturerEmail ?? '';
       if (offering.lecturerId) {

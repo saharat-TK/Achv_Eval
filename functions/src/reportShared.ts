@@ -61,8 +61,28 @@ export function esc(s: string): string {
     .replace(/>/g, '&gt;');
 }
 
+/**
+ * Repairs common Markdown-table malformations from the LLM before parsing.
+ * LLMs (especially on long, wide tables like the มคอ.3 weekly plan) sometimes
+ * emit the header row and the `:---` delimiter row on a single line, which
+ * makes `marked` treat the whole thing as a paragraph instead of a table.
+ * Idempotent — well-formed tables pass through unchanged.
+ */
+export function normalizeMarkdownTables(src: string): string {
+  let out = src ?? '';
+  // 1) Split a merged "header | | :--- | delimiter" line into two lines.
+  out = out.replace(/\|[ \t]+(\|(?:[ \t]*:?-{2,}:?[ \t]*\|)+)/g, '|\n$1');
+  // 2) Insert a blank line before a table glued to a preceding paragraph,
+  //    so the header row isn't absorbed into that paragraph.
+  out = out.replace(
+    /([^\n|])\n(\|[^\n]*\|)\n(\|[ \t]*:?-{2,})/g,
+    '$1\n\n$2\n$3',
+  );
+  return out;
+}
+
 export function md(src: string): string {
-  return marked.parse(src ?? '', { async: false }) as string;
+  return marked.parse(normalizeMarkdownTables(src ?? ''), { async: false }) as string;
 }
 
 /** A score row carries ● in the column matching the item's score. */
