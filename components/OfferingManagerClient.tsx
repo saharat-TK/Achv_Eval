@@ -1,19 +1,20 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { httpsCallable } from 'firebase/functions';
 import { getFirebaseAuth, getFirebaseFunctions } from '@/lib/firebase/config';
 import {
   assignOfferingLecturers,
   deleteEmptyOfferings,
+  reverseOfferingStatuses,
 } from '@/app/admin/offering-manager/actions';
 import BatchOfferingModal, {
   type ProgramOpt,
   type EditContext,
 } from '@/components/BatchOfferingModal';
 import { OFFERING_STATUS, SEMESTER_LABEL } from '@/lib/constants';
-import type { Semester } from '@/lib/types/models';
+import type { OfferingStatus, Semester } from '@/lib/types/models';
 import type { ManagedLecturer, ManagedOffering } from '@/lib/data/offeringManager';
 
 interface ApBlock {
@@ -30,6 +31,10 @@ interface YearGroup {
   count: number;
   semesters: SemGroup[];
 }
+type ReverseTargetStatus = Extract<
+  OfferingStatus,
+  'documents_pending' | 'ai_complete' | 'pending_assessment'
+>;
 
 function lecturerOptionValue(lecturer: ManagedLecturer): string {
   return `${lecturer.kind}:${lecturer.id}`;
@@ -47,16 +52,40 @@ const STATUS_TONE_CLASS: Record<
   red:    'bg-red-100 text-red-700',
 };
 
+const OFFERING_TABLE_WRAPPER_CLASS =
+  'overflow-x-auto rounded-b-lg border-t border-slate-100';
+const OFFERING_TABLE_CLASS = 'min-w-[760px] w-full table-fixed text-xs';
+const OFFERING_TABLE_HEADER_ROW_CLASS =
+  'bg-slate-50 text-left text-[11px] font-medium text-slate-500';
+const OFFERING_TABLE_HEAD_CELL_CLASS = 'px-3 py-2';
+const OFFERING_TABLE_CELL_CLASS = 'px-3 py-1.5 align-middle';
+const OFFERING_TABLE_CODE_CELL_CLASS =
+  `${OFFERING_TABLE_CELL_CLASS} whitespace-nowrap font-medium text-slate-700`;
+const OFFERING_TABLE_TEXT_CELL_CLASS =
+  `${OFFERING_TABLE_CELL_CLASS} min-w-0 text-slate-600`;
+const OFFERING_TABLE_STATUS_CELL_CLASS =
+  `${OFFERING_TABLE_CELL_CLASS} whitespace-nowrap`;
+const OFFERING_STATUS_PILL_CLASS = 'inline-flex max-w-full items-center rounded-full px-2 py-0.5 text-[10px] font-medium';
+const REVERSE_TARGETS: ReverseTargetStatus[] = [
+  'pending_assessment',
+  'ai_complete',
+  'documents_pending',
+];
+
 export default function OfferingManagerClient({
   offerings,
   academicPrograms,
   lecturers,
   isAdmin,
+  isSuperAdmin,
+  directorAcademicProgramIds,
 }: {
   offerings: ManagedOffering[];
   academicPrograms: ProgramOpt[];
   lecturers: ManagedLecturer[];
   isAdmin: boolean;
+  isSuperAdmin: boolean;
+  directorAcademicProgramIds: string[];
 }) {
   const router = useRouter();
   const [modal, setModal] = useState<{ mode: 'add' } | { mode: 'edit'; edit: EditContext } | null>(
@@ -69,6 +98,15 @@ export default function OfferingManagerClient({
     offerings: ManagedOffering[];
     values: Record<string, string>;
   } | null>(null);
+  const [reverse, setReverse] = useState<{
+    label: string;
+    offerings: ManagedOffering[];
+    targets: ReverseTargetStatus[];
+    targetStatus: ReverseTargetStatus;
+    selectedOfferingIds: string[];
+    skippedOpen: boolean;
+    typed: string;
+  } | null>(null);
   const [typed, setTyped] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -76,6 +114,17 @@ export default function OfferingManagerClient({
   const [menuDir, setMenuDir] = useState<'up' | 'down'>('down');
   const [collapsedSems, setCollapsedSems] = useState<Set<string>>(new Set());
   const [collapsedBlocks, setCollapsedBlocks] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    if (!menuKey) return;
+    function closeOnOutsidePointerDown(e: PointerEvent) {
+      if (!(e.target instanceof Element)) return;
+      if (e.target.closest('[data-offering-group-menu]')) return;
+      setMenuKey(null);
+    }
+    document.addEventListener('pointerdown', closeOnOutsidePointerDown);
+    return () => document.removeEventListener('pointerdown', closeOnOutsidePointerDown);
+  }, [menuKey]);
 
   function toggleSem(key: string) {
     setCollapsedSems((prev) => {
@@ -228,6 +277,96 @@ export default function OfferingManagerClient({
     });
   }
 
+  function getReverseTargets(block: ApBlock): ReverseTargetStatus[] {
+    const canReversePending =
+      isSuperAdmin ||
+      (!!block.academicProgramId && directorAcademicProgramIds.includes(block.academicProgramId));
+    const targets = new Set<ReverseTargetStatus>();
+    if (canReversePending && block.offerings.some((o) => o.status === 'pending_assessment')) {
+      targets.add('ai_complete');
+      targets.add('documents_pending');
+    }
+    if (isSuperAdmin && block.offerings.some((o) => o.status === 'assessed')) {
+      targets.add('pending_assessment');
+      targets.add('ai_complete');
+      targets.add('documents_pending');
+    }
+    return REVERSE_TARGETS.filter((target) => targets.has(target));
+  }
+
+  function countEligibleReverseOfferings(
+    offeringsForReverse: ManagedOffering[],
+    targetStatus: ReverseTargetStatus,
+  ): number {
+    return getEligibleReverseOfferings(offeringsForReverse, targetStatus).length;
+  }
+
+  function canReverseOfferingToTarget(
+    offering: ManagedOffering,
+    targetStatus: ReverseTargetStatus,
+  ): boolean {
+    if (
+      offering.status === 'pending_assessment' &&
+      ['ai_complete', 'documents_pending'].includes(targetStatus)
+    ) {
+      return true;
+    }
+    return (
+      isSuperAdmin &&
+      offering.status === 'assessed' &&
+      ['pending_assessment', 'ai_complete', 'documents_pending'].includes(targetStatus)
+    );
+  }
+
+  function getEligibleReverseOfferings(
+    offeringsForReverse: ManagedOffering[],
+    targetStatus: ReverseTargetStatus,
+  ): ManagedOffering[] {
+    return offeringsForReverse.filter((offering) =>
+      canReverseOfferingToTarget(offering, targetStatus),
+    );
+  }
+
+  function getSkippedReverseOfferings(
+    offeringsForReverse: ManagedOffering[],
+    targetStatus: ReverseTargetStatus,
+  ): { offering: ManagedOffering; reason: string }[] {
+    return offeringsForReverse.flatMap((offering) => {
+      if (canReverseOfferingToTarget(offering, targetStatus)) return [];
+      if (
+        offering.status === 'pending_assessment' &&
+        !['ai_complete', 'documents_pending'].includes(targetStatus)
+      ) {
+        return [{ offering, reason: 'รายการรอทวนสอบย้อนเป็นสถานะนี้ไม่ได้' }];
+      }
+      if (offering.status === 'assessed' && !isSuperAdmin) {
+        return [{ offering, reason: 'เฉพาะผู้ดูแลระบบสูงสุดเท่านั้น' }];
+      }
+      if (offering.status === 'assessed') {
+        return [{ offering, reason: 'รายการทวนสอบแล้วย้อนเป็นสถานะนี้ไม่ได้' }];
+      }
+      return [{ offering, reason: 'สถานะปัจจุบันไม่สามารถย้อนกลับได้' }];
+    });
+  }
+
+  function openReverse(block: ApBlock, year: number, sem: Semester) {
+    const targets = getReverseTargets(block);
+    if (targets.length === 0) return;
+    setMenuKey(null);
+    setError(null);
+    setReverse({
+      label: `${block.label} · ปีการศึกษา ${year} ${SEMESTER_LABEL[sem]}`,
+      offerings: block.offerings,
+      targets,
+      targetStatus: targets[0],
+      selectedOfferingIds: getEligibleReverseOfferings(block.offerings, targets[0]).map(
+        (offering) => offering.id,
+      ),
+      skippedOpen: false,
+      typed: '',
+    });
+  }
+
   function openAssign(block: ApBlock, year: number, sem: Semester) {
     if (!block.academicProgramId) return;
     setMenuKey(null);
@@ -306,6 +445,31 @@ export default function OfferingManagerClient({
     } finally {
       setBusy(false);
     }
+  }
+
+  async function confirmReverse() {
+    if (!reverse || reverse.typed !== 'ยืนยัน' || reverse.selectedOfferingIds.length === 0) return;
+    setBusy(true);
+    setError(null);
+    const res = await reverseOfferingStatuses(
+      reverse.selectedOfferingIds,
+      reverse.targetStatus,
+    );
+    setBusy(false);
+    if (!res.ok) {
+      setError(res.error);
+      return;
+    }
+    router.refresh();
+    if (res.failed.length) {
+      setError(
+        `ย้อนสถานะสำเร็จ ${res.succeeded} รายการ · ข้าม ${res.failed.length} รายการ — ${res.failed
+          .map((f) => `${f.label}: ${f.reason}`)
+          .join(', ')}`,
+      );
+      return;
+    }
+    setReverse(null);
   }
 
   return (
@@ -413,6 +577,7 @@ export default function OfferingManagerClient({
                       {s.programs.map((block) => {
                         const key = `${g.year}-${s.sem}-${block.academicProgramId ?? 'none'}`;
                         const blockCollapsed = collapsedBlocks.has(key);
+                        const reverseTargets = getReverseTargets(block);
                         return (
                           <div
                             key={key}
@@ -435,7 +600,7 @@ export default function OfferingManagerClient({
                                 </span>
                               </button>
                               {block.academicProgramId && (
-                                <div className="relative">
+                                <div className="relative" data-offering-group-menu>
                                   <button
                                     type="button"
                                     onClick={(e) => toggleMenu(key, e)}
@@ -466,6 +631,15 @@ export default function OfferingManagerClient({
                                       >
                                         มอบหมายอาจารย์
                                       </button>
+                                      {reverseTargets.length > 0 && (
+                                        <button
+                                          type="button"
+                                          onClick={() => openReverse(block, g.year, s.sem)}
+                                          className="block w-full px-3 py-2 text-left text-sm text-amber-700 hover:bg-amber-50"
+                                        >
+                                          ย้อนสถานะ
+                                        </button>
+                                      )}
                                       <button
                                         type="button"
                                         onClick={() => openDelete(block, g.year, s.sem)}
@@ -479,14 +653,22 @@ export default function OfferingManagerClient({
                               )}
                             </div>
                             {!blockCollapsed && (
-                            <div className="overflow-hidden rounded-b-lg border-t border-slate-100">
-                              <table className="w-full text-xs">
+                            <div className={OFFERING_TABLE_WRAPPER_CLASS}>
+                              <table className={OFFERING_TABLE_CLASS}>
+                                <colgroup>
+                                  <col className="w-[18%]" />
+                                  <col />
+                                  <col className="w-[28%]" />
+                                  <col className="w-[18%]" />
+                                </colgroup>
                                 <thead>
-                                  <tr className="bg-slate-50 text-left text-[11px] font-medium text-slate-500">
-                                    <th className="px-3 py-2">รหัสวิชา</th>
-                                    <th className="px-3 py-2">ชื่อวิชา</th>
-                                    <th className="px-3 py-2">อาจารย์ผู้รับผิดชอบ</th>
-                                    <th className="px-3 py-2">สถานะ</th>
+                                  <tr className={OFFERING_TABLE_HEADER_ROW_CLASS}>
+                                    <th className={OFFERING_TABLE_HEAD_CELL_CLASS}>รหัสวิชา</th>
+                                    <th className={OFFERING_TABLE_HEAD_CELL_CLASS}>ชื่อวิชา</th>
+                                    <th className={OFFERING_TABLE_HEAD_CELL_CLASS}>
+                                      อาจารย์ผู้รับผิดชอบ
+                                    </th>
+                                    <th className={OFFERING_TABLE_HEAD_CELL_CLASS}>สถานะ</th>
                                   </tr>
                                 </thead>
                                 <tbody className="divide-y divide-slate-100">
@@ -499,7 +681,7 @@ export default function OfferingManagerClient({
                                         key={o.id}
                                         className={o.isActive ? 'bg-white' : 'bg-amber-50/50'}
                                       >
-                                        <td className="whitespace-nowrap px-3 py-2 font-medium text-slate-700">
+                                        <td className={OFFERING_TABLE_CODE_CELL_CLASS}>
                                           {o.courseCode}
                                           {!o.isActive && (
                                             <span className="ml-1.5 rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] text-amber-700">
@@ -507,25 +689,32 @@ export default function OfferingManagerClient({
                                             </span>
                                           )}
                                         </td>
-                                        <td className="px-3 py-2 text-slate-600">
-                                          {o.courseNameTh}
+                                        <td className={OFFERING_TABLE_TEXT_CELL_CLASS}>
+                                          <div className="truncate" title={o.courseNameTh}>
+                                            {o.courseNameTh}
+                                          </div>
                                         </td>
-                                        <td className="px-3 py-2">
+                                        <td className={OFFERING_TABLE_TEXT_CELL_CLASS}>
                                           {lecturerName ? (
-                                            <span className="text-slate-700">
-                                              {lecturerName}
+                                            <div
+                                              className="flex min-w-0 items-center gap-1.5 text-slate-700"
+                                              title={lecturerName}
+                                            >
+                                              <span className="truncate">{lecturerName}</span>
                                               {isPending && (
-                                                <span className="ml-1.5 rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] text-amber-700">
+                                                <span className="shrink-0 rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] text-amber-700">
                                                   รอลงทะเบียน
                                                 </span>
                                               )}
-                                            </span>
+                                            </div>
                                           ) : (
-                                            <span className="text-slate-400">— ยังไม่มอบหมาย</span>
+                                            <span className="block truncate text-slate-400">
+                                              — ยังไม่มอบหมาย
+                                            </span>
                                           )}
                                         </td>
-                                        <td className="px-3 py-2">
-                                          <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${STATUS_TONE_CLASS[tone]}`}>
+                                        <td className={OFFERING_TABLE_STATUS_CELL_CLASS}>
+                                          <span className={`${OFFERING_STATUS_PILL_CLASS} ${STATUS_TONE_CLASS[tone]}`}>
                                             {labelTh}
                                           </span>
                                         </td>
@@ -559,6 +748,314 @@ export default function OfferingManagerClient({
           onClose={() => setModal(null)}
         />
       )}
+
+      {reverse && (() => {
+        const eligibleOfferings = getEligibleReverseOfferings(
+          reverse.offerings,
+          reverse.targetStatus,
+        );
+        const skippedOfferings = getSkippedReverseOfferings(
+          reverse.offerings,
+          reverse.targetStatus,
+        );
+        const selectedIds = new Set(reverse.selectedOfferingIds);
+        const selectedCount = reverse.selectedOfferingIds.length;
+        const allEligibleSelected =
+          eligibleOfferings.length > 0 && selectedCount === eligibleOfferings.length;
+
+        return (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
+            onClick={() => !busy && setReverse(null)}
+            role="dialog"
+            aria-modal="true"
+          >
+            <div
+              className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-xl bg-white p-6 shadow-xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <h2 className="text-base font-semibold text-amber-800">ย้อนสถานะการเปิดสอน</h2>
+              <p className="mt-2 text-sm leading-relaxed text-slate-600">
+                {reverse.label} — {reverse.offerings.length} รายวิชา
+              </p>
+
+              <div className="mt-4 grid gap-2 md:grid-cols-3">
+                {reverse.targets.map((target) => {
+                  const eligibleCount = countEligibleReverseOfferings(
+                    reverse.offerings,
+                    target,
+                  );
+                  const skippedCount = reverse.offerings.length - eligibleCount;
+                  return (
+                    <label
+                      key={target}
+                      className={`flex cursor-pointer items-start gap-2 rounded-lg border px-3 py-2 text-sm ${
+                        reverse.targetStatus === target
+                          ? 'border-amber-300 bg-amber-50 text-amber-900'
+                          : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name="reverse-target-status"
+                        value={target}
+                        checked={reverse.targetStatus === target}
+                        onChange={() =>
+                          setReverse((current) =>
+                            current
+                              ? {
+                                  ...current,
+                                  targetStatus: target,
+                                  selectedOfferingIds: getEligibleReverseOfferings(
+                                    current.offerings,
+                                    target,
+                                  ).map((offering) => offering.id),
+                                  skippedOpen: false,
+                                  typed: '',
+                                }
+                              : current,
+                          )
+                        }
+                        className="mt-0.5"
+                      />
+                      <span>
+                        <span className="font-medium">
+                          ย้อนเป็น {OFFERING_STATUS[target].labelTh}
+                        </span>
+                        <span className="mt-0.5 block text-xs text-slate-500">
+                          เปลี่ยนได้ {eligibleCount} · ข้าม {skippedCount}
+                        </span>
+                      </span>
+                    </label>
+                  );
+                })}
+              </div>
+
+              <div className="mt-4 rounded-lg border border-slate-200">
+                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 bg-slate-50 px-3 py-2">
+                  <div>
+                    <h3 className="text-sm font-semibold text-slate-700">
+                      รายวิชาที่จะเปลี่ยน
+                    </h3>
+                    <p className="text-xs text-slate-500">
+                      เลือกแล้ว {selectedCount}/{eligibleOfferings.length} รายการ
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setReverse((current) =>
+                          current
+                            ? {
+                                ...current,
+                                selectedOfferingIds: eligibleOfferings.map(
+                                  (offering) => offering.id,
+                                ),
+                              }
+                            : current,
+                        )
+                      }
+                      disabled={busy || allEligibleSelected || eligibleOfferings.length === 0}
+                      className="rounded border border-slate-300 bg-white px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                    >
+                      เลือกทั้งหมด
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setReverse((current) =>
+                          current ? { ...current, selectedOfferingIds: [] } : current,
+                        )
+                      }
+                      disabled={busy || selectedCount === 0}
+                      className="rounded border border-slate-300 bg-white px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                    >
+                      ล้างที่เลือก
+                    </button>
+                  </div>
+                </div>
+
+                {eligibleOfferings.length === 0 ? (
+                  <p className="px-3 py-5 text-center text-sm text-slate-500">
+                    ไม่มีรายวิชาที่สามารถย้อนเป็นสถานะนี้ได้
+                  </p>
+                ) : (
+                  <div className="max-h-56 overflow-y-auto">
+                    <table className="w-full table-fixed text-xs">
+                      <colgroup>
+                        <col className="w-10" />
+                        <col className="w-[18%]" />
+                        <col />
+                        <col className="w-[22%]" />
+                        <col className="w-[16%]" />
+                      </colgroup>
+                      <thead className="sticky top-0 bg-slate-50 text-left text-[11px] font-medium text-slate-500">
+                        <tr>
+                          <th className="px-3 py-2">เลือก</th>
+                          <th className="px-3 py-2">รหัสวิชา</th>
+                          <th className="px-3 py-2">ชื่อวิชา</th>
+                          <th className="px-3 py-2">อาจารย์</th>
+                          <th className="px-3 py-2">สถานะเดิม</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {eligibleOfferings.map((offering) => {
+                          const lecturerName = resolveLecturerName(offering) ?? '—';
+                          const { labelTh, tone } = OFFERING_STATUS[offering.status];
+                          return (
+                            <tr key={offering.id}>
+                              <td className="px-3 py-2">
+                                <input
+                                  type="checkbox"
+                                  checked={selectedIds.has(offering.id)}
+                                  onChange={(e) =>
+                                    setReverse((current) => {
+                                      if (!current) return current;
+                                      const next = new Set(current.selectedOfferingIds);
+                                      e.target.checked
+                                        ? next.add(offering.id)
+                                        : next.delete(offering.id);
+                                      return {
+                                        ...current,
+                                        selectedOfferingIds: [...next],
+                                        typed: '',
+                                      };
+                                    })
+                                  }
+                                />
+                              </td>
+                              <td className="whitespace-nowrap px-3 py-2 font-medium text-slate-700">
+                                {offering.courseCode}
+                              </td>
+                              <td className="min-w-0 px-3 py-2 text-slate-600">
+                                <div className="truncate" title={offering.courseNameTh}>
+                                  {offering.courseNameTh}
+                                </div>
+                              </td>
+                              <td className="min-w-0 px-3 py-2 text-slate-600">
+                                <div className="truncate" title={lecturerName}>
+                                  {lecturerName}
+                                </div>
+                              </td>
+                              <td className="whitespace-nowrap px-3 py-2">
+                                <span className={`${OFFERING_STATUS_PILL_CLASS} ${STATUS_TONE_CLASS[tone]}`}>
+                                  {labelTh}
+                                </span>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+
+              <div className="mt-3 rounded-lg border border-slate-200">
+                <button
+                  type="button"
+                  onClick={() =>
+                    setReverse((current) =>
+                      current ? { ...current, skippedOpen: !current.skippedOpen } : current,
+                    )
+                  }
+                  className="flex w-full items-center justify-between px-3 py-2 text-left text-sm font-medium text-slate-700 hover:bg-slate-50"
+                >
+                  <span>ข้าม {skippedOfferings.length} รายการ</span>
+                  <span className="text-xs text-slate-400">
+                    {reverse.skippedOpen ? 'ซ่อน' : 'แสดง'}
+                  </span>
+                </button>
+                {reverse.skippedOpen && (
+                  skippedOfferings.length === 0 ? (
+                    <p className="border-t border-slate-100 px-3 py-3 text-sm text-slate-500">
+                      ไม่มีรายการที่ถูกข้าม
+                    </p>
+                  ) : (
+                    <div className="max-h-40 overflow-y-auto border-t border-slate-100">
+                      <table className="w-full table-fixed text-xs">
+                        <colgroup>
+                          <col className="w-[18%]" />
+                          <col />
+                          <col className="w-[18%]" />
+                          <col className="w-[28%]" />
+                        </colgroup>
+                        <tbody className="divide-y divide-slate-100">
+                          {skippedOfferings.map(({ offering, reason }) => {
+                            const { labelTh, tone } = OFFERING_STATUS[offering.status];
+                            return (
+                              <tr key={offering.id}>
+                                <td className="whitespace-nowrap px-3 py-2 font-medium text-slate-700">
+                                  {offering.courseCode}
+                                </td>
+                                <td className="min-w-0 px-3 py-2 text-slate-600">
+                                  <div className="truncate" title={offering.courseNameTh}>
+                                    {offering.courseNameTh}
+                                  </div>
+                                </td>
+                                <td className="whitespace-nowrap px-3 py-2">
+                                  <span className={`${OFFERING_STATUS_PILL_CLASS} ${STATUS_TONE_CLASS[tone]}`}>
+                                    {labelTh}
+                                  </span>
+                                </td>
+                                <td className="px-3 py-2 text-slate-500">{reason}</td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  )
+                )}
+              </div>
+
+              <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-relaxed text-amber-800">
+                ระบบจะเก็บรายงาน AI ผลทวนสอบ และไฟล์ PDF เดิมไว้ทั้งหมด หากย้อนจาก
+                “ทวนสอบแล้ว” ระบบจะปลดล็อกผลทวนสอบให้กลับไปแก้ไขได้
+              </p>
+
+              <label className="mt-3 block text-xs text-slate-600">
+                พิมพ์ <strong>ยืนยัน</strong> เพื่อดำเนินการ
+                <input
+                  type="text"
+                  value={reverse.typed}
+                  onChange={(e) =>
+                    setReverse((current) =>
+                      current ? { ...current, typed: e.target.value } : current,
+                    )
+                  }
+                  placeholder="ยืนยัน"
+                  className="mt-1 w-full rounded border border-amber-300 px-2 py-1 text-sm focus:border-red-500 focus:outline-none"
+                />
+              </label>
+              {error && (
+                <p className="mt-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+                  {error}
+                </p>
+              )}
+              <div className="mt-4 flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setReverse(null)}
+                  disabled={busy}
+                  className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                >
+                  ยกเลิก
+                </button>
+                <button
+                  type="button"
+                  onClick={confirmReverse}
+                  disabled={busy || reverse.typed !== 'ยืนยัน' || selectedCount === 0}
+                  className="rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-50"
+                >
+                  {busy ? 'กำลังย้อนสถานะ…' : `ย้อนสถานะ ${selectedCount} รายการ`}
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {del && (
         <div

@@ -12,6 +12,12 @@ import type { OfferingStatus, Semester } from '@/lib/types/models';
 
 const DEFAULT_SECTION = '01';
 const NO_DATA_STATUSES: OfferingStatus[] = ['draft', 'documents_pending'];
+const PENDING_REVERSE_TARGETS: OfferingStatus[] = ['ai_complete', 'documents_pending'];
+const ASSESSED_REVERSE_TARGETS: OfferingStatus[] = [
+  'pending_assessment',
+  'ai_complete',
+  'documents_pending',
+];
 
 export interface BulkCreateInput {
   academicYear: number;
@@ -38,6 +44,7 @@ interface Access {
   uid: string;
   email: string | null;
   isAdmin: boolean;
+  isSuperAdmin: boolean;
   allowed: Set<string>; // academic-program ids (empty for admin = all)
 }
 
@@ -46,9 +53,10 @@ async function resolveAccess(): Promise<Access | null> {
   const profile = await getCurrentProfile();
   if (!user || !profile) return null;
   const isAdmin = profile.roles.isAdmin === true;
+  const isSuperAdmin = profile.roles.isSuperAdmin === true;
   const allowed = new Set(profile.roles.directorOfAcademicPrograms ?? []);
   if (!isAdmin && allowed.size === 0) return null;
-  return { uid: user.uid, email: user.email ?? null, isAdmin, allowed };
+  return { uid: user.uid, email: user.email ?? null, isAdmin, isSuperAdmin, allowed };
 }
 
 /** Resolve a curriculum id → its parent academic-program id (or null). */
@@ -90,6 +98,14 @@ async function academicProgramsOfCurriculums(
 function canAccess(access: Access, academicProgramId: string | null): boolean {
   if (access.isAdmin) return true;
   return !!academicProgramId && access.allowed.has(academicProgramId);
+}
+
+function canReversePending(access: Access, academicProgramId: string | null): boolean {
+  return access.isSuperAdmin || (!!academicProgramId && access.allowed.has(academicProgramId));
+}
+
+function canReverseAssessed(access: Access): boolean {
+  return access.isSuperAdmin;
 }
 
 async function audit(
@@ -312,6 +328,117 @@ export async function deleteEmptyOfferings(
     revalidatePath('/admin/offering-manager');
   }
   return { ok: true, succeeded: deletedIds.length, failed };
+}
+
+export async function reverseOfferingStatuses(
+  offeringIds: string[],
+  targetStatus: OfferingStatus,
+): Promise<ManagerActionResult> {
+  const access = await resolveAccess();
+  if (!access) return { ok: false, error: 'ไม่มีสิทธิ์ดำเนินการ' };
+  if (![...PENDING_REVERSE_TARGETS, ...ASSESSED_REVERSE_TARGETS].includes(targetStatus)) {
+    return { ok: false, error: 'สถานะปลายทางไม่ถูกต้อง' };
+  }
+  if (offeringIds.length === 0) return { ok: true, succeeded: 0, failed: [] };
+
+  const db = getAdminDb();
+  const failed: OfferingActionFailure[] = [];
+  const updatedIds: string[] = [];
+  const beforeStatusCounts: Partial<Record<OfferingStatus, number>> = {};
+  const now = FieldValue.serverTimestamp();
+
+  for (const offeringId of offeringIds) {
+    const offeringRef = db.collection('offerings').doc(offeringId);
+
+    try {
+      const previousStatus = await db.runTransaction(async (tx) => {
+        const snap = await tx.get(offeringRef);
+        if (!snap.exists) {
+          throw new Error('ไม่พบรายการ');
+        }
+
+        const offering = snap.data() as {
+          programId: string;
+          courseCode: string;
+          status: OfferingStatus;
+          assessmentId?: string | null;
+          isActive?: boolean;
+        };
+        const programSnap = await tx.get(db.collection('programs').doc(offering.programId));
+        const apId = (programSnap.data()?.parentProgramId as string | undefined) ?? null;
+        if (!canAccess(access, apId)) {
+          throw new Error('ไม่มีสิทธิ์ในหลักสูตรนี้');
+        }
+        if (offering.isActive === false) {
+          throw new Error('รายวิชาปิดใช้งาน');
+        }
+
+        if (offering.status === 'pending_assessment') {
+          if (!PENDING_REVERSE_TARGETS.includes(targetStatus)) {
+            throw new Error('สถานะปลายทางไม่รองรับรายการรอทวนสอบ');
+          }
+          if (!canReversePending(access, apId)) {
+            throw new Error('เฉพาะผู้อำนวยการหลักสูตรหรือผู้ดูแลระบบสูงสุดเท่านั้น');
+          }
+        } else if (offering.status === 'assessed') {
+          if (!ASSESSED_REVERSE_TARGETS.includes(targetStatus)) {
+            throw new Error('สถานะปลายทางไม่รองรับรายการทวนสอบแล้ว');
+          }
+          if (!canReverseAssessed(access)) {
+            throw new Error('เฉพาะผู้ดูแลระบบสูงสุดเท่านั้น');
+          }
+          if (!offering.assessmentId) {
+            throw new Error('ไม่พบผลทวนสอบที่ลงนาม');
+          }
+          const assessmentRef = offeringRef.collection('assessments').doc(offering.assessmentId);
+          const assessmentSnap = await tx.get(assessmentRef);
+          if (!assessmentSnap.exists) {
+            throw new Error('ไม่พบผลทวนสอบที่ลงนาม');
+          }
+          tx.update(assessmentRef, {
+            isLocked: false,
+            signedAt: null,
+            followUpStatus: null,
+            updatedAt: now,
+          });
+        } else {
+          throw new Error('สถานะปัจจุบันไม่สามารถย้อนกลับได้');
+        }
+
+        tx.update(offeringRef, {
+          status: targetStatus,
+          updatedAt: now,
+          updatedBy: access.uid,
+        });
+        return offering.status;
+      });
+
+      beforeStatusCounts[previousStatus] = (beforeStatusCounts[previousStatus] ?? 0) + 1;
+      updatedIds.push(offeringId);
+    } catch (err) {
+      const snap = await offeringRef.get();
+      const label = snap.exists
+        ? ((snap.data()?.courseCode as string | undefined) ?? offeringId)
+        : offeringId;
+      failed.push({
+        id: offeringId,
+        label,
+        reason: err instanceof Error ? err.message : 'ย้อนสถานะไม่สำเร็จ',
+      });
+    }
+  }
+
+  if (updatedIds.length > 0) {
+    await audit('offering_statuses_reversed', access.uid, access.email, {
+      offeringIds: updatedIds,
+      targetStatus,
+      beforeStatusCounts,
+    });
+    revalidatePath('/admin/offering-manager');
+    revalidatePath('/admin/dashboard');
+    revalidatePath('/assessor');
+  }
+  return { ok: true, succeeded: updatedIds.length, failed };
 }
 
 export async function assignOfferingLecturers(

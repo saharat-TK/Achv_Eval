@@ -40,6 +40,8 @@ export default async function OfferingManagerPage() {
         }))}
         lecturers={lecturers}
         isAdmin={isAdmin}
+        isSuperAdmin={profile.roles.isSuperAdmin === true}
+        directorAcademicProgramIds={profile.roles.directorOfAcademicPrograms ?? []}
       />
     </div>
   );
