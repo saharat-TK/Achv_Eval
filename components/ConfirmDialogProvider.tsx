@@ -17,6 +17,9 @@ export interface ConfirmOptions {
   confirmLabel?: string;
   cancelLabel?: string;
   variant?: Variant;
+  acknowledgementLabel?: string;
+  confirmationText?: string;
+  confirmationTextLabel?: string;
 }
 
 type Resolver = (value: boolean) => void;
@@ -35,12 +38,16 @@ export function useConfirm() {
 
 export default function ConfirmDialogProvider({ children }: { children: React.ReactNode }) {
   const [opts, setOpts] = useState<ConfirmOptions | null>(null);
+  const [acknowledged, setAcknowledged] = useState(false);
+  const [typedConfirmation, setTypedConfirmation] = useState('');
   const resolverRef = useRef<Resolver | null>(null);
   const cancelButtonRef = useRef<HTMLButtonElement | null>(null);
 
   const confirm = useCallback((next: ConfirmOptions) => {
     return new Promise<boolean>((resolve) => {
       resolverRef.current = resolve;
+      setAcknowledged(false);
+      setTypedConfirmation('');
       setOpts(next);
     });
   }, []);
@@ -49,19 +56,27 @@ export default function ConfirmDialogProvider({ children }: { children: React.Re
     resolverRef.current?.(value);
     resolverRef.current = null;
     setOpts(null);
+    setAcknowledged(false);
+    setTypedConfirmation('');
   }, []);
+
+  const requiresAcknowledgement = Boolean(opts?.acknowledgementLabel);
+  const requiresConfirmationText = Boolean(opts?.confirmationText);
+  const canConfirm =
+    (!requiresAcknowledgement || acknowledged) &&
+    (!requiresConfirmationText || typedConfirmation.trim() === opts?.confirmationText);
 
   useEffect(() => {
     if (!opts) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') resolve(false);
-      if (e.key === 'Enter') resolve(true);
+      if (e.key === 'Enter' && canConfirm) resolve(true);
     };
     window.addEventListener('keydown', onKey);
     // Focus the cancel button — safer default for destructive prompts.
     cancelButtonRef.current?.focus();
     return () => window.removeEventListener('keydown', onKey);
-  }, [opts, resolve]);
+  }, [canConfirm, opts, resolve]);
 
   const variant: Variant = opts?.variant ?? 'default';
   const confirmCls =
@@ -118,6 +133,32 @@ export default function ConfirmDialogProvider({ children }: { children: React.Re
                     {opts.message}
                   </p>
                 )}
+                {opts.acknowledgementLabel && (
+                  <label className="mt-4 flex items-start gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
+                    <input
+                      type="checkbox"
+                      checked={acknowledged}
+                      onChange={(e) => setAcknowledged(e.target.checked)}
+                      className="mt-0.5"
+                    />
+                    <span>{opts.acknowledgementLabel}</span>
+                  </label>
+                )}
+                {opts.confirmationText && (
+                  <label className="mt-3 block text-sm text-slate-700">
+                    {opts.confirmationTextLabel ?? (
+                      <>
+                        พิมพ์ <strong>{opts.confirmationText}</strong> เพื่อยืนยัน
+                      </>
+                    )}
+                    <input
+                      type="text"
+                      value={typedConfirmation}
+                      onChange={(e) => setTypedConfirmation(e.target.value)}
+                      className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-red-500 focus:outline-none"
+                    />
+                  </label>
+                )}
               </div>
             </div>
 
@@ -133,7 +174,8 @@ export default function ConfirmDialogProvider({ children }: { children: React.Re
               <button
                 type="button"
                 onClick={() => resolve(true)}
-                className={`rounded-lg px-4 py-2 text-sm font-medium ${confirmCls}`}
+                disabled={!canConfirm}
+                className={`rounded-lg px-4 py-2 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50 ${confirmCls}`}
               >
                 {opts.confirmLabel ?? 'ยืนยัน'}
               </button>

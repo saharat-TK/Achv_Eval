@@ -474,6 +474,9 @@ export default function AssessmentForm({
                 title: 'ยืนยันการลงนามทวนสอบ',
                 message: 'เมื่อลงนามแล้วจะไม่สามารถแก้ไขได้อีก',
                 confirmLabel: 'ลงนามทวนสอบ',
+                variant: 'danger',
+                acknowledgementLabel: 'ข้าพเจ้ายอมรับว่าเมื่อลงนามแล้วจะไม่สามารถแก้ไขผลทวนสอบนี้ได้อีก',
+                confirmationText: 'ยืนยัน',
               });
               if (ok) handleSubmit(true);
             }}
