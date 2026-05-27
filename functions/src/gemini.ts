@@ -16,9 +16,8 @@ export interface RubricItemResult {
 }
 
 /** Structured result of one full analysis run (assembled from section calls).
- *  `section3RevisedTqf3` is no longer produced during analysis — the revised
- *  มคอ.3 draft is generated on demand by `runTqf3Draft` / generateTqf3Draft.
- *  The field stays optional so older stored reports still render it. */
+ *  `section3RevisedTqf3` is no longer produced — it stays optional only so
+ *  older stored reports that still contain it continue to render. */
 export interface AnalysisResult {
   courseCodeDetected: string;
   section1Grading: string;
@@ -59,22 +58,6 @@ AUTOMATED MODE — OVERRIDES (take precedence over the guideline above)
   write "ไม่พบหลักฐานในเอกสารที่ได้รับ".
 - Be thorough and detailed. Do not summarise away substance — this output
   feeds an official quality-assurance report.`;
-
-/** Override footer for plain-text (non-JSON) generations such as the revised
- *  มคอ.3 draft, which is too large to survive JSON-string escaping. */
-const AUTOMATED_MODE_TEXT = `
-=====================================================================
-AUTOMATED MODE — OVERRIDES (take precedence over the guideline above)
-=====================================================================
-- Output language: ภาษาไทย. Do NOT ask the user to choose a language;
-  ignore "ขั้นตอนที่ 0" and proceed directly.
-- Do NOT produce a .docx file and do NOT return JSON. Return the document
-  body as plain Markdown text only — no JSON wrapper and no code fences.
-- Base every statement on the attached documents and the analysis findings
-  provided. If evidence is missing, write "ไม่พบหลักฐานในเอกสารที่ได้รับ".
-- Produce ONE single, clean, complete document. Be detailed where needed,
-  but do NOT repeat sections or pad — write each part exactly once. The
-  output budget is limited; excessive length gets truncated.`;
 
 function fileParts(files: InputFile[]): Part[] {
   return files.map((f) => ({
@@ -157,50 +140,6 @@ async function callJson<T>(args: {
 
     throw new Error(`${args.label}: ${message}`);
   }
-}
-
-/**
- * One Gemini call that returns raw text (no JSON wrapper). Used for large
- * free-form outputs (the revised มคอ.3 draft) where wrapping ~600 KB of
- * Markdown in a single JSON string is the dominant failure mode — JSON
- * escaping breaks and the repair round-trip is too large to fetch.
- */
-async function callText(args: {
-  genAI: GoogleGenerativeAI;
-  model: string;
-  label: string;
-  systemInstruction: string;
-  userText: string;
-  files: InputFile[];
-}): Promise<{ text: string; usage: Usage }> {
-  const model = args.genAI.getGenerativeModel({
-    model: args.model,
-    systemInstruction: args.systemInstruction,
-    generationConfig: {
-      responseMimeType: 'text/plain',
-      temperature: 0.3,
-      maxOutputTokens: 65536,
-    },
-  });
-
-  const resp = await model.generateContent({
-    contents: [
-      { role: 'user', parts: [{ text: args.userText }, ...fileParts(args.files)] },
-    ],
-  });
-
-  const finishReason = resp.response.candidates?.[0]?.finishReason;
-  if (finishReason === 'MAX_TOKENS') {
-    throw new Error(`${args.label}: Gemini output was cut off before completion`);
-  }
-
-  return {
-    text: resp.response.text(),
-    usage: {
-      input: resp.response.usageMetadata?.promptTokenCount ?? 0,
-      output: resp.response.usageMetadata?.candidatesTokenCount ?? 0,
-    },
-  };
 }
 
 async function repairJson<T>(args: {
@@ -343,9 +282,8 @@ function extractFirstJsonObject(text: string): string | null {
  * verification rubric (§4). Each section gets the model's full attention,
  * which yields far more detail than a single combined pass.
  *
- * The revised มคอ.3 draft (formerly §3) is intentionally NOT generated here —
- * it is the largest, most failure-prone output and is now produced on demand
- * by `runTqf3Draft`.
+ * The revised มคอ.3 draft (formerly §3) is intentionally NOT generated — it
+ * was the largest, most failure-prone output and has been dropped for now.
  */
 export async function runAnalysis(args: {
   apiKey: string;
@@ -472,81 +410,4 @@ function validate(r: AnalysisResult): void {
   if (!Array.isArray(r.section4Verification.items) || r.section4Verification.items.length !== 7) {
     throw new Error('Analysis result must contain exactly 7 rubric items');
   }
-}
-
-/** Context from a completed analysis, fed to the on-demand TQF3 draft so the
- *  model knows exactly which weaknesses to fix while it rewrites the document. */
-export interface Tqf3Findings {
-  section1Grading?: string;
-  section2Quality?: string;
-  overallSummary?: string;
-  criticalIssues?: string[];
-}
-
-/**
- * Generates a full revised มคอ.3 draft on demand, in a single Gemini call.
- *
- * Re-feeds the original มคอ.3 files (so the model can rewrite the real
- * document, not reconstruct it) plus the analysis findings (so it fixes the
- * identified weaknesses). Returns Markdown for `buildTqf3Html` to render.
- */
-export async function runTqf3Draft(args: {
-  apiKey: string;
-  model: string;
-  guideline: string;
-  files: InputFile[];
-  findings: Tqf3Findings;
-}): Promise<{ content: string; usage: Usage }> {
-  const { apiKey, model, guideline, files, findings } = args;
-  const genAI = new GoogleGenerativeAI(apiKey);
-  const system = `${guideline}\n${AUTOMATED_MODE_TEXT}`;
-
-  const findingsContext = [
-    findings.overallSummary ? `## บทสรุปผู้บริหาร\n${findings.overallSummary}` : '',
-    findings.criticalIssues?.length
-      ? `## ประเด็นสำคัญที่ต้องแก้ไข\n${findings.criticalIssues
-          .map((c) => `- ${c}`)
-          .join('\n')}`
-      : '',
-    findings.section1Grading
-      ? `## ผลการประเมินส่วนที่ 1 (การตัดเกรด)\n${findings.section1Grading}`
-      : '',
-    findings.section2Quality
-      ? `## ผลการประเมินส่วนที่ 2 (คุณภาพรายวิชา)\n${findings.section2Quality}`
-      : '',
-  ]
-    .filter(Boolean)
-    .join('\n\n');
-
-  const { text, usage } = await callText({
-    genAI,
-    model,
-    label: 'ร่าง มคอ.3',
-    systemInstruction: system,
-    files,
-    userText:
-      'จัดทำ "เอกสาร มคอ.3 ฉบับปรับปรุง" ที่สมบูรณ์และพร้อมใช้งานจริง โดยอ้างอิงเอกสาร ' +
-      'มคอ.3 ต้นฉบับที่แนบมา และนำผลการวิเคราะห์ด้านล่างมาแก้ไขทุกจุดอ่อนโดยตรง พร้อมคงจุดเด่นไว้.\n\n' +
-      'ขอบเขตผลลัพธ์ (สำคัญมาก):\n' +
-      '- ตอบกลับเป็น "ตัวเอกสาร มคอ.3 ฉบับปรับปรุง" เท่านั้น เรียงตามหมวดที่ 1 ถึง 6 ของ มคอ.3.\n' +
-      '- ห้ามใส่บทวิเคราะห์ / ตารางเปรียบเทียบก่อน-หลัง / เหตุผลรายข้อ / Change Summary ' +
-      'เพราะมีอยู่ในรายงานวิเคราะห์แล้ว — ให้นำผลวิเคราะห์ไปใช้แก้ไขเนื้อหาโดยตรง.\n' +
-      '- เขียนแต่ละหมวดเพียงครั้งเดียว ห้ามทำซ้ำเนื้อหา เขียนกระชับแต่ครบถ้วน.\n' +
-      '- หมวดที่ 4 (แผนการสอน) ต้องเป็นตารางครบทุกสัปดาห์ ในรูปแบบเดียวกับ มคอ.3 ต้นฉบับ.\n' +
-      '- รูปแบบตาราง Markdown (สำคัญมาก ห้ามผิด): แถวหัวตารางอยู่บรรทัดเดียว ' +
-      'ตามด้วยแถวเส้นคั่น "| --- | --- | ... |" ในบรรทัดถัดไปเพียงบรรทัดเดียว ' +
-      'จากนั้น 1 สัปดาห์ต่อ 1 บรรทัด. ห้ามรวมแถวหัวตารางกับแถวเส้นคั่นไว้บรรทัดเดียวกัน ' +
-      'และห้ามใส่เส้นขีด "----" คั่นระหว่างแถวข้อมูล. ตัวอย่าง:\n' +
-      '| สัปดาห์ | หัวข้อ | ชม.บรรยาย | ชม.ปฏิบัติ | CLO | ผู้สอน |\n' +
-      '| --- | --- | --- | --- | --- | --- |\n' +
-      '| 1 | แนะนำรายวิชา | 2 | 0 | CLO1 | อ.ก |\n' +
-      '- ตอบกลับเป็น Markdown ล้วนเท่านั้น ไม่มี JSON และไม่มี code fence.\n\n' +
-      '=== ผลการวิเคราะห์ของระบบ (ใช้เป็นแนวทางการแก้ไข ไม่ต้องคัดลอกลงในเอกสาร) ===\n' +
-      findingsContext,
-  });
-
-  // The model may still wrap the answer in a ```markdown fence; strip it.
-  const trimmed = text.trim();
-  const content = stripCodeFence(trimmed) ?? trimmed;
-  return { content, usage };
 }

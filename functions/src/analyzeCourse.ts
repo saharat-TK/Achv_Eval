@@ -244,7 +244,6 @@ export const analyzeCourse = onCall(
           reportRef,
           result,
           logSheetId: LOG_SHEET_ID.value(),
-          inputFiles: files,
         });
       } catch (pdfErr) {
         console.error('generateAndStoreReport failed (non-fatal)', pdfErr);
@@ -291,30 +290,14 @@ async function deleteOlderReports(
   const bucket = admin.storage().bucket();
   await Promise.all(
     oldReports.map(async (doc) => {
-      const data = doc.data() ?? {};
-      const paths: string[] = [];
-      if (typeof data.reportStoragePath === 'string' && data.reportStoragePath) {
-        paths.push(data.reportStoragePath);
-      }
-      if (typeof data.tqf3StoragePath === 'string' && data.tqf3StoragePath) {
-        paths.push(data.tqf3StoragePath);
-      }
-      if (Array.isArray(data.inputFileRefs)) {
-        for (const ref of data.inputFileRefs) {
-          if (ref && typeof ref.storagePath === 'string' && ref.storagePath) {
-            paths.push(ref.storagePath);
-          }
+      const path = doc.data()?.reportStoragePath;
+      if (typeof path === 'string' && path) {
+        try {
+          await bucket.file(path).delete({ ignoreNotFound: true });
+        } catch (err) {
+          console.error(`failed to delete old AI report PDF ${path}`, err);
         }
       }
-      await Promise.all(
-        paths.map(async (path) => {
-          try {
-            await bucket.file(path).delete({ ignoreNotFound: true });
-          } catch (err) {
-            console.error(`failed to delete old AI report file ${path}`, err);
-          }
-        }),
-      );
     }),
   );
 

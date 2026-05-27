@@ -32,15 +32,6 @@ export function offeringReportDir(p: OfferingPathParts): string {
 }
 
 /**
- * Storage folder holding the original uploaded files for one analysis run,
- * e.g. `reports/OHS-M/2568-S1/2105709-sec01/inputs/<reportId>`. Persisted so
- * the on-demand TQF3 draft can re-feed the real มคอ.3 to Gemini.
- */
-export function offeringInputsDir(p: OfferingPathParts, reportId: string): string {
-  return `${offeringReportDir(p)}/inputs/${slug(reportId)}`;
-}
-
-/**
  * Human-readable download filename for a report PDF, e.g.
  * `ai-report_ohs-1808412-2568-1-1_f1WEudIim8j.pdf`. The id keeps its
  * original case so it stays traceable to the Firestore doc. The prefix is
