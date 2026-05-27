@@ -15,12 +15,11 @@ export interface RubricItemResult {
   improvements: string;
 }
 
-/** Structured result of one full analysis run (assembled from 4 section calls). */
+/** Structured result of one full analysis run (assembled from section calls). */
 export interface AnalysisResult {
   courseCodeDetected: string;
   section1Grading: string;
   section2Quality: string;
-  section3RevisedTqf3: string;
   section4Verification: {
     items: RubricItemResult[];
     totalScore: number;
@@ -206,6 +205,13 @@ function preview(text: string): string {
   return text.replace(/\s+/g, ' ').slice(0, 300);
 }
 
+/** Removes a leading heading that merely repeats the section title
+ *  (e.g. "## ส่วนที่ 2 — ..."), which the report template / UI already render —
+ *  otherwise the title shows up twice. */
+function stripLeadingSectionHeading(content: string): string {
+  return content.replace(/^\s*(?:#{1,6}\s*|\*\*\s*)?ส่วนที่\s*\d+[^\n]*\n+/u, '');
+}
+
 function parseJson<T>(raw: string): T {
   const text = raw.trim();
   if (!text) {
@@ -268,9 +274,13 @@ function extractFirstJsonObject(text: string): string | null {
 }
 
 /**
- * Runs the full course analysis as four focused, section-by-section Gemini
- * calls (run in parallel). Each section gets the model's full attention,
+ * Runs the full course analysis as three focused, section-by-section Gemini
+ * calls (run in parallel): grading (§1), course-quality (§2), and the 7-item
+ * verification rubric (§3). Each section gets the model's full attention,
  * which yields far more detail than a single combined pass.
+ *
+ * The revised มคอ.3 draft (formerly §3) is intentionally NOT generated — it
+ * was the largest, most failure-prone output and has been dropped for now.
  */
 export async function runAnalysis(args: {
   apiKey: string;
@@ -291,7 +301,8 @@ export async function runAnalysis(args: {
     systemInstruction: system,
     files,
     userText:
-      'จัดทำเฉพาะ "ส่วนที่ 1 — การประเมินผลและการตัดเกรด" อย่างละเอียด ' +
+      'จัดทำเฉพาะเนื้อหาของ "ส่วนที่ 1 — การประเมินผลและการตัดเกรด" อย่างละเอียด ' +
+      'ห้ามใส่หัวข้อ "ส่วนที่ 1 ..." ซ้ำในเนื้อหา (ระบบจะใส่หัวข้อให้แล้ว). ' +
       'ครอบคลุมทุกหัวข้อย่อย: สรุปข้อมูลคะแนน/เกรด, การตรวจสอบตามแนวปฏิบัติ ' +
       '(สัดส่วน 90/10, เกณฑ์การตัดเกรด, ประเด็นเฉพาะ, กระบวนการทบทวน) ' +
       'พร้อมระดับ ✅/⚠️/❌ และจุดเด่น/จุดอ่อน/ข้อเสนอแนะ. ' +
@@ -316,35 +327,21 @@ export async function runAnalysis(args: {
     systemInstruction: system,
     files,
     userText:
-      'จัดทำเฉพาะ "ส่วนที่ 2 — การประเมินคุณภาพรายวิชา" อย่างละเอียด ' +
+      'จัดทำเฉพาะเนื้อหาของ "ส่วนที่ 2 — การประเมินคุณภาพรายวิชา" อย่างละเอียด ' +
+      'ห้ามใส่หัวข้อ "ส่วนที่ 2 ..." ซ้ำในเนื้อหา (ระบบจะใส่หัวข้อให้แล้ว). ' +
       'ประเมินทีละหมวด (หมวดที่ 1 ถึง 6) ตามแนวทาง พร้อมวิเคราะห์ CLO, ' +
-      'PLO–CLO mapping, ความสอดคล้องของวิธีประเมินกับ Bloom, ' +
-      'และสรุปจุดเด่น/จุดอ่อนพร้อมระดับความรุนแรง (Critical/Major/Minor). ' +
+      'PLO–CLO mapping, ความสอดคล้องของวิธีประเมินกับ Bloom. ' +
+      '**บังคับ: ทุกหมวด (หมวดที่ 1 ถึง 6) ต้องปิดท้ายด้วยบทสรุป 2 บรรทัดเสมอ คือ ' +
+      '"จุดเด่นของหมวดนี้:" และ "จุดที่ควรพัฒนาของหมวดนี้:" ' +
+      '(หากไม่พบให้ระบุว่า "ไม่พบ").** ' +
+      'จากนั้นสรุปจุดเด่น/จุดอ่อนภาพรวมพร้อมระดับความรุนแรง (Critical/Major/Minor). ' +
       'ส่งผลเป็น JSON: { "content": "<Markdown รายละเอียดของส่วนที่ 2>", ' +
       '"overallSummary": "<บทสรุปผู้บริหารแบบ Markdown>", ' +
       '"criticalIssues": ["<ประเด็น Critical>", ...], ' +
       '"courseCodeDetected": "<รหัสวิชาที่พบในเอกสาร>" }',
   });
 
-  // --- Section 3: revised TQF3 draft -------------------------------
-  const call3 = callJson<{ content: string }>({
-    genAI,
-    model,
-    label: 'ส่วนที่ 3',
-    schemaHint: '{ "content": "<Markdown ร่าง มคอ.3 ฉบับปรับปรุง>" }',
-    systemInstruction: system,
-    files,
-    userText:
-      'จัดทำเฉพาะ "ส่วนที่ 3 — ร่าง มคอ.3 ฉบับปรับปรุง" อย่างละเอียด ' +
-      'แก้ไขทุกจุดอ่อนที่พบ คงจุดเด่นไว้ ประกอบด้วยบทสรุปการเปลี่ยนแปลง ' +
-      'และร่างข้อความฉบับสมบูรณ์ — หมวดที่ 4 (แผนการสอน) ต้องเป็น ' +
-      'ตารางสมบูรณ์ครบทุกสัปดาห์. ' +
-      'ห้ามใช้ Markdown code fence. ค่า content ต้องเป็น JSON string เดียวเท่านั้น ' +
-      'และต้อง escape เครื่องหมาย " และ line break เป็น \\n. ' +
-      'ส่งผลเป็น JSON: { "content": "<Markdown ร่าง มคอ.3 ฉบับปรับปรุง>" }',
-  });
-
-  // --- Section 4: 7-item verification rubric -----------------------
+  // --- Section 3: 7-item verification rubric -----------------------
   const call4 = callJson<{
     items: RubricItemResult[];
     totalScore: number;
@@ -354,7 +351,7 @@ export async function runAnalysis(args: {
   }>({
     genAI,
     model,
-    label: 'ส่วนที่ 4',
+    label: 'ส่วนที่ 3',
     schemaHint:
       '{ "items": [ { "key": "item1Clo|item21Content|item22Methods|' +
       'item31AssessmentMethods|item32AssessmentForms|item33Proportions|' +
@@ -366,7 +363,7 @@ export async function runAnalysis(args: {
     systemInstruction: system,
     files,
     userText:
-      'จัดทำเฉพาะ "ส่วนที่ 4 — แบบรายงานผลการทวนสอบ 7 หัวข้อ" ' +
+      'จัดทำเฉพาะ "ส่วนที่ 3 — แบบรายงานผลการทวนสอบ 7 หัวข้อ" ' +
       'ให้คะแนนแต่ละหัวข้อ (3 ดีเยี่ยม / 2 ดี / 1 ควรปรับปรุง) ' +
       'พร้อมข้อดีและข้อพัฒนาที่อ้างอิงหลักฐาน. ' +
       `ส่งผลเป็น JSON: { "items": [ { "key": <หนึ่งใน ${RUBRIC_KEYS.join(
@@ -377,13 +374,12 @@ export async function runAnalysis(args: {
       '"band": "improve"|"good"|"excellent" }',
   });
 
-  const [r1, r2, r3, r4] = await Promise.all([call1, call2, call3, call4]);
+  const [r1, r2, r4] = await Promise.all([call1, call2, call4]);
 
   const result: AnalysisResult = {
     courseCodeDetected: r2.data.courseCodeDetected ?? '',
-    section1Grading: r1.data.content ?? '',
-    section2Quality: r2.data.content ?? '',
-    section3RevisedTqf3: r3.data.content ?? '',
+    section1Grading: stripLeadingSectionHeading(r1.data.content ?? ''),
+    section2Quality: stripLeadingSectionHeading(r2.data.content ?? ''),
     section4Verification: {
       items: r4.data.items ?? [],
       totalScore: r4.data.totalScore ?? 0,
@@ -398,14 +394,14 @@ export async function runAnalysis(args: {
   validate(result);
 
   const usage: Usage = {
-    input: r1.usage.input + r2.usage.input + r3.usage.input + r4.usage.input,
-    output: r1.usage.output + r2.usage.output + r3.usage.output + r4.usage.output,
+    input: r1.usage.input + r2.usage.input + r4.usage.input,
+    output: r1.usage.output + r2.usage.output + r4.usage.output,
   };
   return { result, usage };
 }
 
 function validate(r: AnalysisResult): void {
-  if (!r.section1Grading || !r.section2Quality || !r.section3RevisedTqf3) {
+  if (!r.section1Grading || !r.section2Quality) {
     throw new Error('Analysis result is missing one or more required sections');
   }
   if (!Array.isArray(r.section4Verification.items) || r.section4Verification.items.length !== 7) {

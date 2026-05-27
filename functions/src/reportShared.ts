@@ -61,8 +61,48 @@ export function esc(s: string): string {
     .replace(/>/g, '&gt;');
 }
 
+/**
+ * Repairs common Markdown-table malformations from the LLM before parsing.
+ * On long, wide tables (the มคอ.3 weekly plan) the model produces delimiter
+ * rows that `marked` rejects — e.g. a single runaway dash run
+ * (`| :------…------ |`) instead of per-column `| :--- | :--- |` cells, or
+ * the header and delimiter merged onto one line. A rejected delimiter makes
+ * the whole table render as a paragraph (a flood of dashes).
+ *
+ * Idempotent — well-formed tables pass through unchanged.
+ */
+export function normalizeMarkdownTables(src: string): string {
+  let text = src ?? '';
+
+  // (a) Collapse runaway dash padding the model adds to delimiter cells.
+  //     Safe: prose almost never contains 6+ consecutive dashes.
+  text = text.replace(/-{6,}/g, '---');
+
+  // (b) Split a merged "header | | :--- | delimiter" line into two lines.
+  text = text.replace(/\|[ \t]+(\|(?:[ \t]*:?-{1,}:?[ \t]*\|)+)/g, '|\n$1');
+
+  // (c) Rebuild a delimiter row to match its header's column count, so a
+  //     malformed delimiter (wrong cell count / single dash run) still parses.
+  const lines = text.split('\n');
+  const isDelimiterish = (l: string): boolean =>
+    l.includes('|') && /^[\s|:-]+$/.test(l.trim()) && l.includes('-');
+  const columnCount = (l: string): number =>
+    l.trim().replace(/^\||\|$/g, '').split('|').length;
+  for (let i = 0; i < lines.length - 1; i++) {
+    if (
+      lines[i].includes('|') &&
+      !isDelimiterish(lines[i]) &&
+      isDelimiterish(lines[i + 1])
+    ) {
+      const n = columnCount(lines[i]);
+      if (n >= 1) lines[i + 1] = '| ' + Array(n).fill('---').join(' | ') + ' |';
+    }
+  }
+  return lines.join('\n');
+}
+
 export function md(src: string): string {
-  return marked.parse(src ?? '', { async: false }) as string;
+  return marked.parse(normalizeMarkdownTables(src ?? ''), { async: false }) as string;
 }
 
 /** A score row carries ● in the column matching the item's score. */
@@ -131,8 +171,6 @@ export function renderAiSection(aiResult: AnalysisResult): string {
 <div class="section-body">${md(aiResult.section1Grading)}</div>
 <h3>การประเมินคุณภาพรายวิชา</h3>
 <div class="section-body">${md(aiResult.section2Quality)}</div>
-<h3>ร่าง มคอ.3 ฉบับปรับปรุง</h3>
-<div class="section-body">${md(aiResult.section3RevisedTqf3)}</div>
 <h3>แบบรายงานผลการทวนสอบผลลัพธ์การเรียนรู้รายวิชา (ประเมินโดยระบบ AI)</h3>
 <table>
   <thead>

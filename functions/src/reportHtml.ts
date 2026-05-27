@@ -69,10 +69,7 @@ export function buildReportHtml(result: AnalysisResult, meta: ReportMeta): strin
 <h2>ส่วนที่ 2 — การประเมินคุณภาพรายวิชา</h2>
 <div class="section-body">${md(result.section2Quality)}</div>
 
-<h2>ส่วนที่ 3 — ร่าง มคอ.3 ฉบับปรับปรุง</h2>
-<div class="section-body">${md(result.section3RevisedTqf3)}</div>
-
-<h2>ส่วนที่ 4 — แบบรายงานผลการทวนสอบผลลัพธ์การเรียนรู้รายวิชา</h2>
+<h2>ส่วนที่ 3 — แบบรายงานผลการทวนสอบผลลัพธ์การเรียนรู้รายวิชา</h2>
 <table>
   <thead>
     <tr>

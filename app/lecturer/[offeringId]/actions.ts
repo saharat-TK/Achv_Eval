@@ -3,7 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { FieldValue } from 'firebase-admin/firestore';
 import { getAdminDb } from '@/lib/firebase/admin';
-import { getSessionUser } from '@/lib/firebase/auth-server';
+import { getSessionUser, getCurrentProfile } from '@/lib/firebase/auth-server';
 import {
   createNotifications,
   getProgramAssessorIds,
@@ -11,9 +11,69 @@ import {
 } from '@/lib/data/notifications';
 import type { AiReportDoc, OfferingDoc } from '@/lib/types/models';
 
+const ANALYSIS_ATTEMPT_LIMIT = 4;
+
 type SendResult =
   | { ok: true }
   | { ok: false; error: string };
+
+type ResetResult =
+  | { ok: true }
+  | { ok: false; error: string };
+
+/**
+ * Super-admin only: reset an offering's AI-analysis attempt counter back to
+ * 0 (remaining returns to the full limit). Used to re-test analysis after
+ * the quota is exhausted. Writes an audit-log entry.
+ */
+export async function resetAnalysisAttempts(
+  offeringId: string,
+): Promise<ResetResult> {
+  const profile = await getCurrentProfile();
+  if (!profile) return { ok: false, error: 'not_authenticated' };
+  if (!profile.roles.isSuperAdmin) return { ok: false, error: 'not_authorized' };
+
+  const db = getAdminDb();
+  const offeringRef = db.collection('offerings').doc(offeringId);
+  const now = FieldValue.serverTimestamp();
+
+  try {
+    await db.runTransaction(async (tx) => {
+      const snap = await tx.get(offeringRef);
+      if (!snap.exists) throw new Error('offering_not_found');
+      const offering = snap.data() as OfferingDoc;
+      if (offering.isActive === false) throw new Error('offering_not_found');
+
+      const before = offering.analysisAttemptCount ?? 0;
+      tx.update(offeringRef, {
+        analysisAttemptCount: 0,
+        analysisAttemptLimit: ANALYSIS_ATTEMPT_LIMIT,
+        updatedAt: now,
+        updatedBy: profile.uid,
+      });
+      tx.set(db.collection('auditLog').doc(), {
+        occurredAt: now,
+        actorId: profile.uid,
+        actorEmail: profile.email,
+        action: 'reset_analysis_attempts',
+        entityType: 'offerings',
+        entityId: offeringId,
+        before: { analysisAttemptCount: before },
+        after: { analysisAttemptCount: 0 },
+      });
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    if (message === 'offering_not_found') {
+      return { ok: false, error: 'ไม่พบรายวิชานี้' };
+    }
+    return { ok: false, error: 'รีเซ็ตสิทธิ์วิเคราะห์ไม่สำเร็จ' };
+  }
+
+  revalidatePath('/lecturer');
+  revalidatePath(`/lecturer/${offeringId}`);
+  return { ok: true };
+}
 
 export async function sendOfferingForAssessment(
   offeringId: string,

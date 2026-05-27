@@ -36,7 +36,7 @@ export const analyzeCourse = onCall(
   {
     region: REGION,
     secrets: [GEMINI_API_KEY],
-    // Four section-by-section Gemini calls (~60-120s) plus headless-Chromium
+    // Three section-by-section Gemini calls (~60-120s) plus headless-Chromium
     // PDF rendering. 2 GiB is required for Chromium.
     timeoutSeconds: 540,
     memory: '2GiB',
@@ -151,11 +151,6 @@ export const analyzeCourse = onCall(
         geminiRequestId: null,
         inputTokenCount: null,
         outputTokenCount: null,
-        inputFiles: files.map((f) => ({
-          type: f.type,
-          filename: f.filename,
-          sizeBytes: Math.floor((f.dataBase64?.length ?? 0) * 0.75),
-        })),
         reportStoragePath: null,
         reportDownloadUrl: null,
         logSheetRowId: null,

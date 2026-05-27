@@ -77,9 +77,6 @@ export async function generateAndStoreReport(args: {
     generatedAt,
   };
 
-  // ----- Render HTML → PDF → Storage --------------------------------
-  const html = buildReportHtml(result, meta);
-  const pdf = await renderHtmlToPdf(html);
   const programCode = await getProgramCode(db, offering.programId);
   const pathParts = {
     programCode,
@@ -89,6 +86,10 @@ export async function generateAndStoreReport(args: {
     section: offering.section,
   };
   const dir = offeringReportDir(pathParts);
+
+  // ----- Render HTML → PDF → Storage --------------------------------
+  const html = buildReportHtml(result, meta);
+  const pdf = await renderHtmlToPdf(html);
   const { filePath, downloadUrl } = await storePdf(
     pdf,
     `${dir}/ai-report-${reportId}.pdf`,
