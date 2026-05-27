@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
-import { getSessionUser } from '@/lib/firebase/auth-server';
+import { getCurrentProfile } from '@/lib/firebase/auth-server';
 import { getOffering } from '@/lib/data/offerings';
 import { getLatestAssessment } from '@/lib/data/assessments';
 import StatusBadge from '@/components/StatusBadge';
@@ -26,13 +26,13 @@ export default async function OfferingDetailPage({
 }: {
   params: { offeringId: string };
 }) {
-  const user = await getSessionUser();
-  if (!user) redirect('/login');
+  const profile = await getCurrentProfile();
+  if (!profile) redirect('/login');
 
   const offering = await getOffering(params.offeringId);
   // Lecturer may only view their own offering. Admin/director/assessor views
   // arrive in later phases through their own workspaces.
-  if (!offering || offering.lecturerId !== user.uid || offering.isActive === false) {
+  if (!offering || offering.lecturerId !== profile.uid || offering.isActive === false) {
     notFound();
   }
 
@@ -75,6 +75,7 @@ export default async function OfferingDetailPage({
             status={offering.status}
             attemptLimit={offering.analysisAttemptLimit ?? 4}
             attemptCount={offering.analysisAttemptCount ?? 0}
+            isSuperAdmin={profile.roles.isSuperAdmin === true}
           />
         </div>
       </section>

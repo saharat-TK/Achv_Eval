@@ -5,6 +5,8 @@ import { httpsCallable } from 'firebase/functions';
 import { getFirebaseAuth, getFirebaseFunctions } from '@/lib/firebase/config';
 import { DOCUMENT_SLOTS } from '@/lib/constants';
 import { useToast } from '@/components/ToastProvider';
+import { useConfirm } from '@/components/ConfirmDialogProvider';
+import { resetAnalysisAttempts } from '@/app/lecturer/[offeringId]/actions';
 import type { OfferingStatus, UploadType } from '@/lib/types/models';
 
 const ACCEPT = '.pdf,.csv';
@@ -38,19 +40,59 @@ export default function AnalyzeCoursePanel({
   status,
   attemptLimit,
   attemptCount,
+  isSuperAdmin = false,
 }: {
   offeringId: string;
   status: OfferingStatus;
   attemptLimit: number;
   attemptCount: number;
+  /** Super-admins get a button to reset the attempt counter for re-testing. */
+  isSuperAdmin?: boolean;
 }) {
   const [selected, setSelected] = useState<Partial<Record<UploadType, File>>>({});
   const [busy, setBusy] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [localAttemptCount, setLocalAttemptCount] = useState(attemptCount);
+  const [resetting, setResetting] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const toast = useToast();
+  const confirm = useConfirm();
+
+  async function handleReset() {
+    if (resetting) return;
+    const ok = await confirm({
+      title: 'รีเซ็ตสิทธิ์วิเคราะห์',
+      message: `รีเซ็ตจำนวนครั้งกลับเป็น ${attemptLimit}/${attemptLimit} ใช่หรือไม่?`,
+      confirmLabel: 'รีเซ็ต',
+      cancelLabel: 'ยกเลิก',
+      variant: 'danger',
+    });
+    if (!ok) return;
+    setResetting(true);
+    try {
+      const res = await resetAnalysisAttempts(offeringId);
+      if (!res.ok) {
+        toast({ title: 'รีเซ็ตไม่สำเร็จ', description: res.error, variant: 'error' });
+        return;
+      }
+      setLocalAttemptCount(0);
+      setSubmitted(false);
+      toast({
+        title: 'รีเซ็ตสิทธิ์วิเคราะห์แล้ว',
+        description: `จำนวนครั้งกลับเป็น ${attemptLimit}/${attemptLimit} เรียบร้อย`,
+        variant: 'success',
+      });
+    } catch {
+      toast({
+        title: 'รีเซ็ตไม่สำเร็จ',
+        description: 'เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์',
+        variant: 'error',
+      });
+    } finally {
+      setResetting(false);
+    }
+  }
 
   // Warm up the Firebase Auth SDK so the callable can attach an ID token.
   useEffect(() => {
@@ -261,18 +303,31 @@ export default function AnalyzeCoursePanel({
         <p className="mt-3 text-sm text-red-600">ขนาดไฟล์รวมเกิน 25 MB</p>
       )}
 
-      <button
-        onClick={openConfirmDialog}
-        disabled={busy || !hasTqf3 || tooLarge || locked}
-        className="mt-4 inline-flex items-center gap-2 rounded-lg bg-mfu-primary px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:bg-slate-300 disabled:text-slate-600 disabled:opacity-100"
-      >
-        <span>{busy ? 'กำลังส่งเอกสาร…' : 'อัปโหลดและเริ่มวิเคราะห์'}</span>
-        <AttemptBadge
-          className={badgeClass}
-          remaining={remainingAttempts}
-          limit={attemptLimit}
-        />
-      </button>
+      <div className="mt-4 flex items-center gap-2">
+        <button
+          onClick={openConfirmDialog}
+          disabled={busy || !hasTqf3 || tooLarge || locked}
+          className="inline-flex items-center gap-2 rounded-lg bg-mfu-primary px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:bg-slate-300 disabled:text-slate-600 disabled:opacity-100"
+        >
+          <span>{busy ? 'กำลังส่งเอกสาร…' : 'อัปโหลดและเริ่มวิเคราะห์'}</span>
+          <AttemptBadge
+            className={badgeClass}
+            remaining={remainingAttempts}
+            limit={attemptLimit}
+          />
+        </button>
+        {isSuperAdmin && (
+          <button
+            type="button"
+            onClick={handleReset}
+            disabled={resetting}
+            title="รีเซ็ตจำนวนครั้งวิเคราะห์ (เฉพาะผู้ดูแลระบบสูงสุด)"
+            className="rounded-lg bg-red-600 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-red-700 disabled:opacity-50"
+          >
+            {resetting ? 'กำลังรีเซ็ต…' : 'รีเซ็ตสิทธิ์'}
+          </button>
+        )}
+      </div>
       <p className="mt-2 text-xs text-slate-500">
         ระบบอนุญาตให้วิเคราะห์ด้วย AI ได้สูงสุด {attemptLimit} ครั้งต่อรายวิชาที่เปิดสอน
         โดยนับทุกคำขอที่ระบบรับไว้ รวมถึงกรณีวิเคราะห์ล้มเหลว
