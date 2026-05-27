@@ -171,12 +171,6 @@ export function renderAiSection(aiResult: AnalysisResult): string {
 <div class="section-body">${md(aiResult.section1Grading)}</div>
 <h3>การประเมินคุณภาพรายวิชา</h3>
 <div class="section-body">${md(aiResult.section2Quality)}</div>
-${
-  aiResult.section3RevisedTqf3
-    ? `<h3>ร่าง มคอ.3 ฉบับปรับปรุง</h3>
-<div class="section-body">${md(aiResult.section3RevisedTqf3)}</div>`
-    : ''
-}
 <h3>แบบรายงานผลการทวนสอบผลลัพธ์การเรียนรู้รายวิชา (ประเมินโดยระบบ AI)</h3>
 <table>
   <thead>

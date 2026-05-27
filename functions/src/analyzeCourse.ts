@@ -151,11 +151,6 @@ export const analyzeCourse = onCall(
         geminiRequestId: null,
         inputTokenCount: null,
         outputTokenCount: null,
-        inputFiles: files.map((f) => ({
-          type: f.type,
-          filename: f.filename,
-          sizeBytes: Math.floor((f.dataBase64?.length ?? 0) * 0.75),
-        })),
         reportStoragePath: null,
         reportDownloadUrl: null,
         logSheetRowId: null,

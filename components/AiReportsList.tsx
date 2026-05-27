@@ -22,7 +22,6 @@ interface StructuredOutput {
   courseCodeDetected?: string;
   section1Grading?: string;
   section2Quality?: string;
-  section3RevisedTqf3?: string;
   section4Verification?: {
     items: RubricItem[];
     totalScore: number;
@@ -383,12 +382,11 @@ function ReportBody({ out }: { out: StructuredOutput }) {
 
       <Section title="ส่วนที่ 1 — การประเมินผลและการตัดเกรด" body={out.section1Grading} />
       <Section title="ส่วนที่ 2 — การประเมินคุณภาพรายวิชา" body={out.section2Quality} />
-      <Section title="ส่วนที่ 3 — ร่าง มคอ.3 ฉบับปรับปรุง" body={out.section3RevisedTqf3} />
 
       {v && v.items.length > 0 && (
         <details className="rounded-lg border border-slate-200">
           <summary className="cursor-pointer px-3 py-2 text-sm font-medium text-slate-700">
-            ส่วนที่ 4 — ผลการทวนสอบ 7 หัวข้อ ({v.totalScore}/{v.maxScore} ·{' '}
+            ส่วนที่ 3 — ผลการทวนสอบ 7 หัวข้อ ({v.totalScore}/{v.maxScore} ·{' '}
             {v.percent}% · {BAND_TH[v.band] ?? v.band})
           </summary>
           <div className="overflow-x-auto px-3 pb-3">

@@ -278,14 +278,6 @@ export interface OfferingDoc {
   updatedBy: string;
 }
 
-/** A source file submitted for one analysis run. The file itself is NOT
- *  stored — only this metadata record of what was analyzed. */
-export interface AnalyzedInputFile {
-  type: UploadType;
-  filename: string;
-  sizeBytes: number;
-}
-
 // ----- offerings/{id}/aiReports/{reportId} --------------------------
 export interface AiReportDoc {
   offeringId: string;
@@ -298,8 +290,6 @@ export interface AiReportDoc {
   geminiRequestId: string | null;
   inputTokenCount: number | null;
   outputTokenCount: number | null;
-  /** What was submitted for this run (filenames only — files are transient). */
-  inputFiles: AnalyzedInputFile[];
   /** Generated PDF report in Firebase Storage. */
   reportStoragePath: string | null; // gs path within the bucket
   reportDownloadUrl: string | null; // signed/public download URL

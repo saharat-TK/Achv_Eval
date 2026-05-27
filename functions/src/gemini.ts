@@ -15,14 +15,11 @@ export interface RubricItemResult {
   improvements: string;
 }
 
-/** Structured result of one full analysis run (assembled from section calls).
- *  `section3RevisedTqf3` is no longer produced — it stays optional only so
- *  older stored reports that still contain it continue to render. */
+/** Structured result of one full analysis run (assembled from section calls). */
 export interface AnalysisResult {
   courseCodeDetected: string;
   section1Grading: string;
   section2Quality: string;
-  section3RevisedTqf3?: string;
   section4Verification: {
     items: RubricItemResult[];
     totalScore: number;
@@ -279,7 +276,7 @@ function extractFirstJsonObject(text: string): string | null {
 /**
  * Runs the full course analysis as three focused, section-by-section Gemini
  * calls (run in parallel): grading (§1), course-quality (§2), and the 7-item
- * verification rubric (§4). Each section gets the model's full attention,
+ * verification rubric (§3). Each section gets the model's full attention,
  * which yields far more detail than a single combined pass.
  *
  * The revised มคอ.3 draft (formerly §3) is intentionally NOT generated — it
@@ -344,7 +341,7 @@ export async function runAnalysis(args: {
       '"courseCodeDetected": "<รหัสวิชาที่พบในเอกสาร>" }',
   });
 
-  // --- Section 4: 7-item verification rubric -----------------------
+  // --- Section 3: 7-item verification rubric -----------------------
   const call4 = callJson<{
     items: RubricItemResult[];
     totalScore: number;
@@ -354,7 +351,7 @@ export async function runAnalysis(args: {
   }>({
     genAI,
     model,
-    label: 'ส่วนที่ 4',
+    label: 'ส่วนที่ 3',
     schemaHint:
       '{ "items": [ { "key": "item1Clo|item21Content|item22Methods|' +
       'item31AssessmentMethods|item32AssessmentForms|item33Proportions|' +
@@ -366,7 +363,7 @@ export async function runAnalysis(args: {
     systemInstruction: system,
     files,
     userText:
-      'จัดทำเฉพาะ "ส่วนที่ 4 — แบบรายงานผลการทวนสอบ 7 หัวข้อ" ' +
+      'จัดทำเฉพาะ "ส่วนที่ 3 — แบบรายงานผลการทวนสอบ 7 หัวข้อ" ' +
       'ให้คะแนนแต่ละหัวข้อ (3 ดีเยี่ยม / 2 ดี / 1 ควรปรับปรุง) ' +
       'พร้อมข้อดีและข้อพัฒนาที่อ้างอิงหลักฐาน. ' +
       `ส่งผลเป็น JSON: { "items": [ { "key": <หนึ่งใน ${RUBRIC_KEYS.join(
