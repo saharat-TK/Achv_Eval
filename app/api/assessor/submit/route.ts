@@ -77,6 +77,28 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'not_pending_assessment' }, { status: 409 });
   }
 
+  // 3b. On sign-off, require a follow-up review when one applies — i.e. there is
+  // a previous offering with a signed assessment to follow up on. Mirrors the
+  // client-side gate so a direct API call cannot bypass it.
+  if (lock && offering.previousOfferingId) {
+    const prevSnap = await db
+      .collection('offerings')
+      .doc(offering.previousOfferingId)
+      .get();
+    const prevAssessmentId = prevSnap.exists
+      ? (prevSnap.data()?.assessmentId as string | undefined)
+      : undefined;
+    if (prevAssessmentId) {
+      const reviewSnap = await offeringRef
+        .collection('followUpReview')
+        .doc('review')
+        .get();
+      if (!reviewSnap.exists) {
+        return NextResponse.json({ error: 'followup_required' }, { status: 409 });
+      }
+    }
+  }
+
   // 4. Compute rubric result
   const result = computeRubricResult(scores);
 
@@ -144,6 +166,14 @@ export async function POST(request: NextRequest) {
         updatedAt: now,
         updatedBy: user.uid,
       });
+
+      // Freeze the follow-up review alongside the assessment, if one exists,
+      // so its inputs can no longer be changed after sign-off.
+      const reviewRef = offeringRef.collection('followUpReview').doc('review');
+      const reviewSnap = await reviewRef.get();
+      if (reviewSnap.exists) {
+        await reviewRef.update({ isLocked: true, updatedAt: now });
+      }
     } else if (offering.status === 'pending_assessment') {
       // Move to assessor_review on first draft save
       await offeringRef.update({

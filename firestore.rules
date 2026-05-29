@@ -189,6 +189,14 @@ service cloud.firestore {
           && resource.data.isLocked == false;
         allow delete: if false;
       }
+
+      // Per-item follow-up review recorded by the assessor (single doc "review").
+      // Writes go through a server action (Admin SDK); client reads are allowed
+      // to any user who can read the parent offering.
+      match /followUpReview/{docId} {
+        allow read: if canReadOffering(offeringId);
+        allow create, update, delete: if false; // server-only
+      }
     }
 
     // ----- implementationReviews -------------------------------------

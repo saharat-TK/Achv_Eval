@@ -115,10 +115,18 @@ const DEFAULT_SCORES: AssessmentDoc['scores'] = {
 export default function AssessmentForm({
   offeringId,
   hasExamAssessment,
+  requireFollowUp = false,
+  followUpRecorded = false,
+  onGoToFollowUp,
+  onLocked,
   scrollBody = false,
 }: {
   offeringId: string;
   hasExamAssessment: boolean;
+  requireFollowUp?: boolean;
+  followUpRecorded?: boolean;
+  onGoToFollowUp?: () => void;
+  onLocked?: () => void;
   scrollBody?: boolean;
 }) {
   const confirm = useConfirm();
@@ -164,6 +172,7 @@ export default function AssessmentForm({
             setComments(data.comments ?? {});
             setGeneralNotes(data.generalNotes ?? '');
             setIsLocked(data.isLocked);
+            if (data.isLocked) onLocked?.();
             setSignedPdfUrl(data.signedPdfUrl ?? null);
           }
           setLoaded(true);
@@ -252,6 +261,11 @@ export default function AssessmentForm({
         });
         const json = await res.json();
         if (!res.ok) {
+          if (json.error === 'followup_required') {
+            throw new Error(
+              'ต้องประเมินและบันทึกผล “ติดตามผลการปรับปรุง” ก่อนลงนามทวนสอบ',
+            );
+          }
           throw new Error(json.error || 'submission_failed');
         }
         if (json.assessmentId) setAssessmentId(json.assessmentId);
@@ -470,6 +484,19 @@ export default function AssessmentForm({
           </button>
           <button
             onClick={async () => {
+              // Gate: when a previous-semester follow-up applies, the assessor
+              // must complete the follow-up review before signing off.
+              if (requireFollowUp && !followUpRecorded) {
+                const go = await confirm({
+                  title: 'ต้องประเมินติดตามผลการปรับปรุงก่อน',
+                  message:
+                    'รายวิชานี้มีผลการทวนสอบภาคก่อนหน้าที่ต้องติดตาม กรุณาประเมินและบันทึกผลในแท็บ “ติดตามผลการปรับปรุง” ก่อนลงนามทวนสอบ',
+                  confirmLabel: 'ไปที่แท็บติดตามผล',
+                  cancelLabel: 'ปิด',
+                });
+                if (go) onGoToFollowUp?.();
+                return;
+              }
               const ok = await confirm({
                 title: 'ยืนยันการลงนามทวนสอบ',
                 message: 'เมื่อลงนามแล้วจะไม่สามารถแก้ไขได้อีก',

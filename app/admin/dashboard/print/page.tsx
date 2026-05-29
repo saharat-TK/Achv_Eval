@@ -120,6 +120,7 @@ export default async function DashboardPrintPage({
             <SummaryRow label="ลงนามทวนสอบแล้ว" value={data.summary.assessed} />
             <SummaryRow label="รับรองผลแล้ว" value={data.summary.finalVerified} />
             <SummaryRow label="ต้องติดตาม" value={data.summary.needsFollowUp} />
+            <SummaryRow label="ติดตามผลแล้ว" value={data.summary.followUpCompleted} />
             <SummaryRow
               label="คะแนนเฉลี่ย"
               value={scoreText(data.summary.averagePercentScore)}
@@ -146,6 +147,7 @@ export default async function DashboardPrintPage({
               <Th>ทวนสอบ</Th>
               <Th>รับรอง</Th>
               <Th>ติดตาม</Th>
+              <Th>ติดตามผลแล้ว</Th>
               <Th>คะแนนเฉลี่ย</Th>
             </Tr>
           </thead>
@@ -166,6 +168,7 @@ export default async function DashboardPrintPage({
                 <Td>{row.assessed}</Td>
                 <Td>{row.finalVerified}</Td>
                 <Td>{row.needsFollowUp}</Td>
+                <Td>{row.followUpCompleted}</Td>
                 <Td>{scoreText(row.averagePercentScore)}</Td>
               </Tr>
             ))}

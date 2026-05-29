@@ -5,9 +5,13 @@ import {
   esc,
   renderAiSection,
   renderAssessorSection,
+  renderFollowUpSection,
   signatureTable,
   type AssessmentForReport,
+  type FollowUpForReport,
 } from './reportShared';
+
+export type { FollowUpForReport };
 
 export interface VerificationForReport {
   decision: 'verified' | 'needs_follow_up';
@@ -32,11 +36,13 @@ export function buildFinalVerificationHtml(args: {
   assessment: AssessmentForReport;
   verification: VerificationForReport;
   meta: ReportMeta;
+  followUp?: FollowUpForReport | null;
 }): string {
-  const { aiResult, assessment, verification, meta } = args;
+  const { aiResult, assessment, verification, meta, followUp } = args;
 
+  const committeeSectionNumber = followUp ? 4 : 3;
   const committeeSection = `
-<h2>ส่วนที่ 3 — ผลการรับรองขั้นสุดท้ายของคณะกรรมการ <span class="official">ฉบับทางการ</span></h2>
+<h2>ส่วนที่ ${committeeSectionNumber} — ผลการรับรองขั้นสุดท้ายของคณะกรรมการ <span class="official">ฉบับทางการ</span></h2>
 <div class="result-box">
   <p><strong>มติการรับรอง:</strong> ${esc(DECISION_TH[verification.decision])}</p>
   ${
@@ -79,6 +85,8 @@ export function buildFinalVerificationHtml(args: {
 ${renderAiSection(aiResult)}
 
 ${renderAssessorSection(assessment)}
+
+${followUp ? renderFollowUpSection(followUp) : ''}
 
 ${committeeSection}
 

@@ -23,6 +23,8 @@ export interface DashboardProgramRow {
   assessed: number;
   finalVerified: number;
   needsFollowUp: number;
+  /** # offerings with a saved follow-up review (assessor's next-semester follow-up). */
+  followUpCompleted: number;
   averagePercentScore: number | null;
   /** # offerings with a signed assessment — denominator used when averaging scores. */
   signedCount: number;
@@ -98,6 +100,7 @@ export interface ExecutiveDashboardData {
     assessed: number;
     finalVerified: number;
     needsFollowUp: number;
+    followUpCompleted: number;
     averagePercentScore: number | null;
     implementationRate: number | null;
   };
@@ -386,6 +389,23 @@ async function getAssessmentsByOffering(
   return result;
 }
 
+/**
+ * Returns the set of offeringIds that have a saved follow-up review doc
+ * (`offerings/{id}/followUpReview/review`). Uses one collection-group query;
+ * the offeringId is resolved from each doc's grandparent ref. Callers
+ * intersect this with their already-filtered offering scope.
+ */
+async function getOfferingsWithFollowUp(): Promise<Set<string>> {
+  const db = getAdminDb();
+  const snap = await db.collectionGroup('followUpReview').get();
+  const result = new Set<string>();
+  for (const doc of snap.docs) {
+    const offeringId = doc.ref.parent.parent?.id;
+    if (offeringId) result.add(offeringId);
+  }
+  return result;
+}
+
 export async function getExecutiveDashboardData(
   programs: ProgramWithId[],
   filters: DashboardFilters = {},
@@ -429,6 +449,7 @@ export async function getExecutiveDashboardData(
   const assessmentByOffering = await getAssessmentsByOffering(
     programScopedOfferings,
   );
+  const followUpOfferingIds = await getOfferingsWithFollowUp();
   const trend = buildTrend(programScopedOfferings, assessmentByOffering);
 
   const statusCounts: Partial<Record<OfferingStatus, number>> = {};
@@ -492,6 +513,8 @@ export async function getExecutiveDashboardData(
       ).length,
       needsFollowUp: programOfferings.filter((o) => FOLLOW_UP_STATUSES.includes(o.status))
         .length,
+      followUpCompleted: programOfferings.filter((o) => followUpOfferingIds.has(o.id))
+        .length,
       averagePercentScore: average(programScores),
       signedCount: programScores.length,
     };
@@ -531,6 +554,7 @@ export async function getExecutiveDashboardData(
       finalVerified: offerings.filter((o) => FINAL_VERIFIED_STATUSES.includes(o.status))
         .length,
       needsFollowUp: offerings.filter((o) => FOLLOW_UP_STATUSES.includes(o.status)).length,
+      followUpCompleted: offerings.filter((o) => followUpOfferingIds.has(o.id)).length,
       averagePercentScore: average(percentScores),
       implementationRate:
         reviewedImplementationCount === 0

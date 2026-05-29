@@ -5,11 +5,13 @@ import {
   esc,
   renderAiSection,
   renderAssessorSection,
+  renderFollowUpSection,
   signatureTable,
   type AssessmentForReport,
+  type FollowUpForReport,
 } from './reportShared';
 
-export type { AssessmentForReport };
+export type { AssessmentForReport, FollowUpForReport };
 
 /**
  * Builds the combined report HTML: the AI analysis plus the official
@@ -20,8 +22,9 @@ export function buildCombinedReportHtml(args: {
   aiResult: AnalysisResult;
   assessment: AssessmentForReport;
   meta: ReportMeta;
+  followUp?: FollowUpForReport | null;
 }): string {
-  const { aiResult, assessment, meta } = args;
+  const { aiResult, assessment, meta, followUp } = args;
 
   return `<!doctype html>
 <html lang="th">
@@ -49,6 +52,8 @@ export function buildCombinedReportHtml(args: {
 ${renderAiSection(aiResult)}
 
 ${renderAssessorSection(assessment)}
+
+${followUp ? renderFollowUpSection(followUp) : ''}
 
 ${signatureTable()}
 

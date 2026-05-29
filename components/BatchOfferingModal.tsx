@@ -55,6 +55,7 @@ export default function BatchOfferingModal({
   const [selected, setSelected] = useState<DualListItem[]>(
     edit ? edit.initial.map((i) => ({ id: i.courseId, code: i.code, nameTh: i.nameTh })) : [],
   );
+  const [linkToPrevious, setLinkToPrevious] = useState(true);
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -116,7 +117,7 @@ export default function BatchOfferingModal({
           .map((i) => i.offeringId);
 
         if (added.length) {
-          const res = await bulkCreateOfferings({ academicYear: year, semester, courseIds: added });
+          const res = await bulkCreateOfferings({ academicYear: year, semester, courseIds: added, linkToPrevious });
           if (!res.ok) {
             setError(res.error);
             setBusy(false);
@@ -149,6 +150,7 @@ export default function BatchOfferingModal({
           academicYear: year,
           semester,
           courseIds: selected.map((s) => s.id),
+          linkToPrevious,
         });
         if (!res.ok) {
           setError(res.error);
@@ -275,6 +277,23 @@ export default function BatchOfferingModal({
             />
           )}
         </div>
+
+        {/* Link-to-previous toggle — only meaningful when creating new offerings */}
+        {!edit && (
+          <label className="mt-4 flex cursor-pointer items-start gap-2.5">
+            <input
+              type="checkbox"
+              checked={linkToPrevious}
+              onChange={(e) => setLinkToPrevious(e.target.checked)}
+              className="mt-0.5 h-4 w-4 rounded border-slate-300 text-mfu-primary focus:ring-mfu-primary"
+            />
+            <span className="text-xs text-slate-600">
+              <span className="font-medium text-slate-700">เชื่อมโยงกับการเปิดสอนล่าสุดโดยอัตโนมัติ</span>
+              {' '}— ระบบจะค้นหาการเปิดสอนภาคก่อนหน้าของแต่ละรายวิชา
+              และตั้งค่าลิงก์ติดตามผล (previousOfferingId) ให้อัตโนมัติ
+            </span>
+          </label>
+        )}
 
         {error && (
           <p className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">

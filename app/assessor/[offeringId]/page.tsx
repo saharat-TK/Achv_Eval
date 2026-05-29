@@ -2,9 +2,9 @@ import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import { getCurrentProfile } from '@/lib/firebase/auth-server';
 import { getOffering } from '@/lib/data/offerings';
+import { getAssessmentById, getFollowUpReview } from '@/lib/data/assessments';
 import StatusBadge from '@/components/StatusBadge';
-import AiReportsList from '@/components/AiReportsList';
-import AssessmentForm from '@/components/AssessmentForm';
+import AssessorOfferingTabs from '@/components/AssessorOfferingTabs';
 import { SEMESTER_LABEL } from '@/lib/constants';
 import type { OfferingStatus } from '@/lib/types/models';
 
@@ -38,6 +38,24 @@ export default async function AssessorOfferingPage({
     notFound();
   }
 
+  // Fetch previous offering and its assessment (1 hop back) for the follow-up tab.
+  let previousOffering = null;
+  let previousAssessment = null;
+  let initialFollowUp = null;
+
+  if (offering.previousOfferingId) {
+    previousOffering = await getOffering(offering.previousOfferingId);
+    if (previousOffering?.assessmentId) {
+      previousAssessment = await getAssessmentById(
+        previousOffering.id,
+        previousOffering.assessmentId,
+      );
+    }
+    if (previousAssessment) {
+      initialFollowUp = await getFollowUpReview(offering.id);
+    }
+  }
+
   return (
     <div>
       <Link href="/assessor" className="text-sm text-slate-500 hover:underline">
@@ -62,41 +80,42 @@ export default async function AssessorOfferingPage({
         <StatusBadge status={offering.status} />
       </div>
 
-      {/* AI report and the evaluation form side by side. On large screens,
-          each column keeps its section header fixed while the working body
-          scrolls independently. */}
-      <div className="mt-6 grid gap-6 lg:h-[calc(100vh-10rem)] lg:min-h-[52rem] lg:grid-cols-2">
-        {/* Left — AI analysis report (read-only) */}
-        <section className="lg:flex lg:min-h-0 lg:flex-col lg:pr-1">
-          <h2 className="text-sm font-semibold text-slate-700">
-            รายงานการวิเคราะห์ AI
-          </h2>
-          <p className="mt-1 text-xs text-slate-500">
-            ผลวิเคราะห์จากระบบ AI เพื่อประกอบการพิจารณาของผู้ทวนสอบ
-          </p>
-          <div className="mt-4 lg:min-h-0 lg:flex-1">
-            <AiReportsList offeringId={offering.id} scrollBody />
-          </div>
-        </section>
-
-        {/* Right — assessor evaluation form */}
-        <section className="lg:flex lg:min-h-0 lg:flex-col lg:pl-1">
-          <h2 className="text-sm font-semibold text-slate-700">
-            แบบประเมินการทวนสอบ (7 หัวข้อ)
-          </h2>
-          <p className="mt-1 text-xs text-slate-500">
-            ให้คะแนนแต่ละหัวข้อ (1–3) พร้อมข้อดีและข้อเสนอแนะ
-            แล้วบันทึกหรือลงนามทวนสอบ
-          </p>
-          <div className="mt-4 lg:min-h-0 lg:flex-1">
-            <AssessmentForm
-              offeringId={offering.id}
-              hasExamAssessment={offering.hasExamAssessment}
-              scrollBody
-            />
-          </div>
-        </section>
-      </div>
+      <AssessorOfferingTabs
+        offeringId={offering.id}
+        hasExamAssessment={offering.hasExamAssessment}
+        previousOffering={
+          previousOffering
+            ? {
+                id: previousOffering.id,
+                academicYear: previousOffering.academicYear,
+                semester: previousOffering.semester,
+                section: previousOffering.section,
+                courseCode: previousOffering.courseCode,
+                courseNameTh: previousOffering.courseNameTh,
+              }
+            : null
+        }
+        previousAssessment={
+          previousAssessment
+            ? {
+                assessorName: previousAssessment.assessorName,
+                scores: previousAssessment.scores,
+                comments: previousAssessment.comments,
+                generalNotes: previousAssessment.generalNotes,
+              }
+            : null
+        }
+        initialFollowUp={
+          initialFollowUp
+            ? {
+                itemDecisions: initialFollowUp.itemDecisions,
+                itemComments: initialFollowUp.itemComments ?? {},
+                notes: initialFollowUp.notes,
+                isLocked: initialFollowUp.isLocked ?? false,
+              }
+            : null
+        }
+      />
     </div>
   );
 }

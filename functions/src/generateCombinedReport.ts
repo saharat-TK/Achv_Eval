@@ -2,6 +2,7 @@ import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import * as admin from 'firebase-admin';
 import { renderHtmlToPdf, storePdf } from './pdf';
 import { buildCombinedReportHtml } from './assessmentHtml';
+import type { FollowUpForReport, RubricScore } from './reportShared';
 import {
   getProgramCode,
   offeringReportDir,
@@ -55,6 +56,7 @@ export const generateCombinedReport = onCall(
       lecturerId: string | null;
       lecturerEmail: string | null;
       latestAiReportId: string | null;
+      previousOfferingId: string | null;
     };
 
     // Authorize: caller must be an assessor of the program (or admin).
@@ -121,8 +123,72 @@ export const generateCombinedReport = onCall(
       generatedAt: signedAtText,
     };
 
+    // Load the follow-up review for this offering, if one was recorded. It
+    // becomes "ส่วนที่ 3 — ติดตามผลการปรับปรุง" in the combined report.
+    let followUp: FollowUpForReport | null = null;
+    const reviewSnap = await offeringRef
+      .collection('followUpReview')
+      .doc('review')
+      .get();
+    if (reviewSnap.exists && offering.previousOfferingId) {
+      const review = reviewSnap.data()!;
+      const prevOfferingSnap = await db
+        .collection('offerings')
+        .doc(offering.previousOfferingId)
+        .get();
+      const prevOffering = prevOfferingSnap.data() as
+        | {
+            academicYear: number;
+            semester: string;
+            section: string;
+            assessmentId: string | null;
+          }
+        | undefined;
+
+      let previousScores: Record<string, RubricScore> = {};
+      let previousComments: Record<
+        string,
+        { strengths?: string; improvements?: string }
+      > = {};
+      let previousAssessorName = '';
+      const prevAssessmentId =
+        (review.previousAssessmentId as string | undefined) ||
+        prevOffering?.assessmentId ||
+        undefined;
+      if (prevAssessmentId && prevOfferingSnap.exists) {
+        const prevAssessmentSnap = await prevOfferingSnap.ref
+          .collection('assessments')
+          .doc(prevAssessmentId)
+          .get();
+        const prevAssessment = prevAssessmentSnap.data();
+        if (prevAssessment) {
+          previousScores = prevAssessment.scores ?? {};
+          previousComments = prevAssessment.comments ?? {};
+          previousAssessorName = prevAssessment.assessorName ?? '';
+        }
+      }
+
+      const previousTermText = prevOffering
+        ? `${prevOffering.academicYear} ${
+            SEMESTER_LABEL[prevOffering.semester] ?? prevOffering.semester
+          } · ตอนเรียน ${prevOffering.section}`
+        : '';
+
+      followUp = {
+        previousTermText,
+        previousAssessorName,
+        reviewerName: (review.reviewerName as string) ?? '',
+        itemDecisions: (review.itemDecisions as Record<string, string>) ?? {},
+        itemComments: (review.itemComments as Record<string, string>) ?? {},
+        previousScores,
+        previousComments,
+        notes: (review.notes as string | null) ?? null,
+      };
+    }
+
     const html = buildCombinedReportHtml({
       aiResult,
+      followUp,
       assessment: {
         assessorName: assessment.assessorName ?? '',
         signedAtText,
