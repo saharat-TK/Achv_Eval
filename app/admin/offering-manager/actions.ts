@@ -23,6 +23,7 @@ export interface BulkCreateInput {
   academicYear: number;
   semester: Semester;
   courseIds: string[];
+  linkToPrevious?: boolean;
 }
 
 export interface LecturerAssignmentInput {
@@ -237,6 +238,34 @@ export async function bulkCreateOfferings(
       continue;
     }
 
+    // Resolve previousOfferingId: find the most recent offering of this course
+    // that predates the target term. Fetches all offerings for the course and
+    // sorts in memory — per-course counts are small, no composite index needed.
+    let previousOfferingId: string | null = null;
+    if (input.linkToPrevious) {
+      const prevSnap = await db
+        .collection('offerings')
+        .where('courseId', '==', courseId)
+        .get();
+      const candidates = prevSnap.docs
+        .map((d) => ({
+          id: d.id,
+          academicYear: d.data().academicYear as number,
+          semester: d.data().semester as Semester,
+        }))
+        .filter(
+          (o) =>
+            o.academicYear < input.academicYear ||
+            (o.academicYear === input.academicYear && o.semester < input.semester),
+        )
+        .sort(
+          (a, b) =>
+            b.academicYear - a.academicYear ||
+            b.semester.localeCompare(a.semester),
+        );
+      previousOfferingId = candidates[0]?.id ?? null;
+    }
+
     await db.collection('offerings').doc(offeringId).set({
       courseId,
       programId: curriculumId,
@@ -253,7 +282,7 @@ export async function bulkCreateOfferings(
       hasExamAssessment: true,
       assignedPloNumbers: [],
       status: 'draft' as OfferingStatus,
-      previousOfferingId: null,
+      previousOfferingId,
       latestAiReportId: null,
       assessmentId: null,
       isActive: true,

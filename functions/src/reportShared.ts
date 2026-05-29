@@ -193,6 +193,79 @@ export function renderAiSection(aiResult: AnalysisResult): string {
 </div>`;
 }
 
+export const IMPLEMENTATION_DECISION_TH: Record<string, string> = {
+  implemented: 'ดำเนินการแล้ว',
+  partially_implemented: 'ดำเนินการบางส่วน',
+  not_implemented: 'ยังไม่ดำเนินการ',
+};
+
+export interface FollowUpForReport {
+  /** Previous offering term, e.g. "2567 ภาคปลาย · ตอนเรียน 01". */
+  previousTermText: string;
+  /** Assessor who produced the previous assessment being followed up. */
+  previousAssessorName: string;
+  /** The assessor recording this follow-up. */
+  reviewerName: string;
+  /** Per-item implementation decision keyed by rubric item key. */
+  itemDecisions: Record<string, string | undefined>;
+  /** Per-item follow-up comment keyed by rubric item key. */
+  itemComments: Record<string, string | undefined>;
+  /** Previous assessment's scores — shown for context per item. */
+  previousScores: Record<string, RubricScore>;
+  /** Previous assessment's improvement notes per item. */
+  previousComments: Record<string, { strengths?: string; improvements?: string }>;
+  notes: string | null;
+}
+
+/**
+ * "ส่วนที่ 3 — ติดตามผลการปรับปรุง": the assessor's follow-up on the previous
+ * semester's verification result. Rendered only when a follow-up review exists.
+ */
+export function renderFollowUpSection(followUp: FollowUpForReport): string {
+  const rows = RUBRIC_ITEMS.map((item) => {
+    const prevScore = followUp.previousScores[item.key] ?? 'na';
+    const improvement = followUp.previousComments[item.key]?.improvements ?? '';
+    const decisionKey = followUp.itemDecisions[item.key];
+    const decision = decisionKey ? IMPLEMENTATION_DECISION_TH[decisionKey] ?? decisionKey : '—';
+    const comment = followUp.itemComments[item.key] ?? '';
+    return `
+      <tr>
+        <td>${esc(item.labelTh)}</td>
+        <td class="score">${prevScore === 'na' ? 'N/A' : prevScore}</td>
+        <td>${esc(improvement)}</td>
+        <td>${esc(decision)}</td>
+        <td>${esc(comment)}</td>
+      </tr>`;
+  }).join('');
+
+  return `
+<h2>ส่วนที่ 3 — ติดตามผลการปรับปรุง (จากการทวนสอบภาคก่อนหน้า)</h2>
+<table class="meta">
+  <tr><td><strong>ผลการทวนสอบที่นำมาติดตาม</strong></td><td>${esc(followUp.previousTermText)}</td></tr>
+  <tr><td><strong>ทวนสอบภาคก่อนโดย</strong></td><td>${esc(followUp.previousAssessorName)}</td></tr>
+  <tr><td><strong>ผู้ติดตามผล</strong></td><td>${esc(followUp.reviewerName)}</td></tr>
+</table>
+<table>
+  <thead>
+    <tr>
+      <th>หัวข้อการพิจารณา</th>
+      <th class="score">คะแนนเดิม</th>
+      <th>ข้อเสนอแนะเดิม</th>
+      <th>ผลการนำไปปฏิบัติ</th>
+      <th>ความเห็นผู้ติดตามผล</th>
+    </tr>
+  </thead>
+  <tbody>
+    ${rows}
+  </tbody>
+</table>
+${
+  followUp.notes
+    ? `<h3>หมายเหตุการติดตามผล</h3><p>${esc(followUp.notes)}</p>`
+    : ''
+}`;
+}
+
 /**
  * "ส่วนที่ 2 — ผลการทวนสอบโดยผู้ทวนสอบ": the assessor's official 7-item
  * form. Shared by the combined report and the final verification report.

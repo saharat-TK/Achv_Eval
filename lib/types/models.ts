@@ -394,6 +394,30 @@ export interface NotificationDoc {
   createdAt: Ts;
 }
 
+// ----- offerings/{id}/followUpReview/review -------------------------
+/**
+ * Per-item follow-up recorded by the assessor on the *current* offering.
+ * Shows whether each improvement recommendation from the previous semester's
+ * assessment was implemented.  Stored as a single well-known document
+ * (`review`) so it can be upserted without generating multiple versions.
+ * Distinct from `ImplementationReviewDoc`, which is the committee's overall
+ * sign-off on the *previous* offering.
+ */
+export interface FollowUpReviewDoc {
+  previousOfferingId: string;
+  previousAssessmentId: string;
+  programId: string;
+  itemDecisions: Partial<Record<keyof AssessmentDoc['scores'], ImplementationDecision>>;
+  itemComments?: Partial<Record<keyof AssessmentDoc['scores'], string>>;
+  notes: string | null;
+  reviewerId: string;
+  reviewerName: string;
+  // Locked when the assessor signs off the current assessment — the follow-up
+  // review is frozen alongside the assessment and can no longer be edited.
+  isLocked?: boolean;
+  updatedAt: Ts;
+}
+
 // ----- auditLog/{logId} ---------------------------------------------
 export interface AuditLogDoc {
   occurredAt: Ts;

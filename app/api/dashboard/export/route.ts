@@ -55,6 +55,7 @@ function buildCsv(
   lines.push(row('ลงนามทวนสอบแล้ว', data.summary.assessed));
   lines.push(row('รับรองผลแล้ว', data.summary.finalVerified));
   lines.push(row('ต้องติดตาม', data.summary.needsFollowUp));
+  lines.push(row('ติดตามผลแล้ว', data.summary.followUpCompleted));
   lines.push(row('คะแนนเฉลี่ย', scoreText(data.summary.averagePercentScore)));
   lines.push(
     row(
@@ -68,7 +69,7 @@ function buildCsv(
 
   lines.push(row('[ภาพรวมตามหลักสูตร]'));
   lines.push(
-    row('รหัส', 'ชื่อหลักสูตร (AP)', 'จำนวนหลักสูตร', 'รายวิชา', 'AI', 'ทวนสอบ', 'รับรอง', 'ติดตาม', 'คะแนนเฉลี่ย'),
+    row('รหัส', 'ชื่อหลักสูตร (AP)', 'จำนวนหลักสูตร', 'รายวิชา', 'AI', 'ทวนสอบ', 'รับรอง', 'ติดตาม', 'ติดตามผลแล้ว', 'คะแนนเฉลี่ย'),
   );
   for (const apRow of apRows) {
     lines.push(
@@ -81,6 +82,7 @@ function buildCsv(
         apRow.assessed,
         apRow.finalVerified,
         apRow.needsFollowUp,
+        apRow.followUpCompleted,
         scoreText(apRow.averagePercentScore),
       ),
     );

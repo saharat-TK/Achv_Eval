@@ -185,7 +185,7 @@ export default async function AdminDashboardPage({
         defaultSemester={selectedSemester}
       />
 
-      <div className="mt-6 grid gap-3 md:grid-cols-4">
+      <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
         <MetricCard
           label="หลักสูตรในขอบเขต"
           value={data.summary.totalPrograms.toLocaleString('th-TH')}
@@ -200,6 +200,11 @@ export default async function AdminDashboardPage({
           label="ลงนามทวนสอบแล้ว"
           value={data.summary.assessed.toLocaleString('th-TH')}
           detail={completionText(data.summary.assessed, data.summary.totalOfferings)}
+        />
+        <MetricCard
+          label="ติดตามผลแล้ว"
+          value={data.summary.followUpCompleted.toLocaleString('th-TH')}
+          detail={completionText(data.summary.followUpCompleted, data.summary.totalOfferings)}
         />
         <MetricCard
           label="คะแนนเฉลี่ย"
@@ -241,6 +246,7 @@ export default async function AdminDashboardPage({
                   <th className="px-4 py-3 font-medium">ทวนสอบ</th>
                   <th className="px-4 py-3 font-medium">รับรอง</th>
                   <th className="px-4 py-3 font-medium">ติดตาม</th>
+                  <th className="px-4 py-3 font-medium">ติดตามผลแล้ว</th>
                   <th className="px-4 py-3 font-medium">คะแนนเฉลี่ย</th>
                 </tr>
               </thead>
@@ -261,6 +267,7 @@ export default async function AdminDashboardPage({
                     <td className="px-4 py-3 text-slate-700">{row.assessed}</td>
                     <td className="px-4 py-3 text-slate-700">{row.finalVerified}</td>
                     <td className="px-4 py-3 text-slate-700">{row.needsFollowUp}</td>
+                    <td className="px-4 py-3 text-slate-700">{row.followUpCompleted}</td>
                     <td className="px-4 py-3 text-slate-700">
                       {scoreText(row.averagePercentScore)}
                     </td>
@@ -294,6 +301,20 @@ export default async function AdminDashboardPage({
                   </div>
                 ))
               )}
+              <div className="mt-2 space-y-2 border-t border-slate-100 pt-2">
+                <div className="flex items-center justify-between gap-3 text-sm">
+                  <span className="text-slate-600">ต้องติดตามผล</span>
+                  <span className="font-semibold text-slate-800">
+                    {data.summary.needsFollowUp}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between gap-3 text-sm">
+                  <span className="text-slate-600">ติดตามผลแล้ว</span>
+                  <span className="font-semibold text-slate-800">
+                    {data.summary.followUpCompleted}
+                  </span>
+                </div>
+              </div>
             </div>
           </section>
 
@@ -342,51 +363,38 @@ export default async function AdminDashboardPage({
               )}
             </div>
           </section>
+
+          <section className="rounded-lg border border-slate-200 bg-white p-4">
+            <h2 className="text-base font-semibold text-slate-800">
+              จุดอ่อนที่พบซ้ำ
+            </h2>
+            <p className="mt-0.5 text-xs text-slate-500">
+              หัวข้อการทวนสอบที่ได้คะแนนระดับ &ldquo;ควรปรับปรุง&rdquo; (1 คะแนน)
+            </p>
+            <div className="mt-3 space-y-2">
+              {data.recurringWeaknesses.length === 0 ? (
+                <p className="text-sm text-slate-500">
+                  ไม่พบหัวข้อที่ได้คะแนนระดับควรปรับปรุงในขอบเขตที่เลือก
+                </p>
+              ) : (
+                data.recurringWeaknesses.map((weakness) => (
+                  <div
+                    key={weakness.key}
+                    className="flex items-center justify-between gap-3 text-sm"
+                  >
+                    <span className="text-slate-700">
+                      {weakness.number}. {weakness.labelTh}
+                    </span>
+                    <span className="shrink-0 font-semibold text-amber-700">
+                      {weakness.lowCount} รายวิชา · {weakness.lowRate}%
+                    </span>
+                  </div>
+                ))
+              )}
+            </div>
+          </section>
         </div>
       </div>
-
-      <section className="mt-6 rounded-lg border border-slate-200 bg-white">
-        <div className="border-b border-slate-100 px-4 py-3">
-          <h2 className="text-base font-semibold text-slate-800">
-            จุดอ่อนที่พบซ้ำ
-          </h2>
-          <p className="mt-0.5 text-xs text-slate-500">
-            หัวข้อการทวนสอบที่ได้คะแนนระดับ &ldquo;ควรปรับปรุง&rdquo; (1 คะแนน)
-            พร้อมรายวิชาที่เกี่ยวข้อง
-          </p>
-        </div>
-        {data.recurringWeaknesses.length === 0 ? (
-          <div className="p-6 text-sm text-slate-500">
-            ไม่พบหัวข้อที่ได้คะแนนระดับควรปรับปรุงในขอบเขตที่เลือก
-          </div>
-        ) : (
-          <div className="divide-y divide-slate-100">
-            {data.recurringWeaknesses.map((weakness) => (
-              <div key={weakness.key} className="px-4 py-3">
-                <div className="flex items-center justify-between gap-3">
-                  <span className="text-sm font-medium text-slate-700">
-                    {weakness.number}. {weakness.labelTh}
-                  </span>
-                  <span className="shrink-0 text-sm font-semibold text-amber-700">
-                    {weakness.lowCount} รายวิชา · {weakness.lowRate}%
-                  </span>
-                </div>
-                <div className="mt-2 flex flex-wrap gap-1.5">
-                  {weakness.affectedCourses.map((course) => (
-                    <Link
-                      key={course.offeringId}
-                      href={`/admin/programs/${course.programId}/offerings/${course.offeringId}`}
-                      className="rounded-md bg-slate-100 px-2 py-0.5 text-xs text-slate-600 hover:bg-slate-200"
-                    >
-                      {course.courseCode} ({course.academicYear}/{course.semester})
-                    </Link>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </section>
 
       <section className="mt-6 rounded-lg border border-slate-200 bg-white">
         <div className="border-b border-slate-100 px-4 py-3">

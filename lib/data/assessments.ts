@@ -1,9 +1,10 @@
 import 'server-only';
 import { getAdminDb } from '@/lib/firebase/admin';
-import type { AssessmentDoc, OfferingDoc } from '@/lib/types/models';
+import type { AssessmentDoc, FollowUpReviewDoc, OfferingDoc } from '@/lib/types/models';
 
 export type OfferingWithId = OfferingDoc & { id: string };
 export type AssessmentWithId = AssessmentDoc & { id: string };
+export type FollowUpReviewWithId = FollowUpReviewDoc & { id: string };
 
 /**
  * Fetch offerings for a set of programs with statuses relevant to an assessor.
@@ -29,6 +30,40 @@ export async function getOfferingsForAssessor(
   return snap.docs
     .map((d) => ({ id: d.id, ...(d.data() as OfferingDoc) }))
     .filter((o) => o.isActive !== false);
+}
+
+/**
+ * Fetch a specific assessment by its ID.
+ */
+export async function getAssessmentById(
+  offeringId: string,
+  assessmentId: string,
+): Promise<AssessmentWithId | null> {
+  const snap = await getAdminDb()
+    .collection('offerings')
+    .doc(offeringId)
+    .collection('assessments')
+    .doc(assessmentId)
+    .get();
+  if (!snap.exists) return null;
+  return { id: snap.id, ...(snap.data() as AssessmentDoc) };
+}
+
+/**
+ * Fetch the follow-up review recorded by the assessor on a given offering,
+ * if one has been saved.
+ */
+export async function getFollowUpReview(
+  offeringId: string,
+): Promise<FollowUpReviewDoc | null> {
+  const snap = await getAdminDb()
+    .collection('offerings')
+    .doc(offeringId)
+    .collection('followUpReview')
+    .doc('review')
+    .get();
+  if (!snap.exists) return null;
+  return snap.data() as FollowUpReviewDoc;
 }
 
 /**

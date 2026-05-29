@@ -78,6 +78,50 @@ function ProgressTooltip({
   );
 }
 
+/** Custom tooltip for the right BarChart — matches ProgressTooltip's styling. */
+function BandTooltip({
+  active,
+  payload,
+  label,
+}: {
+  active?: boolean;
+  payload?: Array<{
+    name: string;
+    value: number | null;
+    color: string;
+    payload: DashboardTrendPoint;
+  }>;
+  label?: string;
+}) {
+  if (!active || !payload || payload.length === 0) return null;
+  const pt = payload[0].payload;
+  const total = pt.excellent + pt.good + pt.improve;
+
+  return (
+    <div
+      className="rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-md"
+      style={{ fontSize: 11 }}
+    >
+      <p className="mb-1.5 font-semibold text-slate-700">{label}</p>
+      {payload.map((entry) => {
+        if (entry.value === null || entry.value === undefined) return null;
+        const pct = total > 0 ? Math.round((entry.value / total) * 1000) / 10 : 0;
+        return (
+          <div key={entry.name} className="flex items-center gap-1.5">
+            <span
+              className="inline-block h-2 w-2 shrink-0 rounded-sm"
+              style={{ background: entry.color }}
+            />
+            <span style={{ color: entry.color }}>
+              {entry.name}&nbsp;:&nbsp;{pct}% ({entry.value} วิชา)
+            </span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 /**
  * Cross-semester trend charts: average verification score and completion
  * rate over time, plus the result-band mix per term.
@@ -183,9 +227,20 @@ export default function DashboardTrends({
               <XAxis dataKey="label" tick={{ fontSize: 11 }} />
               <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
               <Tooltip
-                contentStyle={{ fontSize: 11 }}
-                itemStyle={{ fontSize: 11 }}
-                labelStyle={{ fontSize: 11, fontWeight: 600 }}
+                content={(props) => (
+                  <BandTooltip
+                    active={props.active}
+                    payload={
+                      (props.payload as unknown) as Array<{
+                        name: string;
+                        value: number | null;
+                        color: string;
+                        payload: DashboardTrendPoint;
+                      }>
+                    }
+                    label={props.label as string}
+                  />
+                )}
               />
               <Legend wrapperStyle={{ fontSize: 12 }} />
               <Bar dataKey="excellent" name="ดีเยี่ยม" stackId="band" fill={GREEN} />

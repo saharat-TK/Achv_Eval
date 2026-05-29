@@ -11,6 +11,7 @@ export interface ApConsolidatedRow {
   assessed: number;
   finalVerified: number;
   needsFollowUp: number;
+  followUpCompleted: number;
   averagePercentScore: number | null;
   /** How many curriculum revisions (ProgramDocs) are grouped into this row. */
   programCount: number;
@@ -69,6 +70,7 @@ export function consolidateByAcademicProgram(
           assessed: row.assessed,
           finalVerified: row.finalVerified,
           needsFollowUp: row.needsFollowUp,
+          followUpCompleted: row.followUpCompleted,
           averagePercentScore: row.averagePercentScore,
           programCount: 1,
         });
@@ -92,6 +94,7 @@ export function consolidateByAcademicProgram(
       assessed: rows.reduce((s, r) => s + r.assessed, 0),
       finalVerified: rows.reduce((s, r) => s + r.finalVerified, 0),
       needsFollowUp: rows.reduce((s, r) => s + r.needsFollowUp, 0),
+      followUpCompleted: rows.reduce((s, r) => s + r.followUpCompleted, 0),
       averagePercentScore:
         totalSignedCount === 0
           ? null
