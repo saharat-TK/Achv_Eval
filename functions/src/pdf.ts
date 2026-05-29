@@ -5,10 +5,15 @@ import chromium from '@sparticuz/chromium';
 
 /** Renders an HTML document to an A4 PDF using headless Chromium. */
 export async function renderHtmlToPdf(html: string): Promise<Buffer> {
+  // Disable WebGL/graphics — we only render static HTML, and the graphics
+  // stack is a common cause of "Failed to launch the browser process" OOM
+  // crashes on memory-constrained serverless cold starts.
+  chromium.setGraphicsMode = false;
   const browser = await puppeteer.launch({
     args: chromium.args,
+    defaultViewport: chromium.defaultViewport,
     executablePath: await chromium.executablePath(),
-    headless: true,
+    headless: chromium.headless,
   });
   try {
     const page = await browser.newPage();

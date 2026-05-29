@@ -37,7 +37,7 @@ function thaiDateTime(value: unknown): string {
  * the PDF in Storage and writes its URL onto the verification document.
  */
 export const generateFinalVerificationReport = onCall(
-  { region: REGION, memory: '2GiB', timeoutSeconds: 180 },
+  { region: REGION, memory: '4GiB', timeoutSeconds: 180 },
   async (request) => {
     if (!request.auth) {
       throw new HttpsError('unauthenticated', 'ต้องเข้าสู่ระบบก่อน');

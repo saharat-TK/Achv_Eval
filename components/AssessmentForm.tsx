@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   collection,
   onSnapshot,
@@ -118,7 +118,6 @@ export default function AssessmentForm({
   requireFollowUp = false,
   followUpRecorded = false,
   onGoToFollowUp,
-  onLocked,
   scrollBody = false,
 }: {
   offeringId: string;
@@ -126,7 +125,6 @@ export default function AssessmentForm({
   requireFollowUp?: boolean;
   followUpRecorded?: boolean;
   onGoToFollowUp?: () => void;
-  onLocked?: () => void;
   scrollBody?: boolean;
 }) {
   const confirm = useConfirm();
@@ -172,7 +170,6 @@ export default function AssessmentForm({
             setComments(data.comments ?? {});
             setGeneralNotes(data.generalNotes ?? '');
             setIsLocked(data.isLocked);
-            if (data.isLocked) onLocked?.();
             setSignedPdfUrl(data.signedPdfUrl ?? null);
           }
           setLoaded(true);
@@ -240,6 +237,26 @@ export default function AssessmentForm({
     },
     [offeringId],
   );
+
+  // Self-heal: when an assessment is locked but has no signed report — e.g.
+  // after a status reversal voided the old PDF and the assessor re-signed, or
+  // the post-sign-off generation call never completed — regenerate it. Tied to
+  // the (assessmentId, locked) cycle via a ref so it fires once per sign-off
+  // and not while a generation is already running.
+  const autoRegenKey = useRef<string | null>(null);
+  useEffect(() => {
+    if (!isLocked || !assessmentId || signedPdfUrl || generatingPdf) return;
+    const key = `${assessmentId}:locked`;
+    if (autoRegenKey.current === key) return;
+    autoRegenKey.current = key;
+    void generateCombinedPdf(assessmentId);
+  }, [isLocked, assessmentId, signedPdfUrl, generatingPdf, generateCombinedPdf]);
+
+  // Once a report URL exists, clear the guard so a later void/re-sign cycle on
+  // the same assessment can trigger regeneration again.
+  useEffect(() => {
+    if (signedPdfUrl) autoRegenKey.current = null;
+  }, [signedPdfUrl]);
 
   // Submit handler
   const handleSubmit = useCallback(

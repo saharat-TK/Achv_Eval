@@ -41,9 +41,6 @@ export default function AssessorOfferingTabs({
   const showFollowUpTab = !!previousAssessment && !!previousOffering;
   const [tab, setTab] = useState<Tab>(showFollowUpTab ? 'followup' : 'current');
   const [followUpRecorded, setFollowUpRecorded] = useState(!!initialFollowUp);
-  const [followUpLocked, setFollowUpLocked] = useState(
-    !!initialFollowUp?.isLocked,
-  );
 
   const tabClass = (t: Tab) =>
     `px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
@@ -102,7 +99,6 @@ export default function AssessorOfferingTabs({
                 requireFollowUp={showFollowUpTab}
                 followUpRecorded={followUpRecorded}
                 onGoToFollowUp={() => setTab('followup')}
-                onLocked={() => setFollowUpLocked(true)}
                 scrollBody
               />
             </div>
@@ -118,7 +114,7 @@ export default function AssessorOfferingTabs({
             previousOffering={previousOffering!}
             previousAssessment={previousAssessment!}
             initialFollowUp={initialFollowUp}
-            locked={followUpLocked}
+            initialLocked={!!initialFollowUp?.isLocked}
             onSaved={() => setFollowUpRecorded(true)}
             onGoToCurrent={() => setTab('current')}
           />

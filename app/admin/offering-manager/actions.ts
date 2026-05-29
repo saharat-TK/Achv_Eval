@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { FieldValue } from 'firebase-admin/firestore';
-import { getAdminDb } from '@/lib/firebase/admin';
+import { getAdminDb, getAdminStorage } from '@/lib/firebase/admin';
 import { getSessionUser, getCurrentProfile } from '@/lib/firebase/auth-server';
 import {
   getCurriculumsWithCourses,
@@ -125,6 +125,36 @@ async function audit(
     before: null,
     after,
   });
+}
+
+/** Extract the storage bucket name embedded in a Firebase download URL. */
+function bucketFromDownloadUrl(url: string | null | undefined): string | null {
+  if (!url) return null;
+  const match = url.match(/\/v0\/b\/([^/]+)\/o\//);
+  return match ? decodeURIComponent(match[1]) : null;
+}
+
+/**
+ * Best-effort deletion of a generated report PDF after a status reversal —
+ * the signed document is voided, so the stored object is removed to prevent
+ * direct token-URL access to a now-invalid official report. Runs after the
+ * Firestore transaction commits (Storage is not transactional) and never
+ * throws: the reversal stands even if the file is already gone.
+ */
+async function deleteStoredPdf(pdf: { path: string; url: string | null }) {
+  try {
+    const bucketName =
+      bucketFromDownloadUrl(pdf.url) ??
+      process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET ??
+      undefined;
+    if (!bucketName) return;
+    await getAdminStorage()
+      .bucket(bucketName)
+      .file(pdf.path)
+      .delete({ ignoreNotFound: true });
+  } catch (err) {
+    console.error('reverseOfferingStatuses: failed to delete PDF', pdf.path, err);
+  }
 }
 
 async function grantLecturerRole(lecturerId: string | null | undefined) {
@@ -374,13 +404,14 @@ export async function reverseOfferingStatuses(
   const failed: OfferingActionFailure[] = [];
   const updatedIds: string[] = [];
   const beforeStatusCounts: Partial<Record<OfferingStatus, number>> = {};
+  const pdfsToDelete: { path: string; url: string | null }[] = [];
   const now = FieldValue.serverTimestamp();
 
   for (const offeringId of offeringIds) {
     const offeringRef = db.collection('offerings').doc(offeringId);
 
     try {
-      const previousStatus = await db.runTransaction(async (tx) => {
+      const { previousStatus, pdfToDelete } = await db.runTransaction(async (tx) => {
         const snap = await tx.get(offeringRef);
         if (!snap.exists) {
           throw new Error('ไม่พบรายการ');
@@ -402,6 +433,8 @@ export async function reverseOfferingStatuses(
           throw new Error('รายวิชาปิดใช้งาน');
         }
 
+        let pdf: { path: string; url: string | null } | null = null;
+
         if (offering.status === 'pending_assessment') {
           if (!PENDING_REVERSE_TARGETS.includes(targetStatus)) {
             throw new Error('สถานะปลายทางไม่รองรับรายการรอทวนสอบ');
@@ -420,16 +453,44 @@ export async function reverseOfferingStatuses(
             throw new Error('ไม่พบผลทวนสอบที่ลงนาม');
           }
           const assessmentRef = offeringRef.collection('assessments').doc(offering.assessmentId);
+          const reviewRef = offeringRef.collection('followUpReview').doc('review');
+
+          // All reads must precede writes within the transaction.
           const assessmentSnap = await tx.get(assessmentRef);
           if (!assessmentSnap.exists) {
             throw new Error('ไม่พบผลทวนสอบที่ลงนาม');
           }
+          const reviewSnap = await tx.get(reviewRef);
+          const assessmentData = assessmentSnap.data() as {
+            signedPdfStoragePath?: string | null;
+            signedPdfUrl?: string | null;
+          };
+
+          // Capture the signed combined report so it can be removed after the
+          // transaction commits — the sign-off is being voided.
+          if (assessmentData.signedPdfStoragePath) {
+            pdf = {
+              path: assessmentData.signedPdfStoragePath,
+              url: assessmentData.signedPdfUrl ?? null,
+            };
+          }
+
+          // Void the sign-off: unlock, drop signature, and clear the report
+          // link so the page no longer advertises an invalid signed document.
           tx.update(assessmentRef, {
             isLocked: false,
             signedAt: null,
             followUpStatus: null,
+            signedPdfStoragePath: null,
+            signedPdfUrl: null,
             updatedAt: now,
           });
+
+          // Unlock the follow-up review that was frozen alongside sign-off,
+          // so the assessor can edit it again after re-opening the assessment.
+          if (reviewSnap.exists) {
+            tx.update(reviewRef, { isLocked: false, updatedAt: now });
+          }
         } else {
           throw new Error('สถานะปัจจุบันไม่สามารถย้อนกลับได้');
         }
@@ -439,10 +500,11 @@ export async function reverseOfferingStatuses(
           updatedAt: now,
           updatedBy: access.uid,
         });
-        return offering.status;
+        return { previousStatus: offering.status, pdfToDelete: pdf };
       });
 
       beforeStatusCounts[previousStatus] = (beforeStatusCounts[previousStatus] ?? 0) + 1;
+      if (pdfToDelete) pdfsToDelete.push(pdfToDelete);
       updatedIds.push(offeringId);
     } catch (err) {
       const snap = await offeringRef.get();
@@ -457,15 +519,25 @@ export async function reverseOfferingStatuses(
     }
   }
 
+  // Remove voided report PDFs after the transactions commit (best-effort).
+  if (pdfsToDelete.length > 0) {
+    await Promise.all(pdfsToDelete.map(deleteStoredPdf));
+  }
+
   if (updatedIds.length > 0) {
     await audit('offering_statuses_reversed', access.uid, access.email, {
       offeringIds: updatedIds,
       targetStatus,
       beforeStatusCounts,
+      deletedReportPdfs: pdfsToDelete.length,
     });
     revalidatePath('/admin/offering-manager');
     revalidatePath('/admin/dashboard');
     revalidatePath('/assessor');
+    // Refresh the per-offering detail pages so their server-rendered state
+    // (lock badges, signed-report links) isn't served stale from the cache.
+    revalidatePath('/assessor/[offeringId]', 'page');
+    revalidatePath('/lecturer/[offeringId]', 'page');
   }
   return { ok: true, succeeded: updatedIds.length, failed };
 }

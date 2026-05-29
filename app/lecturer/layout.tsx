@@ -4,6 +4,7 @@ import { getCurrentProfile } from '@/lib/firebase/auth-server';
 import SignOutButton from '@/components/SignOutButton';
 import NotificationBell from '@/components/NotificationBell';
 import WorkspaceSwitcher from '@/components/WorkspaceSwitcher';
+import AppFooter from '@/components/AppFooter';
 
 export default async function LecturerLayout({
   children,
@@ -14,7 +15,7 @@ export default async function LecturerLayout({
   if (!profile) redirect('/login');
 
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen flex flex-col">
       <header className="sticky top-0 z-50 bg-mfu-primary shadow-sm">
         <div className="mx-auto max-w-5xl px-6 py-3 flex items-center justify-between">
           <Link href="/lecturer" className="flex flex-col">
@@ -36,7 +37,8 @@ export default async function LecturerLayout({
           </div>
         </div>
       </header>
-      <main className="mx-auto max-w-5xl px-6 py-8">{children}</main>
+      <main className="mx-auto max-w-5xl px-6 py-8 flex-1">{children}</main>
+      <AppFooter />
     </div>
   );
 }

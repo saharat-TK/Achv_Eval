@@ -4,6 +4,7 @@ import { getCurrentProfile } from '@/lib/firebase/auth-server';
 import SignOutButton from '@/components/SignOutButton';
 import NotificationBell from '@/components/NotificationBell';
 import WorkspaceSwitcher from '@/components/WorkspaceSwitcher';
+import AppFooter from '@/components/AppFooter';
 
 export default async function AdminLayout({
   children,
@@ -20,7 +21,7 @@ export default async function AdminLayout({
   }
 
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen flex flex-col">
       <div className="sticky top-0 z-50 bg-white shadow-sm print:hidden">
         <header className="bg-mfu-primary">
           <div className="mx-auto max-w-5xl px-6 py-3 flex items-center justify-between">
@@ -114,7 +115,8 @@ export default async function AdminLayout({
         </nav>
       </div>
 
-      <main className="mx-auto max-w-5xl px-6 py-8">{children}</main>
+      <main className="mx-auto max-w-5xl px-6 py-8 flex-1">{children}</main>
+      <AppFooter />
     </div>
   );
 }
