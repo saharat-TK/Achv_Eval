@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { doc, onSnapshot } from 'firebase/firestore';
 import type {
   AssessmentDoc,
   FollowUpReviewDoc,
@@ -8,6 +9,7 @@ import type {
   RubricScore,
 } from '@/lib/types/models';
 import { IMPLEMENTATION_DECISION, SEMESTER_LABEL } from '@/lib/constants';
+import { getFirebaseAuth, getFirebaseDb } from '@/lib/firebase/config';
 import { saveFollowUp } from '@/app/assessor/[offeringId]/actions';
 
 type ScoreKey = keyof AssessmentDoc['scores'];
@@ -82,7 +84,7 @@ export default function FollowUpReviewPanel({
   previousOffering,
   previousAssessment,
   initialFollowUp,
-  locked = false,
+  initialLocked = false,
   onSaved,
   onGoToCurrent,
 }: {
@@ -105,7 +107,7 @@ export default function FollowUpReviewPanel({
     itemComments: FollowUpReviewDoc['itemComments'];
     notes: string | null;
   } | null;
-  locked?: boolean;
+  initialLocked?: boolean;
   onSaved?: () => void;
   onGoToCurrent?: () => void;
 }) {
@@ -119,6 +121,42 @@ export default function FollowUpReviewPanel({
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [message, setMessage] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
+
+  // Track the lock live from Firestore so the panel reflects sign-off and
+  // status reversals both ways, regardless of the server-rendered seed or
+  // which tab was mounted. Seeded from the prop to avoid a first-paint flash.
+  const [locked, setLocked] = useState(initialLocked);
+  useEffect(() => {
+    setLocked(initialLocked);
+    let cancelled = false;
+    let unsub = () => {};
+    (async () => {
+      // Wait for auth to be ready, otherwise the listener attaches before
+      // request.auth is populated and the security rules deny the read.
+      await getFirebaseAuth().authStateReady();
+      if (cancelled) return;
+      const ref = doc(
+        getFirebaseDb(),
+        'offerings',
+        currentOfferingId,
+        'followUpReview',
+        'review',
+      );
+      unsub = onSnapshot(
+        ref,
+        (snap) => {
+          if (snap.exists()) {
+            setLocked((snap.data() as FollowUpReviewDoc).isLocked === true);
+          }
+        },
+        (err) => console.error('follow-up review listener error', err),
+      );
+    })();
+    return () => {
+      cancelled = true;
+      unsub();
+    };
+  }, [currentOfferingId, initialLocked]);
 
   const ERROR_TH: Record<string, string> = {
     followup_locked: 'ผลติดตามถูกล็อกหลังลงนามทวนสอบแล้ว ไม่สามารถแก้ไขได้',
