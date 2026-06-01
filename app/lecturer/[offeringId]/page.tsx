@@ -41,7 +41,7 @@ export default async function OfferingDetailPage({
     : null;
 
   return (
-    <div className="mx-auto max-w-screen-2xl">
+    <div className="mx-auto max-w-[1108px]">
       <Link href="/lecturer" className="text-sm text-slate-500 hover:underline">
         ← กลับไปหน้ารายวิชา
       </Link>
