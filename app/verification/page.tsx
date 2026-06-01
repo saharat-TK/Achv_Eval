@@ -4,11 +4,49 @@ import { getCurrentProfile } from '@/lib/firebase/auth-server';
 import {
   getVerificationProgramIds,
   getVerificationQueue,
+  type VerificationQueueItem,
 } from '@/lib/data/verifications';
 import { SEMESTER_LABEL, VERIFICATION_DECISION } from '@/lib/constants';
 import StatusBadge from '@/components/StatusBadge';
+import type { Semester } from '@/lib/types/models';
 
 export const dynamic = 'force-dynamic';
+
+const YEAR_CLASS =
+  'rounded-xl border border-l-4 border-[#00704A]/20 border-l-[#00704A] bg-[#00704A]/[0.04]';
+const YEAR_TEXT = 'text-[#00704A]';
+
+interface SemesterGroup {
+  sem: Semester;
+  items: VerificationQueueItem[];
+}
+interface YearGroup {
+  year: number;
+  semesters: SemesterGroup[];
+  count: number;
+}
+
+function groupByYear(items: VerificationQueueItem[]): YearGroup[] {
+  const byYear = new Map<number, Map<Semester, VerificationQueueItem[]>>();
+  for (const item of items) {
+    const y = item.offering.academicYear;
+    const s = item.offering.semester as Semester;
+    if (!byYear.has(y)) byYear.set(y, new Map());
+    const semMap = byYear.get(y)!;
+    if (!semMap.has(s)) semMap.set(s, []);
+    semMap.get(s)!.push(item);
+  }
+  return [...byYear.keys()]
+    .sort((a, b) => b - a)
+    .map((year) => {
+      const semMap = byYear.get(year)!;
+      const semesters: SemesterGroup[] = [...semMap.keys()]
+        .sort((a, b) => Number(b) - Number(a))
+        .map((sem) => ({ sem, items: semMap.get(sem)! }));
+      const count = semesters.reduce((n, s) => n + s.items.length, 0);
+      return { year, semesters, count };
+    });
+}
 
 export default async function VerificationDashboardPage() {
   const profile = await getCurrentProfile();
@@ -26,6 +64,8 @@ export default async function VerificationDashboardPage() {
   const pct = (n: number) =>
     total > 0 ? `${Math.round((n / total) * 100)}%` : '—';
 
+  const groups = groupByYear(items);
+
   return (
     <div>
       <div>
@@ -39,88 +79,90 @@ export default async function VerificationDashboardPage() {
 
       {/* KPI strip */}
       <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-        <MetricCard
-          label="รายวิชาทั้งหมด"
-          value={String(total)}
-          detail="ในคิวรับรองผล"
-        />
-        <MetricCard
-          label="รอรับรอง"
-          value={String(assessedOnly)}
-          detail={pct(assessedOnly)}
-        />
-        <MetricCard
-          label="อยู่ระหว่างพิจารณา"
-          value={String(inReview)}
-          detail={pct(inReview)}
-        />
-        <MetricCard
-          label="รับรองผลแล้ว"
-          value={String(verified)}
-          detail={pct(verified)}
-        />
-        <MetricCard
-          label="ต้องติดตามผล"
-          value={String(followUp)}
-          detail={pct(followUp)}
-        />
+        <MetricCard label="รายวิชาทั้งหมด" value={String(total)} detail="ในคิวรับรองผล" />
+        <MetricCard label="รอรับรอง" value={String(assessedOnly)} detail={pct(assessedOnly)} />
+        <MetricCard label="อยู่ระหว่างพิจารณา" value={String(inReview)} detail={pct(inReview)} />
+        <MetricCard label="รับรองผลแล้ว" value={String(verified)} detail={pct(verified)} />
+        <MetricCard label="ต้องติดตามผล" value={String(followUp)} detail={pct(followUp)} />
       </div>
 
-      {items.length === 0 ? (
+      {groups.length === 0 ? (
         <div className="mt-8 rounded-xl border border-dashed border-slate-300 p-10 text-center text-sm text-slate-500">
           ยังไม่มีรายวิชาที่รอรับรองผล
         </div>
       ) : (
-        <div className="mt-6 overflow-hidden rounded-xl border border-slate-200 bg-white">
-          <table className="w-full text-sm">
-            <thead className="bg-slate-50 text-left text-xs text-slate-500">
-              <tr>
-                <th className="px-4 py-3 font-medium">รหัสวิชา</th>
-                <th className="px-4 py-3 font-medium">ชื่อรายวิชา</th>
-                <th className="whitespace-nowrap px-4 py-3 font-medium">ปี/ภาค</th>
-                <th className="whitespace-nowrap px-4 py-3 font-medium">ผู้ทวนสอบ</th>
-                <th className="whitespace-nowrap px-4 py-3 font-medium">คะแนนทวนสอบ</th>
-                <th className="px-4 py-3 font-medium">สถานะ</th>
-                <th className="px-4 py-3 font-medium">ผลรับรอง</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {items.map(({ offering, assessment, latestVerification }) => (
-                <tr key={offering.id} className="hover:bg-slate-50">
-                  <td className="px-4 py-3">
-                    <Link
-                      href={`/verification/${offering.id}`}
-                      className="font-medium text-mfu-primary hover:underline"
-                    >
-                      {offering.courseCode}
-                    </Link>
-                  </td>
-                  <td className="px-4 py-3 text-slate-700">
-                    {offering.courseNameTh}
-                  </td>
-                  <td className="whitespace-nowrap px-4 py-3 text-slate-600">
-                    {offering.academicYear} {SEMESTER_LABEL[offering.semester]}
-                  </td>
-                  <td className="whitespace-nowrap px-4 py-3 text-slate-600">
-                    {assessment?.assessorName ?? '—'}
-                  </td>
-                  <td className="whitespace-nowrap px-4 py-3 text-slate-600">
-                    {assessment
-                      ? `${assessment.totalScore}/${assessment.maxScore} (${assessment.percentScore}%)`
-                      : '—'}
-                  </td>
-                  <td className="px-4 py-3">
-                    <StatusBadge status={offering.status} />
-                  </td>
-                  <td className="px-4 py-3 text-slate-600">
-                    {latestVerification
-                      ? VERIFICATION_DECISION[latestVerification.decision].labelTh
-                      : 'ยังไม่บันทึก'}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div className="mt-6 space-y-4">
+          {groups.map((g) => (
+            <section key={g.year} className={YEAR_CLASS}>
+              {/* Year header */}
+              <div className="flex items-center justify-between px-4 py-3">
+                <h2 className={`text-base font-semibold ${YEAR_TEXT}`}>
+                  ปีการศึกษา {g.year}
+                </h2>
+                <span className="rounded-full bg-white/70 px-2.5 py-0.5 text-xs font-medium text-slate-600">
+                  {g.count} รายวิชา
+                </span>
+              </div>
+
+              {/* Semester groups */}
+              <div className="space-y-4 px-3 pb-3">
+                {g.semesters.map((s) => (
+                  <div key={s.sem}>
+                    <h3 className="mb-1 text-xs font-semibold text-slate-500">
+                      {SEMESTER_LABEL[s.sem]}
+                    </h3>
+                    <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
+                      <table className="w-full text-sm">
+                        <thead className="bg-slate-50 text-left text-xs text-slate-500">
+                          <tr>
+                            <th className="whitespace-nowrap px-4 py-2.5 font-medium">รหัสวิชา</th>
+                            <th className="w-full px-4 py-2.5 font-medium">ชื่อรายวิชา</th>
+                            <th className="whitespace-nowrap px-4 py-2.5 font-medium">ผู้ทวนสอบ</th>
+                            <th className="whitespace-nowrap px-4 py-2.5 font-medium">คะแนนทวนสอบ</th>
+                            <th className="whitespace-nowrap px-4 py-2.5 font-medium">สถานะ</th>
+                            <th className="whitespace-nowrap px-4 py-2.5 font-medium">ผลรับรอง</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                          {s.items.map(({ offering, assessment, latestVerification }) => (
+                            <tr key={offering.id} className="hover:bg-slate-50">
+                              <td className="whitespace-nowrap px-4 py-3">
+                                <Link
+                                  href={`/verification/${offering.id}`}
+                                  className="font-medium text-mfu-primary hover:underline"
+                                >
+                                  {offering.courseCode}
+                                </Link>
+                              </td>
+                              <td className="px-4 py-3 text-slate-700">
+                                {offering.courseNameTh}
+                              </td>
+                              <td className="whitespace-nowrap px-4 py-3 text-slate-600">
+                                {assessment?.assessorName ?? '—'}
+                              </td>
+                              <td className="whitespace-nowrap px-4 py-3 text-slate-600">
+                                {assessment
+                                  ? `${assessment.totalScore}/${assessment.maxScore} (${assessment.percentScore}%)`
+                                  : '—'}
+                              </td>
+                              <td className="px-4 py-3">
+                                <StatusBadge status={offering.status} />
+                              </td>
+                              <td className="whitespace-nowrap px-4 py-3 text-slate-600">
+                                {latestVerification
+                                  ? VERIFICATION_DECISION[latestVerification.decision].labelTh
+                                  : 'ยังไม่บันทึก'}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </section>
+          ))}
         </div>
       )}
     </div>

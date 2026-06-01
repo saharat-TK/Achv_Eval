@@ -146,11 +146,11 @@ export default function LecturerOfferingsTable({ uid }: { uid: string }) {
         const isOpen = expanded.has(g.year);
         const palette = YEAR_STYLE;
         return (
-          <section key={g.year}>
+          <section key={g.year} className={`rounded-xl border border-l-4 ${palette.bar}`}>
             <button
               type="button"
               onClick={() => toggleYear(g.year)}
-              className={`flex w-full items-center justify-between gap-3 rounded-xl border border-l-4 px-4 py-3 text-left transition-colors hover:brightness-[0.98] ${palette.bar}`}
+              className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition-colors hover:brightness-[0.98]"
             >
               <span className="flex items-center gap-2">
                 <svg
@@ -181,10 +181,10 @@ export default function LecturerOfferingsTable({ uid }: { uid: string }) {
             </button>
 
             {isOpen && (
-              <div className="mt-2 space-y-3">
+              <div className="space-y-3 px-3 pb-3">
                 {g.semesters.map((s) => (
                   <div key={s.sem}>
-                    <h3 className="mb-1 px-1 text-xs font-semibold text-slate-500">
+                    <h3 className="mb-1 text-xs font-semibold text-slate-500">
                       {SEMESTER_LABEL[s.sem]}
                     </h3>
                     <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">

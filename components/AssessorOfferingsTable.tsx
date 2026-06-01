@@ -238,11 +238,11 @@ export default function AssessorOfferingsTable({
       {groups.map((g, idx) => {
         const isOpen = expanded.has(g.year);
         return (
-          <section key={g.year}>
+          <section key={g.year} className={`rounded-xl border border-l-4 ${YEAR_STYLE.bar}`}>
             <button
               type="button"
               onClick={() => toggleYear(g.year)}
-              className={`flex w-full items-center justify-between gap-3 rounded-xl border border-l-4 px-4 py-3 text-left transition-colors hover:brightness-[0.98] ${YEAR_STYLE.bar}`}
+              className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition-colors hover:brightness-[0.98]"
             >
               <span className="flex items-center gap-2">
                 <svg
@@ -273,15 +273,15 @@ export default function AssessorOfferingsTable({
             </button>
 
             {isOpen && (
-              <div className="mt-2 space-y-4 pl-2">
+              <div className="space-y-4 px-3 pb-3">
                 {g.semesters.map((s) => (
                   <div key={s.sem} className="space-y-3">
-                    <h3 className="px-1 text-xs font-semibold text-slate-500">
+                    <h3 className="text-xs font-semibold text-slate-500">
                       {SEMESTER_LABEL[s.sem]}
                     </h3>
                     {s.departments.map((dept) => (
                       <div key={dept.departmentId}>
-                        <div className="mb-1 flex items-center justify-between gap-3 px-1">
+                        <div className="mb-1 flex items-center justify-between gap-3">
                           <h4 className="text-sm font-semibold text-slate-700">
                             {dept.departmentNameTh}
                           </h4>
