@@ -14,6 +14,7 @@ interface Offering {
   courseNameTh: string;
   academicYear: number;
   semester: Semester;
+  section: string;
   status: OfferingStatus;
 }
 
@@ -180,7 +181,7 @@ export default function LecturerOfferingsTable({ uid }: { uid: string }) {
             </button>
 
             {isOpen && (
-              <div className="mt-2 space-y-3 pl-2">
+              <div className="mt-2 space-y-3">
                 {g.semesters.map((s) => (
                   <div key={s.sem}>
                     <h3 className="mb-1 px-1 text-xs font-semibold text-slate-500">
@@ -195,6 +196,9 @@ export default function LecturerOfferingsTable({ uid }: { uid: string }) {
                             </th>
                             <th className="w-full px-4 py-2.5 font-medium">
                               ชื่อรายวิชา
+                            </th>
+                            <th className="whitespace-nowrap px-4 py-2.5 font-medium text-center">
+                              ตอนเรียน
                             </th>
                             <th className="whitespace-nowrap px-4 py-2.5 font-medium">
                               สถานะ
@@ -214,6 +218,9 @@ export default function LecturerOfferingsTable({ uid }: { uid: string }) {
                               </td>
                               <td className="px-4 py-3 text-slate-700">
                                 {o.courseNameTh}
+                              </td>
+                              <td className="whitespace-nowrap px-4 py-3 text-center text-slate-600">
+                                {o.section}
                               </td>
                               <td className="whitespace-nowrap px-4 py-3">
                                 <StatusBadge status={o.status} />

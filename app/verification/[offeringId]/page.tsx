@@ -32,7 +32,7 @@ export default async function VerificationDetailPage({
   const { offering, assessment, latestVerification } = item;
 
   return (
-    <div className="max-w-4xl">
+    <div>
       <Link href="/verification" className="text-sm text-slate-500 hover:underline">
         ← กลับไปหน้ารายการรับรองผล
       </Link>

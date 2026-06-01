@@ -6,7 +6,7 @@ export default function AppFooter() {
 
   return (
     <footer className="mt-auto border-t border-slate-100 bg-white">
-      <div className="mx-auto max-w-5xl px-6 py-4 flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between text-xs text-slate-400">
+      <div className="mx-auto max-w-6xl px-6 py-4 flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between text-xs text-slate-400">
         {/* School + copyright */}
         <p>
           สำนักวิชาวิทยาศาสตร์สุขภาพ มหาวิทยาลัยแม่ฟ้าหลวง

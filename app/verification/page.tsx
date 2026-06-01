@@ -16,13 +16,15 @@ export default async function VerificationDashboardPage() {
 
   const programIds = getVerificationProgramIds(profile);
   const items = await getVerificationQueue(programIds);
-  const pendingCount = items.filter((i) =>
-    ['assessed', 'verification_review'].includes(i.offering.status),
-  ).length;
-  const verifiedCount = items.filter((i) => i.offering.status === 'verified').length;
-  const followUpCount = items.filter(
-    (i) => i.offering.status === 'needs_follow_up',
-  ).length;
+
+  const total = items.length;
+  const assessedOnly = items.filter((i) => i.offering.status === 'assessed').length;
+  const inReview = items.filter((i) => i.offering.status === 'verification_review').length;
+  const verified = items.filter((i) => i.offering.status === 'verified').length;
+  const followUp = items.filter((i) => i.offering.status === 'needs_follow_up').length;
+
+  const pct = (n: number) =>
+    total > 0 ? `${Math.round((n / total) * 100)}%` : '—';
 
   return (
     <div>
@@ -35,10 +37,33 @@ export default async function VerificationDashboardPage() {
         </p>
       </div>
 
-      <div className="mt-6 grid gap-3 md:grid-cols-3">
-        <SummaryBox label="รอดำเนินการ" value={pendingCount} />
-        <SummaryBox label="รับรองผลแล้ว" value={verifiedCount} />
-        <SummaryBox label="ต้องติดตาม" value={followUpCount} />
+      {/* KPI strip */}
+      <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+        <MetricCard
+          label="รายวิชาทั้งหมด"
+          value={String(total)}
+          detail="ในคิวรับรองผล"
+        />
+        <MetricCard
+          label="รอรับรอง"
+          value={String(assessedOnly)}
+          detail={pct(assessedOnly)}
+        />
+        <MetricCard
+          label="อยู่ระหว่างพิจารณา"
+          value={String(inReview)}
+          detail={pct(inReview)}
+        />
+        <MetricCard
+          label="รับรองผลแล้ว"
+          value={String(verified)}
+          detail={pct(verified)}
+        />
+        <MetricCard
+          label="ต้องติดตามผล"
+          value={String(followUp)}
+          detail={pct(followUp)}
+        />
       </div>
 
       {items.length === 0 ? (
@@ -52,8 +77,9 @@ export default async function VerificationDashboardPage() {
               <tr>
                 <th className="px-4 py-3 font-medium">รหัสวิชา</th>
                 <th className="px-4 py-3 font-medium">ชื่อรายวิชา</th>
-                <th className="px-4 py-3 font-medium">ปี/ภาค</th>
-                <th className="px-4 py-3 font-medium">คะแนนทวนสอบ</th>
+                <th className="whitespace-nowrap px-4 py-3 font-medium">ปี/ภาค</th>
+                <th className="whitespace-nowrap px-4 py-3 font-medium">ผู้ทวนสอบ</th>
+                <th className="whitespace-nowrap px-4 py-3 font-medium">คะแนนทวนสอบ</th>
                 <th className="px-4 py-3 font-medium">สถานะ</th>
                 <th className="px-4 py-3 font-medium">ผลรับรอง</th>
               </tr>
@@ -72,10 +98,13 @@ export default async function VerificationDashboardPage() {
                   <td className="px-4 py-3 text-slate-700">
                     {offering.courseNameTh}
                   </td>
-                  <td className="px-4 py-3 text-slate-600">
+                  <td className="whitespace-nowrap px-4 py-3 text-slate-600">
                     {offering.academicYear} {SEMESTER_LABEL[offering.semester]}
                   </td>
-                  <td className="px-4 py-3 text-slate-600">
+                  <td className="whitespace-nowrap px-4 py-3 text-slate-600">
+                    {assessment?.assessorName ?? '—'}
+                  </td>
+                  <td className="whitespace-nowrap px-4 py-3 text-slate-600">
                     {assessment
                       ? `${assessment.totalScore}/${assessment.maxScore} (${assessment.percentScore}%)`
                       : '—'}
@@ -98,11 +127,20 @@ export default async function VerificationDashboardPage() {
   );
 }
 
-function SummaryBox({ label, value }: { label: string; value: number }) {
+function MetricCard({
+  label,
+  value,
+  detail,
+}: {
+  label: string;
+  value: string;
+  detail: string;
+}) {
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-4">
+    <div className="rounded-lg border border-slate-200 bg-white p-4">
       <div className="text-xs text-slate-500">{label}</div>
       <div className="mt-1 text-2xl font-semibold text-slate-800">{value}</div>
+      <div className="mt-1 text-xs text-slate-500">{detail}</div>
     </div>
   );
 }

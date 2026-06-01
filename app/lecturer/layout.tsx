@@ -17,7 +17,7 @@ export default async function LecturerLayout({
   return (
     <div className="min-h-screen flex flex-col">
       <header className="sticky top-0 z-50 bg-mfu-primary shadow-sm">
-        <div className="mx-auto max-w-5xl px-6 py-3 flex items-center justify-between">
+        <div className="mx-auto max-w-6xl px-6 py-3 flex items-center justify-between">
           <Link href="/lecturer" className="flex flex-col">
             <span className="text-sm font-semibold text-white">
               ระบบประเมินและทวนสอบรายวิชา
@@ -37,7 +37,7 @@ export default async function LecturerLayout({
           </div>
         </div>
       </header>
-      <main className="mx-auto max-w-5xl px-6 py-8 flex-1">{children}</main>
+      <main className="mx-auto max-w-6xl px-6 py-8 flex-1">{children}</main>
       <AppFooter />
     </div>
   );
