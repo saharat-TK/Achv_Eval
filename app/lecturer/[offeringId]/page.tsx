@@ -59,29 +59,19 @@ export default async function OfferingDetailPage({
         <StatusBadge status={offering.status} />
       </div>
 
-      {/* Analysis submission */}
-      <section className="mt-8">
-        <h2 className="text-sm font-semibold text-slate-700">
-          ส่งเอกสารเพื่อวิเคราะห์ด้วย AI
-        </h2>
-        <p className="mt-1 text-xs text-slate-500">
-          ไฟล์ที่อัปโหลดจะถูกส่งให้ระบบ AI วิเคราะห์ทันทีและ
-          <strong>ไม่ถูกจัดเก็บไว้ในระบบ</strong> — ระบบเก็บเฉพาะรายงาน PDF
-          ที่สร้างขึ้นเท่านั้น
-        </p>
-        <div className="mt-3">
-          <AnalyzeCoursePanel
-            offeringId={offering.id}
-            status={offering.status}
-            attemptLimit={offering.analysisAttemptLimit ?? 4}
-            attemptCount={offering.analysisAttemptCount ?? 0}
-            isSuperAdmin={profile.roles.isSuperAdmin === true}
-          />
-        </div>
-      </section>
+      {/* Analysis submission — compact trigger, full UI inside modal */}
+      <div className="mt-6">
+        <AnalyzeCoursePanel
+          offeringId={offering.id}
+          status={offering.status}
+          attemptLimit={offering.analysisAttemptLimit ?? 4}
+          attemptCount={offering.analysisAttemptCount ?? 0}
+          isSuperAdmin={profile.roles.isSuperAdmin === true}
+        />
+      </div>
 
       {/* AI reports — live-updating */}
-      <section className="mt-8">
+      <section className="mt-6">
         <h2 className="text-sm font-semibold text-slate-700">
           รายงานการวิเคราะห์
         </h2>

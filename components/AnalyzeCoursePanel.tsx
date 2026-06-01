@@ -56,6 +56,7 @@ export default function AnalyzeCoursePanel({
   const [localAttemptCount, setLocalAttemptCount] = useState(attemptCount);
   const [resetting, setResetting] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [modalOpen, setModalOpen] = useState(false);
   const toast = useToast();
   const confirm = useConfirm();
 
@@ -109,14 +110,7 @@ export default function AnalyzeCoursePanel({
   const selectedEntries: SelectedUploadSummary[] = DOCUMENT_SLOTS.flatMap((slot) => {
     const file = selected[slot.type];
     return file
-      ? [
-          {
-            type: slot.type,
-            labelTh: slot.labelTh,
-            required: slot.required,
-            file,
-          },
-        ]
+      ? [{ type: slot.type, labelTh: slot.labelTh, required: slot.required, file }]
       : [];
   });
 
@@ -155,20 +149,16 @@ export default function AnalyzeCoursePanel({
   async function runAnalysis() {
     if (busy || !hasTqf3 || tooLarge || locked) return;
     setBusy(true);
+    setModalOpen(false);
+    setConfirmOpen(false);
     setError(null);
     try {
-      // Wait for the Auth SDK to restore the session so the callable can
-      // attach the ID token.
       const auth = getFirebaseAuth();
       await auth.authStateReady();
       if (!auth.currentUser) {
         const message = 'เซสชันหมดอายุ กรุณาออกจากระบบและเข้าสู่ระบบใหม่';
         setError(message);
-        toast({
-          title: 'ไม่สามารถเริ่มวิเคราะห์',
-          description: message,
-          variant: 'error',
-        });
+        toast({ title: 'ไม่สามารถเริ่มวิเคราะห์', description: message, variant: 'error' });
         setBusy(false);
         return;
       }
@@ -189,10 +179,8 @@ export default function AnalyzeCoursePanel({
         { timeout: 540_000 },
       );
 
-      // Fire and forget. The Cloud Function runs to completion server-side
-      // even if the lecturer navigates away; it writes the aiReports doc,
-      // which the live report list below picks up. We only catch fast
-      // invocation errors here.
+      // Fire and forget — Cloud Function runs server-side even if the lecturer
+      // navigates away; the live aiReports listener picks up the result.
       callable({ offeringId, files }).catch((e) => {
         console.error('analyzeCourse invocation failed', e);
         toast({
@@ -205,7 +193,6 @@ export default function AnalyzeCoursePanel({
         });
       });
 
-      setConfirmOpen(false);
       setLocalAttemptCount((count) => Math.min(attemptLimit, count + 1));
       setSubmitted(true);
       setSelected({});
@@ -215,107 +202,46 @@ export default function AnalyzeCoursePanel({
         variant: 'success',
       });
     } catch (e: unknown) {
-      const message =
-        e instanceof Error ? e.message : 'ส่งคำขอวิเคราะห์ไม่สำเร็จ';
+      const message = e instanceof Error ? e.message : 'ส่งคำขอวิเคราะห์ไม่สำเร็จ';
       setError(message);
-      toast({
-        title: 'ส่งคำขอวิเคราะห์ไม่สำเร็จ',
-        description: message,
-        variant: 'error',
-      });
+      toast({ title: 'ส่งคำขอวิเคราะห์ไม่สำเร็จ', description: message, variant: 'error' });
     } finally {
       setBusy(false);
     }
   }
 
-  if (submitted) {
-    return (
-      <div className="rounded-xl border border-green-200 bg-green-50 p-4">
-        <div className="flex flex-wrap items-center gap-2">
-          <p className="text-sm font-medium text-green-800">
-            ส่งคำขอวิเคราะห์เรียบร้อยแล้ว
-          </p>
-          <AttemptBadge
-            className={badgeClass}
-            remaining={remainingAttempts}
-            limit={attemptLimit}
-          />
-        </div>
-        <p className="mt-1 text-xs text-green-700">
-          ระบบกำลังวิเคราะห์เอกสารทีละส่วน — ท่านสามารถออกจากหน้านี้หรือไป
-          วิเคราะห์รายวิชาอื่นได้ สถานะและผลการวิเคราะห์จะปรากฏด้านล่างโดยอัตโนมัติ
-        </p>
-        <button
-          onClick={() => setSubmitted(false)}
-          disabled={remainingAttempts === 0}
-          className="mt-3 text-xs text-green-800 underline hover:text-green-900 disabled:text-slate-400 disabled:no-underline"
-        >
-          ส่งคำขอวิเคราะห์อีกครั้ง
-        </button>
-      </div>
-    );
-  }
+  // ── Locked status hint ────────────────────────────────────────────────────
+  const lockedHint = !hasAttempts
+    ? 'ใช้สิทธิ์วิเคราะห์ครบแล้ว'
+    : !workflowAllowsAnalysis
+      ? 'รายวิชาอยู่ในขั้นตอนทวนสอบแล้ว'
+      : null;
 
+  // ── Compact trigger (rendered on the page) ───────────────────────────────
   return (
-    <div>
-      <div className="divide-y divide-slate-100 rounded-xl border border-slate-200 bg-white">
-        {DOCUMENT_SLOTS.map((slot) => {
-          const file = selected[slot.type];
-          return (
-            <div
-              key={slot.type}
-              className="flex items-center justify-between gap-4 px-4 py-3"
-            >
-              <div className="min-w-0">
-                <div className="text-sm font-medium text-slate-800">
-                  {slot.labelTh}
-                  {slot.required && (
-                    <span className="ml-2 text-xs text-red-500">บังคับ</span>
-                  )}
-                </div>
-                <div className="truncate text-xs text-slate-500">
-                  {file ? file.name : slot.descriptionTh}
-                </div>
-              </div>
-              <label
-                className={`shrink-0 rounded-md border border-slate-300 px-3 py-1.5 text-xs font-medium ${
-                  busy || locked
-                    ? 'cursor-not-allowed text-slate-400'
-                    : 'cursor-pointer text-slate-600 hover:bg-slate-50'
-                }`}
-              >
-                {file ? 'เปลี่ยนไฟล์' : 'เลือกไฟล์'}
-                <input
-                  type="file"
-                  accept={ACCEPT}
-                  className="hidden"
-                  disabled={busy || locked}
-                  onChange={(e) => pick(slot.type, e.target.files?.[0])}
-                />
-              </label>
-            </div>
-          );
-        })}
-      </div>
-
-      {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
-      {tooLarge && (
-        <p className="mt-3 text-sm text-red-600">ขนาดไฟล์รวมเกิน 25 MB</p>
-      )}
-
-      <div className="mt-4 flex items-center gap-2">
+    <>
+      <div className="flex flex-wrap items-center gap-3">
+        {/* Primary trigger button */}
         <button
-          onClick={openConfirmDialog}
-          disabled={busy || !hasTqf3 || tooLarge || locked}
-          className="inline-flex items-center gap-2 rounded-lg bg-mfu-primary px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:bg-slate-300 disabled:text-slate-600 disabled:opacity-100"
+          type="button"
+          onClick={() => { if (!locked && !busy) setModalOpen(true); }}
+          disabled={locked || busy}
+          className="inline-flex items-center gap-2 rounded-lg bg-mfu-primary px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:bg-slate-200 disabled:text-slate-500 disabled:opacity-100"
         >
-          <span>{busy ? 'กำลังส่งเอกสาร…' : 'อัปโหลดและเริ่มวิเคราะห์'}</span>
-          <AttemptBadge
-            className={badgeClass}
-            remaining={remainingAttempts}
-            limit={attemptLimit}
-          />
+          {busy ? (
+            <>
+              <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
+              </svg>
+              <span>กำลังส่ง…</span>
+            </>
+          ) : (
+            <span>อัปโหลดและวิเคราะห์ด้วย AI</span>
+          )}
+          <AttemptBadge className={badgeClass} remaining={remainingAttempts} limit={attemptLimit} />
         </button>
+
+        {/* Super-admin reset button — visible on the page too */}
         {isSuperAdmin && (
           <button
             type="button"
@@ -327,27 +253,159 @@ export default function AnalyzeCoursePanel({
             {resetting ? 'กำลังรีเซ็ต…' : 'รีเซ็ตสิทธิ์'}
           </button>
         )}
+
+        {/* Locked / status hint */}
+        {lockedHint && (
+          <span className="text-xs text-slate-500">{lockedHint}</span>
+        )}
       </div>
-      <p className="mt-2 text-xs text-slate-500">
-        ระบบอนุญาตให้วิเคราะห์ด้วย AI ได้สูงสุด {attemptLimit} ครั้งต่อรายวิชาที่เปิดสอน
-        โดยนับทุกคำขอที่ระบบรับไว้ รวมถึงกรณีวิเคราะห์ล้มเหลว
-      </p>
-      {!hasAttempts && (
-        <p className="mt-1 text-xs text-slate-500">
-          ใช้สิทธิ์วิเคราะห์ครบแล้ว จึงไม่สามารถอัปโหลดและเริ่มวิเคราะห์ใหม่ได้
-        </p>
-      )}
-      {hasAttempts && !workflowAllowsAnalysis && (
-        <p className="mt-1 text-xs text-slate-500">
-          รายวิชานี้เข้าสู่ขั้นตอนทวนสอบแล้ว จึงไม่สามารถวิเคราะห์ใหม่ได้
-        </p>
-      )}
-      {!locked && !hasTqf3 && !busy && (
-        <p className="mt-2 text-xs text-slate-400">
-          ต้องแนบไฟล์ มคอ.3 (TQF3) เป็นอย่างน้อยจึงจะเริ่มวิเคราะห์ได้
-        </p>
+
+      {/* Success row */}
+      {submitted && (
+        <div className="mt-3 flex flex-wrap items-center gap-3 rounded-lg border border-green-200 bg-green-50 px-4 py-2.5">
+          <svg className="h-4 w-4 shrink-0 text-green-600" viewBox="0 0 20 20" fill="currentColor">
+            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clipRule="evenodd" />
+          </svg>
+          <p className="text-sm font-medium text-green-800">
+            ส่งคำขอวิเคราะห์เรียบร้อยแล้ว — ระบบกำลังวิเคราะห์อยู่
+          </p>
+          {remainingAttempts > 0 && (
+            <button
+              onClick={() => { setSubmitted(false); setModalOpen(true); }}
+              className="ml-auto text-xs text-green-700 underline hover:text-green-900"
+            >
+              ส่งอีกครั้ง
+            </button>
+          )}
+        </div>
       )}
 
+      {/* Error row (shown on page when modal is closed) */}
+      {error && !modalOpen && (
+        <p className="mt-2 text-sm text-red-600">{error}</p>
+      )}
+
+      {/* ── Upload modal ──────────────────────────────────────────────────── */}
+      {modalOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4 py-6"
+          role="presentation"
+          onClick={() => { if (!busy) { setModalOpen(false); setError(null); } }}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="upload-modal-title"
+            className="w-full max-w-2xl rounded-xl border border-slate-200 bg-white shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal header */}
+            <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
+              <div>
+                <h2 id="upload-modal-title" className="text-base font-semibold text-slate-900">
+                  อัปโหลดเอกสารเพื่อวิเคราะห์ด้วย AI
+                </h2>
+                <p className="mt-0.5 text-xs text-slate-500">
+                  ต้องแนบ มคอ.3 เป็นอย่างน้อย · ขนาดรวมไม่เกิน 25 MB
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => { setModalOpen(false); setError(null); }}
+                disabled={busy}
+                aria-label="ปิด"
+                className="rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 disabled:cursor-not-allowed"
+              >
+                <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                  <path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z" />
+                </svg>
+              </button>
+            </div>
+
+            {/* File slots */}
+            <div className="divide-y divide-slate-100 px-5 py-3">
+              {DOCUMENT_SLOTS.map((slot) => {
+                const file = selected[slot.type];
+                return (
+                  <div
+                    key={slot.type}
+                    className="flex items-center justify-between gap-4 py-3"
+                  >
+                    <div className="min-w-0">
+                      <div className="text-sm font-medium text-slate-800">
+                        {slot.labelTh}
+                        {slot.required && (
+                          <span className="ml-2 text-xs text-red-500">บังคับ</span>
+                        )}
+                      </div>
+                      <div className="truncate text-xs text-slate-500">
+                        {file ? file.name : slot.descriptionTh}
+                      </div>
+                    </div>
+                    <label
+                      className={`shrink-0 rounded-md border border-slate-300 px-3 py-1.5 text-xs font-medium ${
+                        busy
+                          ? 'cursor-not-allowed text-slate-400'
+                          : 'cursor-pointer text-slate-600 hover:bg-slate-50'
+                      }`}
+                    >
+                      {file ? 'เปลี่ยนไฟล์' : 'เลือกไฟล์'}
+                      <input
+                        type="file"
+                        accept={ACCEPT}
+                        className="hidden"
+                        disabled={busy}
+                        onChange={(e) => pick(slot.type, e.target.files?.[0])}
+                      />
+                    </label>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Size / error feedback inside modal */}
+            {(tooLarge || error) && (
+              <div className="px-5 pb-3">
+                {tooLarge && <p className="text-sm text-red-600">ขนาดไฟล์รวมเกิน 25 MB</p>}
+                {error && <p className="text-sm text-red-600">{error}</p>}
+              </div>
+            )}
+
+            {/* Modal footer */}
+            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 px-5 py-4">
+              <div className="flex items-center gap-2">
+                <AttemptBadge className={badgeClass} remaining={remainingAttempts} limit={attemptLimit} />
+                <span className="text-xs text-slate-400">
+                  {totalBytes > 0 ? `${formatBytes(totalBytes)} รวม` : ''}
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                {!hasTqf3 && !busy && (
+                  <span className="text-xs text-slate-400">ต้องแนบ มคอ.3 ก่อน</span>
+                )}
+                <button
+                  type="button"
+                  onClick={() => { setModalOpen(false); setError(null); }}
+                  disabled={busy}
+                  className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-400"
+                >
+                  ยกเลิก
+                </button>
+                <button
+                  type="button"
+                  onClick={openConfirmDialog}
+                  disabled={busy || !hasTqf3 || tooLarge}
+                  className="inline-flex items-center gap-2 rounded-lg bg-mfu-primary px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:bg-slate-200 disabled:text-slate-500 disabled:opacity-100"
+                >
+                  อัปโหลดและเริ่มวิเคราะห์
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Confirm dialog (second step, overlays the modal) ─────────────── */}
       <AnalysisUploadConfirmDialog
         open={confirmOpen}
         busy={busy}
@@ -358,7 +416,7 @@ export default function AnalyzeCoursePanel({
         onCancel={cancelConfirmDialog}
         onConfirm={runAnalysis}
       />
-    </div>
+    </>
   );
 }
 
@@ -406,7 +464,7 @@ function AnalysisUploadConfirmDialog({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4 py-6"
+      className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/40 px-4 py-6"
       role="presentation"
     >
       <div
@@ -436,19 +494,13 @@ function AnalysisUploadConfirmDialog({
                 className="grid gap-2 px-4 py-3 sm:grid-cols-[12rem_1fr_auto]"
               >
                 <div>
-                  <p className="text-sm font-medium text-slate-800">
-                    {item.labelTh}
-                  </p>
+                  <p className="text-sm font-medium text-slate-800">{item.labelTh}</p>
                   <p className="text-xs text-slate-500">
                     {item.required ? 'ไฟล์บังคับ' : 'ไฟล์เพิ่มเติม'}
                   </p>
                 </div>
-                <p className="min-w-0 truncate text-sm text-slate-700">
-                  {item.file.name}
-                </p>
-                <p className="text-sm text-slate-500">
-                  {formatBytes(item.file.size)}
-                </p>
+                <p className="min-w-0 truncate text-sm text-slate-700">{item.file.name}</p>
+                <p className="text-sm text-slate-500">{formatBytes(item.file.size)}</p>
               </div>
             ))}
           </div>
@@ -458,9 +510,7 @@ function AnalysisUploadConfirmDialog({
               <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
                 ขนาดไฟล์รวม
               </p>
-              <p className="mt-1 font-semibold text-slate-900">
-                {formatBytes(totalBytes)}
-              </p>
+              <p className="mt-1 font-semibold text-slate-900">{formatBytes(totalBytes)}</p>
             </div>
             <div className="rounded-lg bg-slate-50 px-4 py-3">
               <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
@@ -504,7 +554,5 @@ function formatBytes(bytes: number) {
     units.length - 1,
   );
   const value = bytes / 1024 ** exponent;
-  return `${value >= 10 || exponent === 0 ? value.toFixed(0) : value.toFixed(1)} ${
-    units[exponent]
-  }`;
+  return `${value >= 10 || exponent === 0 ? value.toFixed(0) : value.toFixed(1)} ${units[exponent]}`;
 }
