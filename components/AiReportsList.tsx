@@ -157,7 +157,7 @@ export default function AiReportsList({
   }
   if (reports.length === 0) {
     return (
-      <div className="mt-4 rounded-xl border border-dashed border-slate-300 bg-white p-8 text-center text-sm text-slate-400">
+      <div className="mt-3 rounded-xl border border-dashed border-slate-200 p-8 text-center text-sm text-slate-400">
         ยังไม่มีรายงาน — อัปโหลดเอกสารเพื่อเริ่มวิเคราะห์
       </div>
     );

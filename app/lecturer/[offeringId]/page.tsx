@@ -59,29 +59,35 @@ export default async function OfferingDetailPage({
         <StatusBadge status={offering.status} />
       </div>
 
-      {/* Analysis submission — compact trigger, full UI inside modal */}
-      <div className="mt-6">
-        <AnalyzeCoursePanel
-          offeringId={offering.id}
-          status={offering.status}
-          attemptLimit={offering.analysisAttemptLimit ?? 4}
-          attemptCount={offering.analysisAttemptCount ?? 0}
-          isSuperAdmin={profile.roles.isSuperAdmin === true}
-        />
-      </div>
+      {/* Single card — upload action + reports always fill container width */}
+      <div className="mt-6 overflow-hidden rounded-xl border border-slate-200 bg-white">
 
-      {/* AI reports — live-updating */}
-      <section className="mt-6">
-        <h2 className="text-sm font-semibold text-slate-700">
-          รายงานการวิเคราะห์
-        </h2>
-        <AiReportsList
-          offeringId={offering.id}
-          combinedReportUrl={assessment?.signedPdfUrl ?? null}
-          combinedReportPending={Boolean(assessment && !assessment.signedPdfUrl)}
-          enableAssessmentHandoff
-        />
-      </section>
+        {/* Upload row — header strip */}
+        <div className="flex flex-wrap items-center gap-3 border-b border-slate-100 px-4 py-3">
+          <span className="text-sm font-semibold text-slate-700">
+            ส่งเอกสารเพื่อวิเคราะห์ด้วย AI
+          </span>
+          <AnalyzeCoursePanel
+            offeringId={offering.id}
+            status={offering.status}
+            attemptLimit={offering.analysisAttemptLimit ?? 4}
+            attemptCount={offering.analysisAttemptCount ?? 0}
+            isSuperAdmin={profile.roles.isSuperAdmin === true}
+          />
+        </div>
+
+        {/* Reports body */}
+        <div className="px-4 py-4">
+          <h2 className="text-sm font-semibold text-slate-700">รายงานการวิเคราะห์</h2>
+          <AiReportsList
+            offeringId={offering.id}
+            combinedReportUrl={assessment?.signedPdfUrl ?? null}
+            combinedReportPending={Boolean(assessment && !assessment.signedPdfUrl)}
+            enableAssessmentHandoff
+          />
+        </div>
+
+      </div>
     </div>
   );
 }
