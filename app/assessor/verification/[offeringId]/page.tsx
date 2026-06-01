@@ -54,7 +54,7 @@ export default async function VerificationDetailPage({
     : [];
 
   return (
-    <div className="max-w-3xl">
+    <div>
       <Link
         href="/assessor/verification"
         className="text-sm text-slate-500 hover:underline"

@@ -15,6 +15,14 @@ export const dynamic = 'force-dynamic';
 const YEAR_CLASS =
   'rounded-xl border border-l-4 border-[#00704A]/20 border-l-[#00704A] bg-[#00704A]/[0.04]';
 const YEAR_TEXT = 'text-[#00704A]';
+const INNER_CARD_CLASS = 'rounded-lg border border-slate-200 bg-white';
+const TABLE_WRAPPER_CLASS =
+  'overflow-x-auto rounded-b-lg border-t border-slate-100';
+const VERIFICATION_TABLE_CLASS = 'min-w-[760px] w-full table-fixed text-xs';
+const TABLE_HEADER_ROW_CLASS =
+  'bg-slate-50 text-left text-[11px] font-medium text-slate-500';
+const TABLE_HEAD_CELL_CLASS = 'px-3 py-2';
+const TABLE_CELL_CLASS = 'px-3 py-1.5 align-middle';
 
 interface SemesterGroup {
   sem: Semester;
@@ -91,7 +99,7 @@ export default async function VerificationDashboardPage() {
           ยังไม่มีรายวิชาที่รอรับรองผล
         </div>
       ) : (
-        <div className="mt-6 space-y-4">
+        <div className="mt-6 space-y-5">
           {groups.map((g) => (
             <section key={g.year} className={YEAR_CLASS}>
               {/* Year header */}
@@ -111,52 +119,69 @@ export default async function VerificationDashboardPage() {
                     <h3 className="mb-1 text-xs font-semibold text-slate-500">
                       {SEMESTER_LABEL[s.sem]}
                     </h3>
-                    <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
-                      <table className="w-full text-sm">
-                        <thead className="bg-slate-50 text-left text-xs text-slate-500">
-                          <tr>
-                            <th className="whitespace-nowrap px-4 py-2.5 font-medium">รหัสวิชา</th>
-                            <th className="w-full px-4 py-2.5 font-medium">ชื่อรายวิชา</th>
-                            <th className="whitespace-nowrap px-4 py-2.5 font-medium">ผู้ทวนสอบ</th>
-                            <th className="whitespace-nowrap px-4 py-2.5 font-medium">คะแนนทวนสอบ</th>
-                            <th className="whitespace-nowrap px-4 py-2.5 font-medium">สถานะ</th>
-                            <th className="whitespace-nowrap px-4 py-2.5 font-medium">ผลรับรอง</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-100">
-                          {s.items.map(({ offering, assessment, latestVerification }) => (
-                            <tr key={offering.id} className="hover:bg-slate-50">
-                              <td className="whitespace-nowrap px-4 py-3">
-                                <Link
-                                  href={`/verification/${offering.id}`}
-                                  className="font-medium text-mfu-primary hover:underline"
-                                >
-                                  {offering.courseCode}
-                                </Link>
-                              </td>
-                              <td className="px-4 py-3 text-slate-700">
-                                {offering.courseNameTh}
-                              </td>
-                              <td className="whitespace-nowrap px-4 py-3 text-slate-600">
-                                {assessment?.assessorName ?? '—'}
-                              </td>
-                              <td className="whitespace-nowrap px-4 py-3 text-slate-600">
-                                {assessment
-                                  ? `${assessment.totalScore}/${assessment.maxScore} (${assessment.percentScore}%)`
-                                  : '—'}
-                              </td>
-                              <td className="px-4 py-3">
-                                <StatusBadge status={offering.status} />
-                              </td>
-                              <td className="whitespace-nowrap px-4 py-3 text-slate-600">
-                                {latestVerification
-                                  ? VERIFICATION_DECISION[latestVerification.decision].labelTh
-                                  : 'ยังไม่บันทึก'}
-                              </td>
+                    <div className={INNER_CARD_CLASS}>
+                      <div className={TABLE_WRAPPER_CLASS}>
+                        <table className={VERIFICATION_TABLE_CLASS}>
+                          <colgroup>
+                            <col className="w-[14%]" />
+                            <col />
+                            <col className="w-[18%]" />
+                            <col className="w-[17%]" />
+                            <col className="w-[15%]" />
+                            <col className="w-[16%]" />
+                          </colgroup>
+                          <thead>
+                            <tr className={TABLE_HEADER_ROW_CLASS}>
+                              <th className={TABLE_HEAD_CELL_CLASS}>รหัสวิชา</th>
+                              <th className={TABLE_HEAD_CELL_CLASS}>ชื่อรายวิชา</th>
+                              <th className={TABLE_HEAD_CELL_CLASS}>ผู้ทวนสอบ</th>
+                              <th className={TABLE_HEAD_CELL_CLASS}>คะแนนทวนสอบ</th>
+                              <th className={TABLE_HEAD_CELL_CLASS}>สถานะ</th>
+                              <th className={TABLE_HEAD_CELL_CLASS}>ผลรับรอง</th>
                             </tr>
-                          ))}
-                        </tbody>
-                      </table>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100">
+                            {s.items.map(({ offering, assessment, latestVerification }) => (
+                              <tr key={offering.id} className="hover:bg-slate-50">
+                                <td className={`${TABLE_CELL_CLASS} whitespace-nowrap`}>
+                                  <Link
+                                    href={`/verification/${offering.id}`}
+                                    className="font-medium text-mfu-primary hover:underline"
+                                  >
+                                    {offering.courseCode}
+                                  </Link>
+                                </td>
+                                <td className={`${TABLE_CELL_CLASS} min-w-0 text-slate-700`}>
+                                  <div className="truncate" title={offering.courseNameTh}>
+                                    {offering.courseNameTh}
+                                  </div>
+                                </td>
+                                <td className={`${TABLE_CELL_CLASS} min-w-0 text-slate-600`}>
+                                  <div
+                                    className="truncate"
+                                    title={assessment?.assessorName ?? undefined}
+                                  >
+                                    {assessment?.assessorName ?? '—'}
+                                  </div>
+                                </td>
+                                <td className={`${TABLE_CELL_CLASS} whitespace-nowrap text-slate-600`}>
+                                  {assessment
+                                    ? `${assessment.totalScore}/${assessment.maxScore} (${assessment.percentScore}%)`
+                                    : '—'}
+                                </td>
+                                <td className={`${TABLE_CELL_CLASS} whitespace-nowrap`}>
+                                  <StatusBadge status={offering.status} />
+                                </td>
+                                <td className={`${TABLE_CELL_CLASS} whitespace-nowrap text-slate-600`}>
+                                  {latestVerification
+                                    ? VERIFICATION_DECISION[latestVerification.decision].labelTh
+                                    : 'ยังไม่บันทึก'}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
                     </div>
                   </div>
                 ))}
@@ -179,7 +204,7 @@ function MetricCard({
   detail: string;
 }) {
   return (
-    <div className="rounded-lg border border-slate-200 bg-white p-4">
+    <div className="min-w-0 rounded-lg border border-slate-200 bg-white p-4">
       <div className="text-xs text-slate-500">{label}</div>
       <div className="mt-1 text-2xl font-semibold text-slate-800">{value}</div>
       <div className="mt-1 text-xs text-slate-500">{detail}</div>

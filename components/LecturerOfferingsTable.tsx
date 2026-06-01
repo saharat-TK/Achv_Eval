@@ -29,15 +29,17 @@ interface YearGroup {
   semesters: SemesterGroup[];
 }
 
-/**
- * Single uniform year-header style — Starbucks House Green (#00704A):
- * a soft green tint with a deep-green left accent and matching text.
- * Full class strings (not interpolated) so Tailwind keeps them.
- */
-const YEAR_STYLE = {
-  bar: 'border-[#00704A]/20 border-l-[#00704A] bg-[#00704A]/[0.06]',
-  text: 'text-[#00704A]',
-};
+const YEAR_SECTION_CLASS =
+  'rounded-xl border border-[#00704A]/20 border-l-4 border-l-[#00704A] bg-[#00704A]/[0.04]';
+const YEAR_TEXT_CLASS = 'text-[#00704A]';
+const INNER_CARD_CLASS = 'rounded-lg border border-slate-200 bg-white';
+const TABLE_WRAPPER_CLASS =
+  'overflow-x-auto rounded-b-lg border-t border-slate-100';
+const OFFERING_TABLE_CLASS = 'min-w-[760px] w-full table-fixed text-xs';
+const TABLE_HEADER_ROW_CLASS =
+  'bg-slate-50 text-left text-[11px] font-medium text-slate-500';
+const TABLE_HEAD_CELL_CLASS = 'px-3 py-2';
+const TABLE_CELL_CLASS = 'px-3 py-1.5 align-middle';
 
 /**
  * Live list of the lecturer's assigned offerings, grouped by academic year
@@ -141,12 +143,11 @@ export default function LecturerOfferingsTable({ uid }: { uid: string }) {
   }
 
   return (
-    <div className="mt-6 space-y-4">
+    <div className="mt-6 space-y-5">
       {groups.map((g, idx) => {
         const isOpen = expanded.has(g.year);
-        const palette = YEAR_STYLE;
         return (
-          <section key={g.year} className={`rounded-xl border border-l-4 ${palette.bar}`}>
+          <section key={g.year} className={YEAR_SECTION_CLASS}>
             <button
               type="button"
               onClick={() => toggleYear(g.year)}
@@ -161,12 +162,12 @@ export default function LecturerOfferingsTable({ uid }: { uid: string }) {
                   strokeWidth={2}
                   strokeLinecap="round"
                   strokeLinejoin="round"
-                  className={`h-4 w-4 transition-transform ${isOpen ? 'rotate-90' : ''} ${palette.text} opacity-60`}
+                  className={`h-4 w-4 transition-transform ${isOpen ? 'rotate-90' : ''} ${YEAR_TEXT_CLASS} opacity-60`}
                   aria-hidden
                 >
                   <polyline points="9 18 15 12 9 6" />
                 </svg>
-                <span className={`text-base font-semibold ${palette.text}`}>
+                <span className={`text-base font-semibold ${YEAR_TEXT_CLASS}`}>
                   ปีการศึกษา {g.year}
                 </span>
                 {idx === 0 && (
@@ -181,54 +182,58 @@ export default function LecturerOfferingsTable({ uid }: { uid: string }) {
             </button>
 
             {isOpen && (
-              <div className="space-y-3 px-3 pb-3">
+              <div className="space-y-4 px-3 pb-3">
                 {g.semesters.map((s) => (
                   <div key={s.sem}>
                     <h3 className="mb-1 text-xs font-semibold text-slate-500">
                       {SEMESTER_LABEL[s.sem]}
                     </h3>
-                    <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
-                      <table className="w-full text-sm">
-                        <thead className="bg-slate-50 text-left text-xs text-slate-500">
-                          <tr>
-                            <th className="whitespace-nowrap px-4 py-2.5 font-medium">
-                              รหัสวิชา
-                            </th>
-                            <th className="w-full px-4 py-2.5 font-medium">
-                              ชื่อรายวิชา
-                            </th>
-                            <th className="whitespace-nowrap px-4 py-2.5 font-medium text-center">
-                              ตอนเรียน
-                            </th>
-                            <th className="whitespace-nowrap px-4 py-2.5 font-medium">
-                              สถานะ
-                            </th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-100">
-                          {s.offerings.map((o) => (
-                            <tr key={o.id} className="hover:bg-slate-50">
-                              <td className="whitespace-nowrap px-4 py-3">
-                                <Link
-                                  href={`/lecturer/${o.id}`}
-                                  className="font-medium text-mfu-primary hover:underline"
-                                >
-                                  {o.courseCode}
-                                </Link>
-                              </td>
-                              <td className="px-4 py-3 text-slate-700">
-                                {o.courseNameTh}
-                              </td>
-                              <td className="whitespace-nowrap px-4 py-3 text-center text-slate-600">
-                                {o.section}
-                              </td>
-                              <td className="whitespace-nowrap px-4 py-3">
-                                <StatusBadge status={o.status} />
-                              </td>
+                    <div className={INNER_CARD_CLASS}>
+                      <div className={TABLE_WRAPPER_CLASS}>
+                        <table className={OFFERING_TABLE_CLASS}>
+                          <colgroup>
+                            <col className="w-[18%]" />
+                            <col />
+                            <col className="w-[14%]" />
+                            <col className="w-[22%]" />
+                          </colgroup>
+                          <thead>
+                            <tr className={TABLE_HEADER_ROW_CLASS}>
+                              <th className={TABLE_HEAD_CELL_CLASS}>รหัสวิชา</th>
+                              <th className={TABLE_HEAD_CELL_CLASS}>ชื่อรายวิชา</th>
+                              <th className={`${TABLE_HEAD_CELL_CLASS} text-center`}>
+                                ตอนเรียน
+                              </th>
+                              <th className={TABLE_HEAD_CELL_CLASS}>สถานะ</th>
                             </tr>
-                          ))}
-                        </tbody>
-                      </table>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100">
+                            {s.offerings.map((o) => (
+                              <tr key={o.id} className="hover:bg-slate-50">
+                                <td className={`${TABLE_CELL_CLASS} whitespace-nowrap`}>
+                                  <Link
+                                    href={`/lecturer/${o.id}`}
+                                    className="font-medium text-mfu-primary hover:underline"
+                                  >
+                                    {o.courseCode}
+                                  </Link>
+                                </td>
+                                <td className={`${TABLE_CELL_CLASS} min-w-0 text-slate-700`}>
+                                  <div className="truncate" title={o.courseNameTh}>
+                                    {o.courseNameTh}
+                                  </div>
+                                </td>
+                                <td className={`${TABLE_CELL_CLASS} whitespace-nowrap text-center text-slate-600`}>
+                                  {o.section}
+                                </td>
+                                <td className={`${TABLE_CELL_CLASS} whitespace-nowrap`}>
+                                  <StatusBadge status={o.status} />
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
                     </div>
                   </div>
                 ))}

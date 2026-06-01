@@ -68,7 +68,7 @@ function MetricCard({
   detail: string;
 }) {
   return (
-    <div className="rounded-lg border border-slate-200 bg-white p-4">
+    <div className="min-w-0 rounded-lg border border-slate-200 bg-white p-4">
       <div className="text-xs text-slate-500">{label}</div>
       <div className="mt-1 text-2xl font-semibold text-slate-800">{value}</div>
       <div className="mt-1 text-xs text-slate-500">{detail}</div>

@@ -54,14 +54,17 @@ const ASSESSOR_STATUSES: OfferingStatus[] = [
 const UNKNOWN_DEPARTMENT_ID = '__unknown_department__';
 const UNKNOWN_DEPARTMENT_NAME = 'ไม่ระบุสาขาวิชา';
 
-/**
- * Matches the lecturer page's year-header treatment so both course lists
- * feel like the same workspace family.
- */
-const YEAR_STYLE = {
-  bar: 'border-[#00704A]/20 border-l-[#00704A] bg-[#00704A]/[0.06]',
-  text: 'text-[#00704A]',
-};
+const YEAR_SECTION_CLASS =
+  'rounded-xl border border-[#00704A]/20 border-l-4 border-l-[#00704A] bg-[#00704A]/[0.04]';
+const YEAR_TEXT_CLASS = 'text-[#00704A]';
+const INNER_CARD_CLASS = 'rounded-lg border border-slate-200 bg-white';
+const TABLE_WRAPPER_CLASS =
+  'overflow-x-auto rounded-b-lg border-t border-slate-100';
+const OFFERING_TABLE_CLASS = 'min-w-[760px] w-full table-fixed text-xs';
+const TABLE_HEADER_ROW_CLASS =
+  'bg-slate-50 text-left text-[11px] font-medium text-slate-500';
+const TABLE_HEAD_CELL_CLASS = 'px-3 py-2';
+const TABLE_CELL_CLASS = 'px-3 py-1.5 align-middle';
 
 /**
  * Live grouped list of offerings an assessor can review. The list mirrors
@@ -234,11 +237,11 @@ export default function AssessorOfferingsTable({
   }
 
   return (
-    <div className="mt-6 space-y-4">
+    <div className="mt-6 space-y-5">
       {groups.map((g, idx) => {
         const isOpen = expanded.has(g.year);
         return (
-          <section key={g.year} className={`rounded-xl border border-l-4 ${YEAR_STYLE.bar}`}>
+          <section key={g.year} className={YEAR_SECTION_CLASS}>
             <button
               type="button"
               onClick={() => toggleYear(g.year)}
@@ -253,12 +256,12 @@ export default function AssessorOfferingsTable({
                   strokeWidth={2}
                   strokeLinecap="round"
                   strokeLinejoin="round"
-                  className={`h-4 w-4 transition-transform ${isOpen ? 'rotate-90' : ''} ${YEAR_STYLE.text} opacity-60`}
+                  className={`h-4 w-4 transition-transform ${isOpen ? 'rotate-90' : ''} ${YEAR_TEXT_CLASS} opacity-60`}
                   aria-hidden
                 >
                   <polyline points="9 18 15 12 9 6" />
                 </svg>
-                <span className={`text-base font-semibold ${YEAR_STYLE.text}`}>
+                <span className={`text-base font-semibold ${YEAR_TEXT_CLASS}`}>
                   ปีการศึกษา {g.year}
                 </span>
                 {idx === 0 && (
@@ -280,8 +283,8 @@ export default function AssessorOfferingsTable({
                       {SEMESTER_LABEL[s.sem]}
                     </h3>
                     {s.departments.map((dept) => (
-                      <div key={dept.departmentId}>
-                        <div className="mb-1 flex items-center justify-between gap-3">
+                      <div key={dept.departmentId} className={INNER_CARD_CLASS}>
+                        <div className="flex items-center justify-between gap-3 px-3 py-2.5">
                           <h4 className="text-sm font-semibold text-slate-700">
                             {dept.departmentNameTh}
                           </h4>
@@ -289,28 +292,24 @@ export default function AssessorOfferingsTable({
                             {dept.offerings.length} รายวิชา
                           </span>
                         </div>
-                        <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
-                          <table className="w-full text-sm">
-                            <thead className="bg-slate-50 text-left text-xs text-slate-500">
-                              <tr>
-                                <th className="whitespace-nowrap px-4 py-2.5 font-medium">
-                                  รหัสวิชา
-                                </th>
-                                <th className="w-full px-4 py-2.5 font-medium">
-                                  ชื่อรายวิชา
-                                </th>
-                                <th className="whitespace-nowrap px-4 py-2.5 font-medium">
-                                  เล่มหลักสูตร
-                                </th>
-                                <th className="whitespace-nowrap px-4 py-2.5 font-medium">
-                                  ตอนเรียน
-                                </th>
-                                <th className="whitespace-nowrap px-4 py-2.5 font-medium">
-                                  อาจารย์
-                                </th>
-                                <th className="whitespace-nowrap px-4 py-2.5 font-medium">
-                                  สถานะ
-                                </th>
+                        <div className={TABLE_WRAPPER_CLASS}>
+                          <table className={OFFERING_TABLE_CLASS}>
+                            <colgroup>
+                              <col className="w-[15%]" />
+                              <col />
+                              <col className="w-[22%]" />
+                              <col className="w-[10%]" />
+                              <col className="w-[18%]" />
+                              <col className="w-[16%]" />
+                            </colgroup>
+                            <thead>
+                              <tr className={TABLE_HEADER_ROW_CLASS}>
+                                <th className={TABLE_HEAD_CELL_CLASS}>รหัสวิชา</th>
+                                <th className={TABLE_HEAD_CELL_CLASS}>ชื่อรายวิชา</th>
+                                <th className={TABLE_HEAD_CELL_CLASS}>เล่มหลักสูตร</th>
+                                <th className={TABLE_HEAD_CELL_CLASS}>ตอนเรียน</th>
+                                <th className={TABLE_HEAD_CELL_CLASS}>อาจารย์</th>
+                                <th className={TABLE_HEAD_CELL_CLASS}>สถานะ</th>
                               </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-100">
@@ -321,7 +320,7 @@ export default function AssessorOfferingsTable({
                                     key={o.id}
                                     className="transition-colors hover:bg-slate-50"
                                   >
-                                    <td className="whitespace-nowrap px-4 py-3 font-medium">
+                                    <td className={`${TABLE_CELL_CLASS} whitespace-nowrap font-medium`}>
                                       <Link
                                         href={`/assessor/${o.id}`}
                                         className="text-mfu-primary hover:underline"
@@ -329,21 +328,28 @@ export default function AssessorOfferingsTable({
                                         {o.courseCode}
                                       </Link>
                                     </td>
-                                    <td className="px-4 py-3 text-slate-700">
-                                      {o.courseNameTh}
+                                    <td className={`${TABLE_CELL_CLASS} min-w-0 text-slate-700`}>
+                                      <div className="truncate" title={o.courseNameTh}>
+                                        {o.courseNameTh}
+                                      </div>
                                     </td>
-                                    <td className="whitespace-nowrap px-4 py-3 text-xs text-slate-500">
-                                      {meta
-                                        ? `${meta.code} ${meta.nameTh}`
-                                        : '—'}
+                                    <td className={`${TABLE_CELL_CLASS} min-w-0 text-slate-500`}>
+                                      <div
+                                        className="truncate"
+                                        title={meta ? `${meta.code} ${meta.nameTh}` : undefined}
+                                      >
+                                        {meta ? `${meta.code} ${meta.nameTh}` : '—'}
+                                      </div>
                                     </td>
-                                    <td className="whitespace-nowrap px-4 py-3 text-slate-600">
+                                    <td className={`${TABLE_CELL_CLASS} whitespace-nowrap text-slate-600`}>
                                       {o.section}
                                     </td>
-                                    <td className="whitespace-nowrap px-4 py-3 text-xs text-slate-500">
-                                      {o.lecturerEmail ?? '—'}
+                                    <td className={`${TABLE_CELL_CLASS} min-w-0 text-slate-500`}>
+                                      <div className="truncate" title={o.lecturerEmail ?? undefined}>
+                                        {o.lecturerEmail ?? '—'}
+                                      </div>
                                     </td>
-                                    <td className="whitespace-nowrap px-4 py-3">
+                                    <td className={`${TABLE_CELL_CLASS} whitespace-nowrap`}>
                                       <StatusBadge status={o.status} />
                                     </td>
                                   </tr>
