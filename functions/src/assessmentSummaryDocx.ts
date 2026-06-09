@@ -47,6 +47,49 @@ function courseTable(rows: { code: string; lecturer: string; band: string }[]): 
   });
 }
 
+/** Section 3.1 — a 3-column table (topic | strengths | suggestions). */
+function bulletCell(items: string[]): TableCell {
+  if (items.length === 0) {
+    return new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: '—', size: 20 })] })] });
+  }
+  return new TableCell({
+    children: items.map(
+      (s) => new Paragraph({ text: s, bullet: { level: 0 }, spacing: { after: 20 } }),
+    ),
+  });
+}
+
+function assessorTopicTable(topics: SummaryTopic[]): Table {
+  return new Table({
+    width: { size: 100, type: WidthType.PERCENTAGE },
+    rows: [
+      new TableRow({
+        children: [
+          cell('หัวข้อการทวนสอบ', { bold: true }),
+          cell('ข้อดี / จุดเด่น', { bold: true }),
+          cell('ข้อเสนอแนะ', { bold: true }),
+        ],
+      }),
+      ...topics.map(
+        (t) =>
+          new TableRow({
+            children: [
+              new TableCell({
+                children: [
+                  new Paragraph({
+                    children: [new TextRun({ text: `${t.number}. ${t.labelTh}`, bold: true, size: 20 })],
+                  }),
+                ],
+              }),
+              bulletCell(t.strengths),
+              bulletCell(t.improvements),
+            ],
+          }),
+      ),
+    ],
+  });
+}
+
 function topicParagraphs(topics: SummaryTopic[]): Paragraph[] {
   const out: Paragraph[] = [];
   for (const t of topics) {
@@ -119,7 +162,7 @@ export async function buildAssessmentSummaryDocx(d: SummaryReportData): Promise<
   }
 
   children.push(heading('สรุปข้อเสนอแนะตามหัวข้อการทวนสอบ (7 รายการ) — จากผู้ทวนสอบ'));
-  children.push(...topicParagraphs(d.assessorTopics));
+  children.push(assessorTopicTable(d.assessorTopics));
 
   children.push(heading('ข้อเสนอแนะเพิ่มเติมตามหัวข้อการทวนสอบ (7 รายการ) — จากการวิเคราะห์ AI'));
   children.push(...topicParagraphs(d.aiTopics));

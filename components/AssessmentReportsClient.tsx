@@ -6,6 +6,8 @@ import Link from 'next/link';
 import type { ManagedOffering } from '@/lib/data/offeringManager';
 import type { ReportSummary } from '@/lib/data/assessmentReports';
 import type { ReportScope, Semester } from '@/lib/types/models';
+import { httpsCallable } from 'firebase/functions';
+import { getFirebaseAuth, getFirebaseFunctions } from '@/lib/firebase/config';
 import { SEMESTER_LABEL, REPORT_THRESHOLD } from '@/lib/constants';
 import StatusBadge from '@/components/StatusBadge';
 import { createAssessmentReport } from '@/app/admin/assessment-reports/actions';
@@ -467,6 +469,7 @@ function CreateReportModal({
   const [meetingDateTime, setMeetingDateTime] = useState('');
   const [committee, setCommittee] = useState(DEFAULT_COMMITTEE);
   const [busy, setBusy] = useState(false);
+  const [phase, setPhase] = useState<'idle' | 'creating' | 'synthesizing'>('idle');
   const [error, setError] = useState<string | null>(null);
 
   function setMember(i: number, field: 'name' | 'role', value: string) {
@@ -482,6 +485,7 @@ function CreateReportModal({
   async function submit() {
     setBusy(true);
     setError(null);
+    setPhase('creating');
     try {
       const res = await createAssessmentReport({
         academicProgramId: target.academicProgramId,
@@ -493,12 +497,31 @@ function CreateReportModal({
       if (!res.ok) {
         setError(res.error);
         setBusy(false);
+        setPhase('idle');
         return;
       }
+
+      // Run AI analysis + synthesis now so Section 3.2 is ready ahead of
+      // PDF/DOCX rendering. The report already persists, so a slow or failed
+      // synthesis never loses it — the report page can retry.
+      setPhase('synthesizing');
+      try {
+        await getFirebaseAuth().authStateReady();
+        const callable = httpsCallable(
+          getFirebaseFunctions(),
+          'synthesizeAssessmentReport',
+          { timeout: 180_000 },
+        );
+        await callable({ reportId: res.reportId });
+      } catch {
+        // Non-fatal: navigate anyway; the report exists and can be retried.
+      }
+
       onCreated(res.reportId);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'เกิดข้อผิดพลาด');
       setBusy(false);
+      setPhase('idle');
     }
   }
 
@@ -585,7 +608,11 @@ function CreateReportModal({
             disabled={busy}
             className="rounded-lg bg-mfu-primary px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
           >
-            {busy ? 'กำลังสร้าง…' : 'สร้างรายงาน'}
+            {phase === 'synthesizing'
+              ? 'กำลังวิเคราะห์และสังเคราะห์ข้อเสนอแนะ AI…'
+              : phase === 'creating'
+                ? 'กำลังสร้าง…'
+                : 'สร้างรายงาน'}
           </button>
         </div>
       </div>

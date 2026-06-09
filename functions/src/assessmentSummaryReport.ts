@@ -1,4 +1,4 @@
-import { onCall, HttpsError } from 'firebase-functions/v2/https';
+import { onCall, HttpsError, type CallableRequest } from 'firebase-functions/v2/https';
 import { defineSecret } from 'firebase-functions/params';
 import * as admin from 'firebase-admin';
 import { GoogleGenerativeAI } from '@google/generative-ai';
@@ -45,11 +45,65 @@ interface CourseRow {
   band: string | null;
 }
 
-/**
- * Synthesize cross-course AI suggestions per rubric topic from each assessed
- * offering's AI analysis. Resilient: on any failure returns empty topics so
- * the report still generates with the assessor section intact.
- */
+interface StoredTopic {
+  key: string;
+  number: string;
+  labelTh: string;
+  strengths: string[];
+  improvements: string[];
+}
+
+interface ReportData {
+  academicProgramId: string;
+  academicProgramLabel: string;
+  academicYear: number;
+  scope: 'semester' | 'annual';
+  semester: string | null;
+  header: { venue: string; meetingDateTime: string; committee: { name: string; role: string }[] };
+  snapshot: {
+    totalOfferings: number;
+    assessedOfferings: number;
+    percent: number;
+    bandDistribution: { improve: number; good: number; excellent: number };
+    courseRows: CourseRow[];
+    assessorTopicSummary: StoredTopic[];
+  };
+  aiSynthesis: StoredTopic[] | null;
+}
+
+const sts = () => admin.firestore.FieldValue.serverTimestamp();
+
+async function loadReport(
+  db: admin.firestore.Firestore,
+  reportId: string,
+): Promise<{ ref: admin.firestore.DocumentReference; report: ReportData }> {
+  const ref = db.collection('assessmentSummaryReports').doc(reportId);
+  const snap = await ref.get();
+  if (!snap.exists) throw new HttpsError('not-found', 'ไม่พบรายงาน');
+  return { ref, report: snap.data() as ReportData };
+}
+
+async function authorize(
+  db: admin.firestore.Firestore,
+  uid: string,
+  academicProgramId: string,
+): Promise<void> {
+  const roles = (await db.collection('users').doc(uid).get()).data()?.roles ?? {};
+  const allowed =
+    roles.isAdmin === true ||
+    (roles.directorOfAcademicPrograms ?? []).includes(academicProgramId);
+  if (!allowed) throw new HttpsError('permission-denied', 'ไม่มีสิทธิ์ในหลักสูตรนี้');
+}
+
+function requireAuth(request: CallableRequest): { uid: string; reportId: string } {
+  if (!request.auth) throw new HttpsError('unauthenticated', 'ต้องเข้าสู่ระบบก่อน');
+  const reportId = request.data?.reportId as string | undefined;
+  if (!reportId) throw new HttpsError('invalid-argument', 'ต้องระบุรายงาน');
+  return { uid: request.auth.uid, reportId };
+}
+
+/** Gemini synthesis of cross-course AI suggestions per rubric topic. Resilient:
+ *  returns empty topics on any failure so the report can still be produced. */
 async function synthesizeAiTopics(
   apiKey: string,
   perTopicImprovements: Map<string, string[]>,
@@ -97,14 +151,14 @@ async function synthesizeAiTopics(
     const parsed = JSON.parse(resp.response.text()) as {
       topics?: { number?: string; improvements?: string[] }[];
     };
-    const byNumber = new Map(
-      (parsed.topics ?? []).map((t) => [t.number, t.improvements ?? []]),
-    );
+    const byNumber = new Map((parsed.topics ?? []).map((t) => [t.number, t.improvements ?? []]));
     return RUBRIC_TOPICS.map((t) => ({
       number: t.number,
       labelTh: t.labelTh,
       strengths: [],
-      improvements: (byNumber.get(t.number) ?? []).filter((s) => typeof s === 'string' && s.trim()),
+      improvements: (byNumber.get(t.number) ?? []).filter(
+        (s) => typeof s === 'string' && s.trim(),
+      ),
     }));
   } catch (err) {
     console.warn('AI synthesis failed; emitting empty topics', err);
@@ -112,120 +166,140 @@ async function synthesizeAiTopics(
   }
 }
 
+/** Gather, synthesize, and persist aiSynthesis on the report doc. */
+async function runSynthesis(
+  db: admin.firestore.Firestore,
+  ref: admin.firestore.DocumentReference,
+  report: ReportData,
+  apiKey: string,
+): Promise<SummaryTopic[]> {
+  const perTopic = new Map<string, string[]>(RUBRIC_TOPICS.map((t) => [t.key, []]));
+  const assessed = report.snapshot.courseRows.filter((r) => r.assessed);
+  for (const row of assessed) {
+    const offSnap = await db.collection('offerings').doc(row.offeringId).get();
+    const aiId = offSnap.data()?.latestAiReportId as string | undefined;
+    if (!aiId) continue;
+    const aiSnap = await offSnap.ref.collection('aiReports').doc(aiId).get();
+    const result = aiSnap.data()?.structuredOutput as AnalysisResult | undefined;
+    if (!result?.section4Verification?.items) continue;
+    for (const item of result.section4Verification.items) {
+      const imp = item.improvements?.trim();
+      if (imp && perTopic.has(item.key)) perTopic.get(item.key)!.push(imp);
+    }
+  }
+
+  const aiTopics = await synthesizeAiTopics(apiKey, perTopic);
+  await ref.update({
+    aiSynthesis: aiTopics.map((t, i) => ({
+      key: RUBRIC_TOPICS[i].key,
+      number: t.number,
+      labelTh: t.labelTh,
+      strengths: t.strengths,
+      improvements: t.improvements,
+    })),
+    updatedAt: sts(),
+  });
+  return aiTopics;
+}
+
+function assembleData(report: ReportData, aiTopics: SummaryTopic[]): SummaryReportData {
+  const assessed = report.snapshot.courseRows.filter((r) => r.assessed);
+  const groupsMap = new Map<string, CourseRow[]>();
+  for (const r of assessed) {
+    if (!groupsMap.has(r.semester)) groupsMap.set(r.semester, []);
+    groupsMap.get(r.semester)!.push(r);
+  }
+  const semesterGroups = [...groupsMap.keys()]
+    .sort((a, b) => Number(a) - Number(b))
+    .map((sem) => ({
+      semesterLabel: SEMESTER_LABEL[sem] ?? sem,
+      rows: groupsMap.get(sem)!.map((r) => ({
+        courseCode: r.courseCode,
+        courseNameEn: r.courseNameEn,
+        courseNameTh: r.courseNameTh,
+        lecturerName: r.lecturerName,
+        bandLabel: r.band ? BAND_LABEL[r.band] ?? r.band : null,
+      })),
+    }));
+
+  return {
+    academicProgramLabel: report.academicProgramLabel,
+    academicYear: report.academicYear,
+    scopeLabel:
+      report.scope === 'annual'
+        ? 'ประจำปีการศึกษา'
+        : SEMESTER_LABEL[report.semester ?? ''] ?? '',
+    header: report.header,
+    totalOfferings: report.snapshot.totalOfferings,
+    assessedOfferings: report.snapshot.assessedOfferings,
+    percent: report.snapshot.percent,
+    bandDistribution: report.snapshot.bandDistribution,
+    semesterGroups,
+    assessorTopics: report.snapshot.assessorTopicSummary.map((t) => ({
+      number: t.number,
+      labelTh: t.labelTh,
+      strengths: t.strengths,
+      improvements: t.improvements,
+    })),
+    aiTopics,
+    generatedAt: new Date().toLocaleString('th-TH', {
+      timeZone: 'Asia/Bangkok',
+      dateStyle: 'long',
+      timeStyle: 'short',
+    }),
+  };
+}
+
 /**
- * Callable: generate the assessment summary report (PDF + DOCX) for a stored
- * assessmentSummaryReports document, including a Gemini-synthesized Section 3.2.
+ * Callable: run AI analysis + synthesis for Section 3.2 and store it on the
+ * report. Invoked right after a report is created so the AI suggestions are
+ * ready ahead of PDF/DOCX rendering.
+ */
+export const synthesizeAssessmentReport = onCall(
+  { region: REGION, secrets: [GEMINI_API_KEY], memory: '1GiB', timeoutSeconds: 120 },
+  async (request) => {
+    const { uid, reportId } = requireAuth(request);
+    const db = admin.firestore();
+    const { ref, report } = await loadReport(db, reportId);
+    await authorize(db, uid, report.academicProgramId);
+
+    await ref.update({ status: 'synthesizing', updatedAt: sts() });
+    try {
+      await runSynthesis(db, ref, report, GEMINI_API_KEY.value());
+      await ref.update({ status: 'synthesized', updatedAt: sts() });
+      return { ok: true };
+    } catch (err) {
+      await ref.update({ status: 'failed', updatedAt: sts() });
+      console.error('synthesis failed', err);
+      throw new HttpsError('internal', 'วิเคราะห์และสังเคราะห์ข้อเสนอแนะไม่สำเร็จ');
+    }
+  },
+);
+
+/**
+ * Callable: render the report PDF + DOCX from the stored snapshot and
+ * aiSynthesis. If synthesis hasn't run yet, it is performed inline first.
  */
 export const generateAssessmentSummaryReport = onCall(
   { region: REGION, secrets: [GEMINI_API_KEY], memory: '4GiB', timeoutSeconds: 300 },
   async (request) => {
-    if (!request.auth) throw new HttpsError('unauthenticated', 'ต้องเข้าสู่ระบบก่อน');
-    const uid = request.auth.uid;
-    const reportId = request.data?.reportId as string | undefined;
-    if (!reportId) throw new HttpsError('invalid-argument', 'ต้องระบุรายงาน');
-
+    const { uid, reportId } = requireAuth(request);
     const db = admin.firestore();
-    const ref = db.collection('assessmentSummaryReports').doc(reportId);
-    const snap = await ref.get();
-    if (!snap.exists) throw new HttpsError('not-found', 'ไม่พบรายงาน');
-    const report = snap.data() as {
-      academicProgramId: string;
-      academicProgramLabel: string;
-      academicYear: number;
-      scope: 'semester' | 'annual';
-      semester: string | null;
-      header: { venue: string; meetingDateTime: string; committee: { name: string; role: string }[] };
-      snapshot: {
-        totalOfferings: number;
-        assessedOfferings: number;
-        percent: number;
-        bandDistribution: { improve: number; good: number; excellent: number };
-        courseRows: CourseRow[];
-        assessorTopicSummary: {
-          number: string;
-          labelTh: string;
-          strengths: string[];
-          improvements: string[];
-        }[];
-      };
-    };
+    const { ref, report } = await loadReport(db, reportId);
+    await authorize(db, uid, report.academicProgramId);
 
-    // Authorize: admin or director of the report's academic program.
-    const roles = (await db.collection('users').doc(uid).get()).data()?.roles ?? {};
-    const allowed =
-      roles.isAdmin === true ||
-      (roles.directorOfAcademicPrograms ?? []).includes(report.academicProgramId);
-    if (!allowed) throw new HttpsError('permission-denied', 'ไม่มีสิทธิ์ในหลักสูตรนี้');
-
-    await ref.update({ status: 'generating', updatedAt: admin.firestore.FieldValue.serverTimestamp() });
-
+    await ref.update({ status: 'rendering', updatedAt: sts() });
     try {
-      // Gather AI analysis improvements per rubric topic across assessed courses.
-      const perTopic = new Map<string, string[]>(RUBRIC_TOPICS.map((t) => [t.key, []]));
-      const assessed = report.snapshot.courseRows.filter((r) => r.assessed);
-      for (const row of assessed) {
-        const offSnap = await db.collection('offerings').doc(row.offeringId).get();
-        const aiId = offSnap.data()?.latestAiReportId as string | undefined;
-        if (!aiId) continue;
-        const aiSnap = await offSnap.ref.collection('aiReports').doc(aiId).get();
-        const result = aiSnap.data()?.structuredOutput as AnalysisResult | undefined;
-        if (!result?.section4Verification?.items) continue;
-        for (const item of result.section4Verification.items) {
-          const imp = item.improvements?.trim();
-          if (imp && perTopic.has(item.key)) perTopic.get(item.key)!.push(imp);
-        }
-      }
+      const aiTopics: SummaryTopic[] = report.aiSynthesis
+        ? report.aiSynthesis.map((t) => ({
+            number: t.number,
+            labelTh: t.labelTh,
+            strengths: t.strengths,
+            improvements: t.improvements,
+          }))
+        : await runSynthesis(db, ref, report, GEMINI_API_KEY.value());
 
-      const aiTopics = await synthesizeAiTopics(GEMINI_API_KEY.value(), perTopic);
-
-      // Group assessed course rows by semester for the detail tables.
-      const groupsMap = new Map<string, CourseRow[]>();
-      for (const r of assessed) {
-        if (!groupsMap.has(r.semester)) groupsMap.set(r.semester, []);
-        groupsMap.get(r.semester)!.push(r);
-      }
-      const semesterGroups = [...groupsMap.keys()]
-        .sort((a, b) => Number(a) - Number(b))
-        .map((sem) => ({
-          semesterLabel: SEMESTER_LABEL[sem] ?? sem,
-          rows: groupsMap.get(sem)!.map((r) => ({
-            courseCode: r.courseCode,
-            courseNameEn: r.courseNameEn,
-            courseNameTh: r.courseNameTh,
-            lecturerName: r.lecturerName,
-            bandLabel: r.band ? BAND_LABEL[r.band] ?? r.band : null,
-          })),
-        }));
-
-      const generatedAt = new Date().toLocaleString('th-TH', {
-        timeZone: 'Asia/Bangkok',
-        dateStyle: 'long',
-        timeStyle: 'short',
-      });
-
-      const data: SummaryReportData = {
-        academicProgramLabel: report.academicProgramLabel,
-        academicYear: report.academicYear,
-        scopeLabel:
-          report.scope === 'annual'
-            ? 'ประจำปีการศึกษา'
-            : SEMESTER_LABEL[report.semester ?? ''] ?? '',
-        header: report.header,
-        totalOfferings: report.snapshot.totalOfferings,
-        assessedOfferings: report.snapshot.assessedOfferings,
-        percent: report.snapshot.percent,
-        bandDistribution: report.snapshot.bandDistribution,
-        semesterGroups,
-        assessorTopics: report.snapshot.assessorTopicSummary.map((t) => ({
-          number: t.number,
-          labelTh: t.labelTh,
-          strengths: t.strengths,
-          improvements: t.improvements,
-        })),
-        aiTopics,
-        generatedAt,
-      };
-
+      const data = assembleData(report, aiTopics);
       const html = buildAssessmentSummaryHtml(data);
       const [pdf, docx] = await Promise.all([
         renderHtmlToPdf(html),
@@ -245,26 +319,19 @@ export const generateAssessmentSummaryReport = onCall(
       ]);
 
       await ref.update({
-        aiSynthesis: aiTopics.map((t, i) => ({
-          key: RUBRIC_TOPICS[i].key,
-          number: t.number,
-          labelTh: t.labelTh,
-          strengths: t.strengths,
-          improvements: t.improvements,
-        })),
         status: 'ready',
         pdfStoragePath: pdfStored.filePath,
         pdfUrl: pdfStored.downloadUrl,
         docxStoragePath: docxStored.filePath,
         docxUrl: docxStored.downloadUrl,
-        generatedAt: admin.firestore.FieldValue.serverTimestamp(),
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        generatedAt: sts(),
+        updatedAt: sts(),
       });
 
       await db.collection('auditLog').add({
-        occurredAt: admin.firestore.FieldValue.serverTimestamp(),
+        occurredAt: sts(),
         actorId: uid,
-        actorEmail: request.auth.token.email ?? null,
+        actorEmail: request.auth!.token.email ?? null,
         action: 'summary_report_generated',
         entityType: 'assessmentSummaryReports',
         entityId: reportId,
@@ -274,10 +341,7 @@ export const generateAssessmentSummaryReport = onCall(
 
       return { pdfUrl: pdfStored.downloadUrl, docxUrl: docxStored.downloadUrl };
     } catch (err) {
-      await ref.update({
-        status: 'failed',
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-      });
+      await ref.update({ status: 'failed', updatedAt: sts() });
       console.error('summary report generation failed', err);
       throw new HttpsError('internal', 'สร้างรายงานไม่สำเร็จ');
     }

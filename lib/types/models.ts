@@ -432,7 +432,13 @@ export interface AuditLogDoc {
 
 // ----- assessmentSummaryReports/{reportId} --------------------------
 export type ReportScope = 'semester' | 'annual';
-export type ReportStatus = 'draft' | 'generating' | 'ready' | 'failed';
+export type ReportStatus =
+  | 'draft' // created; AI synthesis not yet run
+  | 'synthesizing' // AI synthesis in progress
+  | 'synthesized' // aiSynthesis ready; PDF/DOCX not yet rendered
+  | 'rendering' // PDF/DOCX generation in progress
+  | 'ready' // artifacts available
+  | 'failed';
 
 export interface ReportCommitteeMember {
   name: string;

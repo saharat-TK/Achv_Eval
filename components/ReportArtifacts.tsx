@@ -75,8 +75,9 @@ export default function ReportArtifacts({
       ) : (
         <div className="mt-3">
           <p className="text-sm text-slate-500">
-            สร้างเอกสารรายงานในรูปแบบ PDF และ DOCX พร้อมข้อเสนอแนะที่สังเคราะห์จากการ
-            วิเคราะห์ AI (ใช้เวลาประมาณ 1–2 นาที)
+            {status === 'synthesized'
+              ? 'สังเคราะห์ข้อเสนอแนะ AI เรียบร้อยแล้ว — สร้างเอกสารรายงานในรูปแบบ PDF และ DOCX ได้เลย'
+              : 'สร้างเอกสารรายงานในรูปแบบ PDF และ DOCX พร้อมข้อเสนอแนะที่สังเคราะห์จากการวิเคราะห์ AI'}
           </p>
           <button
             onClick={generate}

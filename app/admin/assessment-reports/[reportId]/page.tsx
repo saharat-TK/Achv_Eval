@@ -5,7 +5,12 @@ import { getReportById } from '@/lib/data/assessmentReports';
 import { SEMESTER_LABEL } from '@/lib/constants';
 import ReportArtifacts from '@/components/ReportArtifacts';
 import DeleteReportButton from '@/components/DeleteReportButton';
-import type { AssessmentBand, ReportTopicSummary, Semester } from '@/lib/types/models';
+import type {
+  AssessmentBand,
+  ReportStatus,
+  ReportTopicSummary,
+  Semester,
+} from '@/lib/types/models';
 
 export const dynamic = 'force-dynamic';
 
@@ -13,6 +18,15 @@ const BAND_LABEL: Record<AssessmentBand, string> = {
   improve: 'ควรปรับปรุง',
   good: 'ดี',
   excellent: 'ดีเยี่ยม',
+};
+
+const STATUS_LABEL: Record<ReportStatus, string> = {
+  draft: 'ฉบับร่าง',
+  synthesizing: 'กำลังสังเคราะห์ข้อเสนอแนะ',
+  synthesized: 'สังเคราะห์ข้อเสนอแนะแล้ว',
+  rendering: 'กำลังสร้างเอกสาร',
+  ready: 'พร้อมใช้งาน',
+  failed: 'ไม่สำเร็จ',
 };
 
 export default async function AssessmentReportPage({
@@ -86,7 +100,7 @@ export default async function AssessmentReportPage({
 
         <div className="mt-3 flex items-center justify-between gap-3">
           <span className="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-600">
-            สถานะ: {report.status === 'ready' ? 'พร้อมใช้งาน' : 'ฉบับร่าง'}
+            สถานะ: {STATUS_LABEL[report.status] ?? 'ฉบับร่าง'}
           </span>
           <DeleteReportButton reportId={report.id} />
         </div>
@@ -150,28 +164,52 @@ export default async function AssessmentReportPage({
         ))}
       </section>
 
-      {/* Section 3.1 — Assessor topic summary */}
+      {/* Section 3.1 — Assessor topic summary (strengths + suggestions) */}
       <section className="rounded-xl border border-slate-200 bg-white p-5">
         <h2 className="text-base font-semibold text-slate-800">
           สรุปข้อเสนอแนะตามหัวข้อการทวนสอบ (7 รายการ) — จากผู้ทวนสอบ
         </h2>
-        <div className="mt-3 space-y-3">
-          {snapshot.assessorTopicSummary.map((t) => (
-            <div key={t.key} className="border-l-2 border-slate-200 pl-3">
-              <div className="text-sm font-medium text-slate-700">
-                {t.number}. {t.labelTh}
-              </div>
-              {t.improvements.length === 0 && t.strengths.length === 0 ? (
-                <p className="text-xs text-slate-400">ไม่มีความเห็นเพิ่มเติม</p>
-              ) : (
-                <ul className="mt-1 list-disc space-y-0.5 pl-5 text-xs text-slate-600">
-                  {t.improvements.map((s, i) => (
-                    <li key={`imp-${i}`}>{s}</li>
-                  ))}
-                </ul>
-              )}
-            </div>
-          ))}
+        <div className="mt-3 overflow-hidden rounded-lg border border-slate-200">
+          <table className="w-full text-xs">
+            <thead className="bg-slate-50 text-left text-slate-500">
+              <tr>
+                <th className="w-1/4 px-3 py-2 font-medium">หัวข้อการทวนสอบ</th>
+                <th className="px-3 py-2 font-medium">ข้อดี / จุดเด่น</th>
+                <th className="px-3 py-2 font-medium">ข้อเสนอแนะ</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100 align-top">
+              {snapshot.assessorTopicSummary.map((t) => (
+                <tr key={t.key}>
+                  <td className="px-3 py-2 font-medium text-slate-700">
+                    {t.number}. {t.labelTh}
+                  </td>
+                  <td className="px-3 py-2 text-slate-600">
+                    {t.strengths.length === 0 ? (
+                      <span className="text-slate-300">—</span>
+                    ) : (
+                      <ul className="list-disc space-y-0.5 pl-4">
+                        {t.strengths.map((s, i) => (
+                          <li key={i}>{s}</li>
+                        ))}
+                      </ul>
+                    )}
+                  </td>
+                  <td className="px-3 py-2 text-slate-600">
+                    {t.improvements.length === 0 ? (
+                      <span className="text-slate-300">—</span>
+                    ) : (
+                      <ul className="list-disc space-y-0.5 pl-4">
+                        {t.improvements.map((s, i) => (
+                          <li key={i}>{s}</li>
+                        ))}
+                      </ul>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       </section>
 
