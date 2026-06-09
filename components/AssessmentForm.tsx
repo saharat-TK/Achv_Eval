@@ -366,7 +366,7 @@ export default function AssessmentForm({
       <div
         className={
           scrollBody
-            ? 'overflow-hidden rounded-xl border border-slate-200 bg-white lg:flex lg:min-h-[36rem] lg:flex-[3_1_0%] lg:flex-col'
+            ? 'overflow-hidden rounded-xl border border-slate-200 bg-white lg:flex lg:min-h-[12rem] lg:flex-[3_1_0%] lg:flex-col'
             : 'overflow-hidden rounded-xl border border-slate-200 bg-white'
         }
       >

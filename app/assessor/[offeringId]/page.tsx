@@ -57,7 +57,7 @@ export default async function AssessorOfferingPage({
   }
 
   return (
-    <div>
+    <div className="flex h-full min-h-0 flex-col">
       <Link href="/assessor" className="text-sm text-slate-500 hover:underline">
         ← กลับไปหน้ารายการ
       </Link>

@@ -156,7 +156,11 @@ export default function AiReportsList({
     return <p className="text-sm text-slate-400">กำลังโหลด…</p>;
   }
   if (reports.length === 0) {
-    return <p className="text-sm text-slate-400">ยังไม่มีรายงาน</p>;
+    return (
+      <div className="mt-3 rounded-xl border border-dashed border-slate-200 p-8 text-center text-sm text-slate-400">
+        ยังไม่มีรายงาน — อัปโหลดเอกสารเพื่อเริ่มวิเคราะห์
+      </div>
+    );
   }
 
   return (

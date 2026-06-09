@@ -41,7 +41,7 @@ export default async function OfferingDetailPage({
     : null;
 
   return (
-    <div>
+    <div className="mx-auto max-w-[1108px]">
       <Link href="/lecturer" className="text-sm text-slate-500 hover:underline">
         ← กลับไปหน้ารายวิชา
       </Link>
@@ -59,17 +59,14 @@ export default async function OfferingDetailPage({
         <StatusBadge status={offering.status} />
       </div>
 
-      {/* Analysis submission */}
-      <section className="mt-8">
-        <h2 className="text-sm font-semibold text-slate-700">
-          ส่งเอกสารเพื่อวิเคราะห์ด้วย AI
-        </h2>
-        <p className="mt-1 text-xs text-slate-500">
-          ไฟล์ที่อัปโหลดจะถูกส่งให้ระบบ AI วิเคราะห์ทันทีและ
-          <strong>ไม่ถูกจัดเก็บไว้ในระบบ</strong> — ระบบเก็บเฉพาะรายงาน PDF
-          ที่สร้างขึ้นเท่านั้น
-        </p>
-        <div className="mt-3">
+      {/* Single card — upload action + reports always fill container width */}
+      <div className="mt-6 overflow-hidden rounded-xl border border-slate-200 bg-white">
+
+        {/* Upload row — header strip */}
+        <div className="flex flex-wrap items-center gap-3 border-b border-slate-100 px-4 py-3">
+          <span className="text-sm font-semibold text-slate-700">
+            ส่งเอกสารเพื่อวิเคราะห์ด้วย AI
+          </span>
           <AnalyzeCoursePanel
             offeringId={offering.id}
             status={offering.status}
@@ -78,20 +75,19 @@ export default async function OfferingDetailPage({
             isSuperAdmin={profile.roles.isSuperAdmin === true}
           />
         </div>
-      </section>
 
-      {/* AI reports — live-updating */}
-      <section className="mt-8">
-        <h2 className="text-sm font-semibold text-slate-700">
-          รายงานการวิเคราะห์
-        </h2>
-        <AiReportsList
-          offeringId={offering.id}
-          combinedReportUrl={assessment?.signedPdfUrl ?? null}
-          combinedReportPending={Boolean(assessment && !assessment.signedPdfUrl)}
-          enableAssessmentHandoff
-        />
-      </section>
+        {/* Reports body */}
+        <div className="px-4 py-4">
+          <h2 className="text-sm font-semibold text-slate-700">รายงานการวิเคราะห์</h2>
+          <AiReportsList
+            offeringId={offering.id}
+            combinedReportUrl={assessment?.signedPdfUrl ?? null}
+            combinedReportPending={Boolean(assessment && !assessment.signedPdfUrl)}
+            enableAssessmentHandoff
+          />
+        </div>
+
+      </div>
     </div>
   );
 }

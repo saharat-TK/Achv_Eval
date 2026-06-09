@@ -37,7 +37,7 @@ export default async function LecturerLayout({
           </div>
         </div>
       </header>
-      <main className="mx-auto max-w-6xl px-6 py-8 flex-1">{children}</main>
+      <main className="w-full px-6 py-8 flex-1">{children}</main>
       <AppFooter />
     </div>
   );

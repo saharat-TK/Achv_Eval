@@ -14,7 +14,7 @@ export default async function LecturerDashboard() {
     counts.total > 0 ? `${Math.round((n / counts.total) * 100)}%` : '—';
 
   return (
-    <div>
+    <div className="mx-auto max-w-6xl">
       <div>
         <h1 className="text-xl font-semibold text-slate-800">รายวิชาที่รับผิดชอบ</h1>
         <p className="mt-1 text-sm text-slate-500">
