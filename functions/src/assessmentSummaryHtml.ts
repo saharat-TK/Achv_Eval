@@ -158,6 +158,21 @@ ${assessorTopicTable(d.assessorTopics)}
 <h2>ข้อเสนอแนะเพิ่มเติมตามหัวข้อการทวนสอบ (7 รายการ) — จากการวิเคราะห์ AI</h2>
 ${topicBlock(d.aiTopics)}
 
+${
+  d.semesterGroups.some((g) => g.rows.length > 0)
+    ? `<div style="page-break-before: always;">
+  <h2>ภาคผนวก — รายงานการทวนสอบผลลัพธ์การเรียนรู้รายวิชา (รายฉบับ)</h2>
+  <p>เอกสารส่วนนี้รวบรวมรายงานการทวนสอบฉบับลงนามของแต่ละรายวิชาที่ดำเนินการทวนสอบแล้ว ตามลำดับดังนี้</p>
+  ${d.semesterGroups
+    .map(
+      (g) => `<div style="margin-top:6px;"><strong>${esc(g.semesterLabel)}</strong>
+      <ol>${g.rows.map((r) => `<li>${esc(r.courseCode)} ${esc(r.courseNameEn)}</li>`).join('')}</ol></div>`,
+    )
+    .join('')}
+</div>`
+    : ''
+}
+
 <p class="muted" style="margin-top:14px;font-size:10px;">
   เอกสารนี้เป็นส่วนหนึ่งของกระบวนการทวนสอบผลลัพธ์การเรียนรู้รายวิชา
   จัดทำโดยระบบประเมินและทวนสอบรายวิชา สำนักวิชาวิทยาศาสตร์สุขภาพ มหาวิทยาลัยแม่ฟ้าหลวง

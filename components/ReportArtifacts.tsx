@@ -10,12 +10,10 @@ export default function ReportArtifacts({
   reportId,
   status,
   pdfUrl,
-  docxUrl,
 }: {
   reportId: string;
   status: ReportStatus;
   pdfUrl: string | null;
-  docxUrl: string | null;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
@@ -40,7 +38,7 @@ export default function ReportArtifacts({
     }
   }
 
-  const ready = status === 'ready' && (pdfUrl || docxUrl);
+  const ready = status === 'ready' && pdfUrl;
 
   return (
     <section className="rounded-xl border border-slate-200 bg-white p-5">
@@ -56,14 +54,6 @@ export default function ReportArtifacts({
               ดาวน์โหลด PDF
             </a>
           )}
-          {docxUrl && (
-            <a
-              href={docxUrl}
-              className="rounded-lg border border-mfu-primary px-4 py-2 text-sm font-medium text-mfu-primary hover:bg-mfu-primary/5"
-            >
-              ดาวน์โหลด DOCX (แก้ไขได้)
-            </a>
-          )}
           <button
             onClick={generate}
             disabled={busy}
@@ -76,15 +66,15 @@ export default function ReportArtifacts({
         <div className="mt-3">
           <p className="text-sm text-slate-500">
             {status === 'synthesized'
-              ? 'สังเคราะห์ข้อเสนอแนะ AI เรียบร้อยแล้ว — สร้างเอกสารรายงานในรูปแบบ PDF และ DOCX ได้เลย'
-              : 'สร้างเอกสารรายงานในรูปแบบ PDF และ DOCX พร้อมข้อเสนอแนะที่สังเคราะห์จากการวิเคราะห์ AI'}
+              ? 'สังเคราะห์ข้อเสนอแนะ AI เรียบร้อยแล้ว — สร้างไฟล์ PDF ฉบับสมบูรณ์ (พร้อมภาคผนวกรายงานรายวิชา) ได้เลย'
+              : 'สร้างไฟล์รายงาน PDF พร้อมข้อเสนอแนะที่สังเคราะห์จากการวิเคราะห์ AI และภาคผนวกรายงานการทวนสอบรายวิชา'}
           </p>
           <button
             onClick={generate}
             disabled={busy}
             className="mt-3 rounded-lg bg-mfu-primary px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
           >
-            {busy ? 'กำลังสร้างรายงาน…' : 'สร้างเอกสารรายงาน (PDF / DOCX)'}
+            {busy ? 'กำลังสร้างรายงาน…' : 'สร้างรายงาน PDF'}
           </button>
         </div>
       )}

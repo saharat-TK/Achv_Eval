@@ -2,13 +2,12 @@ import { onCall, HttpsError, type CallableRequest } from 'firebase-functions/v2/
 import { defineSecret } from 'firebase-functions/params';
 import * as admin from 'firebase-admin';
 import { GoogleGenerativeAI } from '@google/generative-ai';
-import { renderHtmlToPdf, storeFile } from './pdf';
+import { renderHtmlToPdf, storeFile, mergePdfs, downloadStored } from './pdf';
 import {
   buildAssessmentSummaryHtml,
   type SummaryReportData,
   type SummaryTopic,
 } from './assessmentSummaryHtml';
-import { buildAssessmentSummaryDocx } from './assessmentSummaryDocx';
 import type { AnalysisResult } from './gemini';
 
 const GEMINI_API_KEY = defineSecret('GEMINI_API_KEY');
@@ -250,6 +249,25 @@ function assembleData(report: ReportData, aiTopics: SummaryTopic[]): SummaryRepo
   };
 }
 
+/** Download each assessed course's signed combined report PDF, in row order. */
+async function collectCourseCombinedPdfs(
+  db: admin.firestore.Firestore,
+  courseRows: CourseRow[],
+): Promise<Buffer[]> {
+  const parts: Buffer[] = [];
+  for (const row of courseRows.filter((r) => r.assessed)) {
+    const offSnap = await db.collection('offerings').doc(row.offeringId).get();
+    const assessmentId = offSnap.data()?.assessmentId as string | undefined;
+    if (!assessmentId) continue;
+    const aSnap = await offSnap.ref.collection('assessments').doc(assessmentId).get();
+    const path = aSnap.data()?.signedPdfStoragePath as string | undefined;
+    if (!path) continue;
+    const bytes = await downloadStored(path);
+    if (bytes) parts.push(bytes);
+  }
+  return parts;
+}
+
 /**
  * Callable: run AI analysis + synthesis for Section 3.2 and store it on the
  * report. Invoked right after a report is created so the AI suggestions are
@@ -301,29 +319,31 @@ export const generateAssessmentSummaryReport = onCall(
 
       const data = assembleData(report, aiTopics);
       const html = buildAssessmentSummaryHtml(data);
-      const [pdf, docx] = await Promise.all([
-        renderHtmlToPdf(html),
-        buildAssessmentSummaryDocx(data),
-      ]);
+      const summaryPdf = await renderHtmlToPdf(html);
+
+      // Appendix: append each assessed course's signed combined report PDF, in
+      // report order (semester, then course code). Missing/unreadable ones are
+      // skipped so a single bad artifact never fails the whole report.
+      const appendixParts = await collectCourseCombinedPdfs(db, report.snapshot.courseRows);
+      const finalPdf = appendixParts.length
+        ? await mergePdfs([summaryPdf, ...appendixParts])
+        : summaryPdf;
 
       const dir = `reports/summary/${report.academicProgramId}/${report.academicYear}`;
       const base = report.scope === 'annual' ? 'annual' : `sem${report.semester}`;
-      const [pdfStored, docxStored] = await Promise.all([
-        storeFile(pdf, `${dir}/${base}.pdf`, 'application/pdf', `summary-${base}-${report.academicYear}.pdf`),
-        storeFile(
-          docx,
-          `${dir}/${base}.docx`,
-          'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-          `summary-${base}-${report.academicYear}.docx`,
-        ),
-      ]);
+      const pdfStored = await storeFile(
+        finalPdf,
+        `${dir}/${base}.pdf`,
+        'application/pdf',
+        `summary-${base}-${report.academicYear}.pdf`,
+      );
 
       await ref.update({
         status: 'ready',
         pdfStoragePath: pdfStored.filePath,
         pdfUrl: pdfStored.downloadUrl,
-        docxStoragePath: docxStored.filePath,
-        docxUrl: docxStored.downloadUrl,
+        docxStoragePath: null,
+        docxUrl: null,
         generatedAt: sts(),
         updatedAt: sts(),
       });
@@ -339,7 +359,7 @@ export const generateAssessmentSummaryReport = onCall(
         after: { assessedOfferings: report.snapshot.assessedOfferings },
       });
 
-      return { pdfUrl: pdfStored.downloadUrl, docxUrl: docxStored.downloadUrl };
+      return { pdfUrl: pdfStored.downloadUrl };
     } catch (err) {
       await ref.update({ status: 'failed', updatedAt: sts() });
       console.error('summary report generation failed', err);

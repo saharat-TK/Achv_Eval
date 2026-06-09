@@ -2,6 +2,33 @@ import * as admin from 'firebase-admin';
 import { randomUUID } from 'crypto';
 import puppeteer from 'puppeteer-core';
 import chromium from '@sparticuz/chromium';
+import { PDFDocument } from 'pdf-lib';
+
+/** Concatenates several PDFs into one, in order. Invalid parts are skipped. */
+export async function mergePdfs(parts: Buffer[]): Promise<Buffer> {
+  const merged = await PDFDocument.create();
+  for (const part of parts) {
+    try {
+      const doc = await PDFDocument.load(part, { ignoreEncryption: true });
+      const pages = await merged.copyPages(doc, doc.getPageIndices());
+      pages.forEach((p) => merged.addPage(p));
+    } catch (err) {
+      console.warn('mergePdfs: skipping an unreadable PDF part', err);
+    }
+  }
+  return Buffer.from(await merged.save());
+}
+
+/** Downloads a stored object's bytes, or null if missing/unreadable. */
+export async function downloadStored(filePath: string): Promise<Buffer | null> {
+  try {
+    const [buf] = await admin.storage().bucket().file(filePath).download();
+    return buf;
+  } catch (err) {
+    console.warn('downloadStored: could not read', filePath, err);
+    return null;
+  }
+}
 
 /** Renders an HTML document to an A4 PDF using headless Chromium. */
 export async function renderHtmlToPdf(html: string): Promise<Buffer> {

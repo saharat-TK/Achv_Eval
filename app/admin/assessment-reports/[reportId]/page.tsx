@@ -245,7 +245,6 @@ export default async function AssessmentReportPage({
         reportId={report.id}
         status={report.status}
         pdfUrl={report.pdfUrl}
-        docxUrl={report.docxUrl}
       />
     </div>
   );
