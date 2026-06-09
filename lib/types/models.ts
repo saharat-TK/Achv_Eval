@@ -465,6 +465,10 @@ export interface ReportTopicSummary {
   labelTh: string;
   strengths: string[];
   improvements: string[];
+  /** Mean of assessor scores (1–3) across assessed courses; null if all N/A. */
+  averageScore?: number | null;
+  /** How many assessed courses contributed a numeric (non-N/A) score. */
+  scoredCount?: number;
 }
 
 export interface ReportSnapshot {
@@ -472,6 +476,8 @@ export interface ReportSnapshot {
   assessedOfferings: number;
   percent: number; // 0–100, one decimal
   bandDistribution: { improve: number; good: number; excellent: number };
+  /** Mean of assessed courses' overall percent scores; null if none assessed. */
+  overallAveragePercent?: number | null;
   courseRows: ReportCourseRow[];
   /** Section 3.1 — aggregated from assessor comments per rubric topic. */
   assessorTopicSummary: ReportTopicSummary[];
@@ -511,6 +517,16 @@ export interface AssessmentSummaryReportDoc {
 }
 
 // ----- Rubric scoring helper ----------------------------------------
+/** Grade bands from a percent: <70 improve, 70–79 good, 80–100 excellent. */
+export function bandFromPercent(percent: number): AssessmentBand {
+  return percent >= 80 ? 'excellent' : percent >= 70 ? 'good' : 'improve';
+}
+
+/** Band for a mean topic score on the 1–3 scale (score/3 → percent). */
+export function bandFromScore(score: number): AssessmentBand {
+  return bandFromPercent((score / 3) * 100);
+}
+
 /**
  * Computes total/max/percent/band for an assessment.
  * `na` items are excluded from both numerator and denominator.

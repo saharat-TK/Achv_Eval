@@ -50,6 +50,7 @@ interface StoredTopic {
   labelTh: string;
   strengths: string[];
   improvements: string[];
+  averageScore?: number | null;
 }
 
 interface ReportData {
@@ -63,6 +64,7 @@ interface ReportData {
     totalOfferings: number;
     assessedOfferings: number;
     percent: number;
+    overallAveragePercent?: number | null;
     bandDistribution: { improve: number; good: number; excellent: number };
     courseRows: CourseRow[];
     assessorTopicSummary: StoredTopic[];
@@ -232,6 +234,7 @@ function assembleData(report: ReportData, aiTopics: SummaryTopic[]): SummaryRepo
     totalOfferings: report.snapshot.totalOfferings,
     assessedOfferings: report.snapshot.assessedOfferings,
     percent: report.snapshot.percent,
+    overallAveragePercent: report.snapshot.overallAveragePercent ?? null,
     bandDistribution: report.snapshot.bandDistribution,
     semesterGroups,
     assessorTopics: report.snapshot.assessorTopicSummary.map((t) => ({
@@ -239,6 +242,7 @@ function assembleData(report: ReportData, aiTopics: SummaryTopic[]): SummaryRepo
       labelTh: t.labelTh,
       strengths: t.strengths,
       improvements: t.improvements,
+      averageScore: t.averageScore ?? null,
     })),
     aiTopics,
     generatedAt: new Date().toLocaleString('th-TH', {

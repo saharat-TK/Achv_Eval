@@ -114,6 +114,11 @@ export async function buildReportSnapshot(
       { key: t.key, number: t.number, labelTh: t.labelTh, strengths: [], improvements: [] },
     ]),
   );
+  // Per-topic numeric score accumulators (N/A excluded), and overall percents.
+  const topicScore = new Map<string, { sum: number; count: number }>(
+    RUBRIC_TOPICS.map((t) => [t.key, { sum: 0, count: 0 }]),
+  );
+  const coursePercents: number[] = [];
 
   let assessedOfferings = 0;
 
@@ -152,13 +157,21 @@ export async function buildReportSnapshot(
         band = assessment.band;
         percentScore = assessment.percentScore;
         bandDistribution[assessment.band] += 1;
+        coursePercents.push(assessment.percentScore);
         for (const t of RUBRIC_TOPICS) {
-          const c = assessment.comments?.[t.key as keyof AssessmentDoc['scores']];
+          const key = t.key as keyof AssessmentDoc['scores'];
+          const c = assessment.comments?.[key];
           const bucket = topicMap.get(t.key)!;
           const s = c?.strengths?.trim();
           const imp = c?.improvements?.trim();
           if (s) bucket.strengths.push(s);
           if (imp) bucket.improvements.push(imp);
+          const score = assessment.scores?.[key];
+          if (typeof score === 'number') {
+            const acc = topicScore.get(t.key)!;
+            acc.sum += score;
+            acc.count += 1;
+          }
         }
       }
     }
@@ -187,13 +200,29 @@ export async function buildReportSnapshot(
       ? 0
       : Math.round((1000 * assessedOfferings) / totalOfferings) / 10;
 
+  const overallAveragePercent =
+    coursePercents.length === 0
+      ? null
+      : Math.round(
+          (10 * coursePercents.reduce((a, b) => a + b, 0)) / coursePercents.length,
+        ) / 10;
+
   return {
     totalOfferings,
     assessedOfferings,
     percent,
     bandDistribution,
+    overallAveragePercent,
     courseRows,
-    assessorTopicSummary: RUBRIC_TOPICS.map((t) => topicMap.get(t.key)!),
+    assessorTopicSummary: RUBRIC_TOPICS.map((t) => {
+      const base = topicMap.get(t.key)!;
+      const acc = topicScore.get(t.key)!;
+      return {
+        ...base,
+        averageScore: acc.count === 0 ? null : Math.round((10 * acc.sum) / acc.count) / 10,
+        scoredCount: acc.count,
+      };
+    }),
   };
 }
 

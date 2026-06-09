@@ -5,11 +5,13 @@ import { getReportById } from '@/lib/data/assessmentReports';
 import { SEMESTER_LABEL } from '@/lib/constants';
 import ReportArtifacts from '@/components/ReportArtifacts';
 import DeleteReportButton from '@/components/DeleteReportButton';
-import type {
-  AssessmentBand,
-  ReportStatus,
-  ReportTopicSummary,
-  Semester,
+import {
+  bandFromPercent,
+  bandFromScore,
+  type AssessmentBand,
+  type ReportStatus,
+  type ReportTopicSummary,
+  type Semester,
 } from '@/lib/types/models';
 
 export const dynamic = 'force-dynamic';
@@ -19,6 +21,22 @@ const BAND_LABEL: Record<AssessmentBand, string> = {
   good: 'ดี',
   excellent: 'ดีเยี่ยม',
 };
+
+const BAND_BADGE: Record<AssessmentBand, string> = {
+  improve: 'bg-amber-50 text-amber-800 border-amber-200',
+  good: 'bg-blue-50 text-blue-800 border-blue-200',
+  excellent: 'bg-green-50 text-green-800 border-green-200',
+};
+
+function BandBadge({ band }: { band: AssessmentBand }) {
+  return (
+    <span
+      className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium ${BAND_BADGE[band]}`}
+    >
+      {BAND_LABEL[band]}
+    </span>
+  );
+}
 
 const STATUS_LABEL: Record<ReportStatus, string> = {
   draft: 'ฉบับร่าง',
@@ -166,14 +184,23 @@ export default async function AssessmentReportPage({
 
       {/* Section 3.1 — Assessor topic summary (strengths + suggestions) */}
       <section className="rounded-xl border border-slate-200 bg-white p-5">
-        <h2 className="text-base font-semibold text-slate-800">
-          สรุปข้อเสนอแนะตามหัวข้อการทวนสอบ (7 รายการ) — จากผู้ทวนสอบ
-        </h2>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-base font-semibold text-slate-800">
+            สรุปข้อเสนอแนะตามหัวข้อการทวนสอบ (7 รายการ) — จากผู้ทวนสอบ
+          </h2>
+          {snapshot.overallAveragePercent != null && (
+            <span className="inline-flex items-center gap-2 text-sm text-slate-600">
+              ค่าเฉลี่ยรวมทุกรายวิชา: {snapshot.overallAveragePercent}%
+              <BandBadge band={bandFromPercent(snapshot.overallAveragePercent)} />
+            </span>
+          )}
+        </div>
         <div className="mt-3 overflow-hidden rounded-lg border border-slate-200">
           <table className="w-full text-xs">
             <thead className="bg-slate-50 text-left text-slate-500">
               <tr>
-                <th className="w-1/4 px-3 py-2 font-medium">หัวข้อการทวนสอบ</th>
+                <th className="w-1/5 px-3 py-2 font-medium">หัวข้อการทวนสอบ</th>
+                <th className="px-3 py-2 font-medium">คะแนนเฉลี่ย</th>
                 <th className="px-3 py-2 font-medium">ข้อดี / จุดเด่น</th>
                 <th className="px-3 py-2 font-medium">ข้อเสนอแนะ</th>
               </tr>
@@ -183,6 +210,16 @@ export default async function AssessmentReportPage({
                 <tr key={t.key}>
                   <td className="px-3 py-2 font-medium text-slate-700">
                     {t.number}. {t.labelTh}
+                  </td>
+                  <td className="whitespace-nowrap px-3 py-2 text-slate-600">
+                    {t.averageScore == null ? (
+                      <span className="text-slate-300">N/A</span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1.5">
+                        {t.averageScore.toFixed(1)}/3
+                        <BandBadge band={bandFromScore(t.averageScore)} />
+                      </span>
+                    )}
                   </td>
                   <td className="px-3 py-2 text-slate-600">
                     {t.strengths.length === 0 ? (
