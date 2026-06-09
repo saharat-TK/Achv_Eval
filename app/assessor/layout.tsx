@@ -66,7 +66,9 @@ export default async function AssessorLayout({
         </nav>
       </div>
 
-      <main className="mx-auto max-w-6xl px-6 py-8 flex-1">{children}</main>
+      <main className="mx-auto flex w-full max-w-6xl min-h-0 flex-1 flex-col px-6 py-8">
+        {children}
+      </main>
       <AppFooter />
     </div>
   );

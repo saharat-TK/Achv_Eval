@@ -50,7 +50,7 @@ export default function AssessorOfferingTabs({
     }`;
 
   return (
-    <div>
+    <div className="lg:flex lg:min-h-0 lg:flex-1 lg:flex-col">
       {/* Tab bar — only rendered when there is a previous assessment to follow up on */}
       {showFollowUpTab && (
         <div className="mt-4 flex border-b border-slate-200">
@@ -71,7 +71,7 @@ export default function AssessorOfferingTabs({
 
       {/* Tab 1 — Current assessment (existing two-column layout) */}
       {tab === 'current' && (
-        <div className="mt-6 grid gap-6 lg:h-[calc(100vh-10rem)] lg:min-h-[52rem] lg:grid-cols-2">
+        <div className="mt-6 grid gap-6 lg:min-h-0 lg:flex-1 lg:grid-cols-2">
           {/* Left — AI analysis report (read-only) */}
           <section className="lg:flex lg:min-h-0 lg:flex-col lg:pr-1">
             <h2 className="text-sm font-semibold text-slate-700">รายงานการวิเคราะห์ AI</h2>
