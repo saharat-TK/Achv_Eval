@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react';
 import type { ManagedOffering } from '@/lib/data/offeringManager';
 import type { Semester } from '@/lib/types/models';
 import { SEMESTER_LABEL } from '@/lib/constants';
+import StatusBadge from '@/components/StatusBadge';
 
 interface ProgramOpt {
   id: string;
@@ -265,6 +266,7 @@ export default function AssessmentReportsClient({
                         <ProgramProgressRow
                           key={`${s.sem}-${row.academicProgramId ?? 'none'}`}
                           row={row}
+                          collapsible
                           onCreate={() =>
                             handleCreate(
                               `รายงาน${SEMESTER_LABEL[s.sem]} ${g.year} · ${row.label}`,
@@ -289,19 +291,49 @@ function ProgramProgressRow({
   row,
   onCreate,
   createLabel,
+  collapsible = false,
 }: {
   row: ProgramRow;
   onCreate: () => void;
   createLabel: string;
+  /** Semester rows expand to a course-status list; the annual rollup does not. */
+  collapsible?: boolean;
 }) {
+  const [expanded, setExpanded] = useState(false);
   const { stats } = row;
   const percent = Math.round(stats.ratio * 1000) / 10;
   const fillColor = stats.eligible ? 'bg-[#00704A]' : 'bg-amber-400';
 
+  const courses = useMemo(
+    () =>
+      row.offerings
+        .filter((o) => o.isActive)
+        .sort((a, b) => a.courseCode.localeCompare(b.courseCode)),
+    [row.offerings],
+  );
+
   return (
     <div className="rounded-lg border border-slate-200 bg-white px-3 py-2.5">
       <div className="flex items-center justify-between gap-3">
-        <span className="truncate text-sm font-medium text-slate-700">{row.label}</span>
+        {collapsible ? (
+          <button
+            type="button"
+            onClick={() => setExpanded((v) => !v)}
+            className="flex min-w-0 flex-1 items-center gap-1.5 text-left"
+            aria-expanded={expanded}
+          >
+            <span
+              className={`shrink-0 text-[10px] text-slate-400 transition-transform duration-150 ${
+                expanded ? 'rotate-90' : ''
+              }`}
+            >
+              ▶
+            </span>
+            <span className="truncate text-sm font-medium text-slate-700">{row.label}</span>
+          </button>
+        ) : (
+          <span className="truncate text-sm font-medium text-slate-700">{row.label}</span>
+        )}
         <span className="shrink-0 text-xs text-slate-500">
           ทวนสอบแล้ว {stats.assessed}/{stats.total} ({percent}%)
         </span>
@@ -334,6 +366,28 @@ function ProgramProgressRow({
           {createLabel}
         </button>
       </div>
+
+      {/* Collapsible course-status list (semester rows only) */}
+      {collapsible && expanded && (
+        <ul className="mt-3 divide-y divide-slate-100 border-t border-slate-100">
+          {courses.length === 0 ? (
+            <li className="py-2 text-xs text-slate-400">ไม่มีรายวิชา</li>
+          ) : (
+            courses.map((o) => (
+              <li
+                key={o.id}
+                className="flex items-center justify-between gap-3 py-2"
+              >
+                <span className="min-w-0 truncate text-xs text-slate-700">
+                  <span className="font-medium">{o.courseCode}</span>{' '}
+                  {o.courseNameTh}
+                </span>
+                <StatusBadge status={o.status} />
+              </li>
+            ))
+          )}
+        </ul>
+      )}
     </div>
   );
 }
