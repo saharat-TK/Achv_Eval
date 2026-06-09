@@ -432,6 +432,10 @@ export interface AuditLogDoc {
 
 // ----- assessmentSummaryReports/{reportId} --------------------------
 export type ReportScope = 'semester' | 'annual';
+/** A report covers one academic program, or all programs (school-wide). */
+export type ReportCoverage = 'program' | 'all';
+/** Sentinel academicProgramId for school-wide (all-programs) reports. */
+export const ALL_PROGRAMS_ID = '__ALL__';
 export type ReportStatus =
   | 'draft' // created; AI synthesis not yet run
   | 'synthesizing' // AI synthesis in progress
@@ -456,6 +460,26 @@ export interface ReportCourseRow {
   assessed: boolean;
   band: AssessmentBand | null;
   percentScore: number | null;
+  /** Offering status — included for all-programs course listings. */
+  status?: string;
+  /** Academic year — included for all-programs (annual) course listings. */
+  academicYear?: number;
+  /** Owning academic program — set on all-programs reports for grouping. */
+  academicProgramId?: string;
+  academicProgramCode?: string;
+  academicProgramName?: string;
+}
+
+/** Per-program rollup row for the all-programs (school-wide) report. */
+export interface ProgramRollupRow {
+  academicProgramId: string;
+  code: string;
+  name: string;
+  totalOfferings: number;
+  assessedOfferings: number;
+  assessedPercent: number; // 0–100, one decimal
+  avgScorePercent: number | null; // mean of assessed courses' percent
+  band: AssessmentBand | null;
 }
 
 /** Aggregated commentary for one of the 7 rubric topics. */
@@ -481,11 +505,15 @@ export interface ReportSnapshot {
   courseRows: ReportCourseRow[];
   /** Section 3.1 — aggregated from assessor comments per rubric topic. */
   assessorTopicSummary: ReportTopicSummary[];
+  /** All-programs reports only — per-program rollup for the §2 table. */
+  programRollup?: ProgramRollupRow[];
 }
 
 export interface AssessmentSummaryReportDoc {
+  /** Owning academic program, or ALL_PROGRAMS_ID for school-wide reports. */
   academicProgramId: string;
-  academicProgramLabel: string; // denormalized "code — nameTh"
+  academicProgramLabel: string; // denormalized "code — nameTh" (or "ทุกหลักสูตร")
+  coverage: ReportCoverage;
   academicYear: number; // Buddhist year
   scope: ReportScope;
   semester: Semester | null; // null for annual scope

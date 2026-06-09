@@ -5,6 +5,7 @@ import { getReportById } from '@/lib/data/assessmentReports';
 import { SEMESTER_LABEL } from '@/lib/constants';
 import ReportArtifacts from '@/components/ReportArtifacts';
 import DeleteReportButton from '@/components/DeleteReportButton';
+import CourseListByProgram from '@/components/CourseListByProgram';
 import {
   bandFromPercent,
   bandFromScore,
@@ -65,6 +66,7 @@ export default async function AssessmentReportPage({
   if (!isAdmin && !isDirector) notFound();
 
   const { snapshot, header } = report;
+  const isAll = report.coverage === 'all';
   const scopeLabel =
     report.scope === 'annual'
       ? 'ประจำปีการศึกษา'
@@ -148,38 +150,67 @@ export default async function AssessmentReportPage({
           </span>
         </div>
 
-        {/* Assessed-course table grouped by semester */}
-        {semesters.map((sem) => (
-          <div key={sem} className="mt-4">
-            <div className="text-sm font-semibold text-slate-600">
-              {SEMESTER_LABEL[sem]} ({bySemester.get(sem)!.length} รายวิชา)
-            </div>
-            <table className="mt-1 w-full text-sm">
-              <thead className="text-left text-xs text-slate-500">
-                <tr>
-                  <th className="py-1 pr-3 font-medium">รหัส/ชื่อรายวิชา</th>
-                  <th className="py-1 pr-3 font-medium">ผู้รับผิดชอบ</th>
-                  <th className="py-1 font-medium">ผลการประเมิน</th>
+        {/* All-programs: per-program rollup table. Per-program: per-semester courses. */}
+        {isAll && snapshot.programRollup ? (
+          <table className="mt-4 w-full text-sm">
+            <thead className="text-left text-xs text-slate-500">
+              <tr>
+                <th className="py-1 pr-3 font-medium">รหัสหลักสูตร</th>
+                <th className="py-1 pr-3 font-medium">ชื่อหลักสูตร</th>
+                <th className="py-1 pr-3 font-medium">รายวิชา</th>
+                <th className="py-1 pr-3 font-medium">ทวนสอบแล้ว</th>
+                <th className="py-1 pr-3 font-medium">คะแนนเฉลี่ย</th>
+                <th className="py-1 font-medium">ระดับ</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {snapshot.programRollup.map((p) => (
+                <tr key={p.academicProgramId}>
+                  <td className="py-1.5 pr-3 text-slate-700">{p.code}</td>
+                  <td className="py-1.5 pr-3 text-slate-700">{p.name}</td>
+                  <td className="py-1.5 pr-3 text-slate-600">{p.totalOfferings}</td>
+                  <td className="py-1.5 pr-3 text-slate-600">
+                    {p.assessedOfferings} ({p.assessedPercent}%)
+                  </td>
+                  <td className="py-1.5 pr-3 text-slate-600">
+                    {p.avgScorePercent != null ? `${p.avgScorePercent}%` : '—'}
+                  </td>
+                  <td className="py-1.5">{p.band ? <BandBadge band={p.band} /> : '—'}</td>
                 </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {bySemester.get(sem)!.map((r) => (
-                  <tr key={r.offeringId}>
-                    <td className="py-1.5 pr-3 text-slate-700">
-                      {r.courseCode} {r.courseNameEn}
-                    </td>
-                    <td className="py-1.5 pr-3 text-slate-600">
-                      {r.lecturerName ?? '—'}
-                    </td>
-                    <td className="py-1.5 text-slate-600">
-                      {r.band ? BAND_LABEL[r.band] : '—'}
-                    </td>
+              ))}
+            </tbody>
+          </table>
+        ) : (
+          semesters.map((sem) => (
+            <div key={sem} className="mt-4">
+              <div className="text-sm font-semibold text-slate-600">
+                {SEMESTER_LABEL[sem]} ({bySemester.get(sem)!.length} รายวิชา)
+              </div>
+              <table className="mt-1 w-full text-sm">
+                <thead className="text-left text-xs text-slate-500">
+                  <tr>
+                    <th className="py-1 pr-3 font-medium">รหัส/ชื่อรายวิชา</th>
+                    <th className="py-1 pr-3 font-medium">ผู้รับผิดชอบ</th>
+                    <th className="py-1 font-medium">ผลการประเมิน</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        ))}
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {bySemester.get(sem)!.map((r) => (
+                    <tr key={r.offeringId}>
+                      <td className="py-1.5 pr-3 text-slate-700">
+                        {r.courseCode} {r.courseNameEn}
+                      </td>
+                      <td className="py-1.5 pr-3 text-slate-600">{r.lecturerName ?? '—'}</td>
+                      <td className="py-1.5 text-slate-600">
+                        {r.band ? BAND_LABEL[r.band] : '—'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ))
+        )}
       </section>
 
       {/* Section 3.1 — Assessor topic summary (strengths + suggestions) */}
@@ -276,6 +307,9 @@ export default async function AssessmentReportPage({
           </div>
         </section>
       )}
+
+      {/* All-programs: full course listing grouped by academic program (filterable) */}
+      {isAll && <CourseListByProgram rows={snapshot.courseRows} />}
 
       {/* Generate / download PDF + DOCX */}
       <ReportArtifacts

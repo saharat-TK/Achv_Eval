@@ -7,17 +7,25 @@ import { getSessionUser, getCurrentProfile } from '@/lib/firebase/auth-server';
 import { REPORT_THRESHOLD } from '@/lib/constants';
 import {
   academicProgramLabel,
+  buildAllProgramsSnapshot,
   buildReportSnapshot,
   reportDocId,
 } from '@/lib/data/assessmentReports';
-import type {
-  ReportCommitteeMember,
-  ReportScope,
-  Semester,
+import { getManagedAcademicPrograms } from '@/lib/data/offeringManager';
+import {
+  ALL_PROGRAMS_ID,
+  type ReportCommitteeMember,
+  type ReportCoverage,
+  type ReportScope,
+  type ReportSnapshot,
+  type Semester,
 } from '@/lib/types/models';
+
+const ALL_PROGRAMS_LABEL = 'ทุกหลักสูตร (ทั้งสำนักวิชา)';
 
 export interface CreateReportInput {
   academicProgramId: string;
+  coverage?: ReportCoverage;
   academicYear: number;
   scope: ReportScope;
   semester: Semester | null;
@@ -58,8 +66,14 @@ export async function createAssessmentReport(
 ): Promise<CreateReportResult> {
   const access = await resolveAccess();
   if (!access) return { ok: false, error: 'ไม่มีสิทธิ์ดำเนินการ' };
-  if (!canAccess(access, input.academicProgramId))
+
+  const coverage: ReportCoverage = input.coverage === 'all' ? 'all' : 'program';
+  // School-wide reports are admin/super-admin only.
+  if (coverage === 'all') {
+    if (!access.isAdmin) return { ok: false, error: 'เฉพาะผู้ดูแลระบบเท่านั้น' };
+  } else if (!canAccess(access, input.academicProgramId)) {
     return { ok: false, error: 'ไม่มีสิทธิ์ในหลักสูตรนี้' };
+  }
 
   if (input.scope === 'semester' && !input.semester)
     return { ok: false, error: 'กรุณาระบุภาคการศึกษา' };
@@ -71,15 +85,33 @@ export async function createAssessmentReport(
     return { ok: false, error: 'กรุณาระบุรายชื่อคณะกรรมการอย่างน้อย 1 คน' };
 
   const semester = input.scope === 'annual' ? null : input.semester;
+  const academicProgramId = coverage === 'all' ? ALL_PROGRAMS_ID : input.academicProgramId;
 
   // Recompute the snapshot server-side and re-check the 25% gate so the
   // threshold can't be bypassed from the client.
-  const snapshot = await buildReportSnapshot(
-    input.academicProgramId,
-    input.academicYear,
-    input.scope,
-    semester,
-  );
+  let snapshot: ReportSnapshot;
+  let label: string;
+  if (coverage === 'all') {
+    const { programs } = await getManagedAcademicPrograms({
+      roles: { isAdmin: true },
+    });
+    snapshot = await buildAllProgramsSnapshot(
+      programs.map((p) => ({ id: p.id, code: p.code, nameTh: p.nameTh })),
+      input.academicYear,
+      input.scope,
+      semester,
+    );
+    label = ALL_PROGRAMS_LABEL;
+  } else {
+    snapshot = await buildReportSnapshot(
+      input.academicProgramId,
+      input.academicYear,
+      input.scope,
+      semester,
+    );
+    label = await academicProgramLabel(input.academicProgramId);
+  }
+
   if (snapshot.totalOfferings === 0)
     return { ok: false, error: 'ไม่มีรายวิชาที่เปิดสอนในช่วงที่เลือก' };
   if (snapshot.assessedOfferings / snapshot.totalOfferings < REPORT_THRESHOLD)
@@ -88,16 +120,16 @@ export async function createAssessmentReport(
       error: `ต้องทวนสอบอย่างน้อย ${Math.round(REPORT_THRESHOLD * 100)}% ของรายวิชาก่อนจึงจะสร้างรายงานได้`,
     };
 
-  const label = await academicProgramLabel(input.academicProgramId);
-  const id = reportDocId(input.academicProgramId, input.academicYear, input.scope, semester);
+  const id = reportDocId(academicProgramId, input.academicYear, input.scope, semester);
   const ref = getAdminDb().collection('assessmentSummaryReports').doc(id);
   const existing = await ref.get();
 
   const now = FieldValue.serverTimestamp();
   await ref.set(
     {
-      academicProgramId: input.academicProgramId,
+      academicProgramId,
       academicProgramLabel: label,
+      coverage,
       academicYear: input.academicYear,
       scope: input.scope,
       semester,

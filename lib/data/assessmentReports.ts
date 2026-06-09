@@ -1,13 +1,16 @@
 import 'server-only';
 import { getAdminDb } from '@/lib/firebase/admin';
 import { RUBRIC_TOPICS } from '@/lib/constants';
+import { bandFromPercent } from '@/lib/types/models';
 import type {
   AssessmentBand,
   AssessmentDoc,
   AssessmentSummaryReportDoc,
   OfferingDoc,
   ProgramDoc,
+  ProgramRollupRow,
   ReportCourseRow,
+  ReportCoverage,
   ReportScope,
   ReportSnapshot,
   ReportTopicSummary,
@@ -90,6 +93,79 @@ async function lecturerNameOf(
   return o.pendingLecturerEmail || o.lecturerEmail || null;
 }
 
+/** Read an offering's signed assessment (linked, else latest), or null. */
+async function readAssessment(
+  db: FirebaseFirestore.Firestore,
+  offeringId: string,
+  assessmentId: string | null | undefined,
+): Promise<AssessmentDoc | null> {
+  const col = db.collection('offerings').doc(offeringId).collection('assessments');
+  if (assessmentId) {
+    const s = await col.doc(assessmentId).get();
+    if (s.exists) return s.data() as AssessmentDoc;
+  }
+  const s = await col.orderBy('createdAt', 'desc').limit(1).get();
+  return s.empty ? null : (s.docs[0].data() as AssessmentDoc);
+}
+
+/** Mutable accumulators shared by the per-program and all-programs builders. */
+interface SnapshotAcc {
+  bandDistribution: { improve: number; good: number; excellent: number };
+  topicMap: Map<string, ReportTopicSummary>;
+  topicScore: Map<string, { sum: number; count: number }>;
+  coursePercents: number[];
+}
+
+function newAcc(): SnapshotAcc {
+  return {
+    bandDistribution: { improve: 0, good: 0, excellent: 0 },
+    topicMap: new Map(
+      RUBRIC_TOPICS.map((t) => [
+        t.key,
+        { key: t.key, number: t.number, labelTh: t.labelTh, strengths: [], improvements: [] },
+      ]),
+    ),
+    topicScore: new Map(RUBRIC_TOPICS.map((t) => [t.key, { sum: 0, count: 0 }])),
+    coursePercents: [],
+  };
+}
+
+/** Fold one signed assessment into the shared accumulators. */
+function accumulate(acc: SnapshotAcc, assessment: AssessmentDoc): void {
+  acc.bandDistribution[assessment.band] += 1;
+  acc.coursePercents.push(assessment.percentScore);
+  for (const t of RUBRIC_TOPICS) {
+    const key = t.key as keyof AssessmentDoc['scores'];
+    const c = assessment.comments?.[key];
+    const bucket = acc.topicMap.get(t.key)!;
+    const s = c?.strengths?.trim();
+    const imp = c?.improvements?.trim();
+    if (s) bucket.strengths.push(s);
+    if (imp) bucket.improvements.push(imp);
+    const score = assessment.scores?.[key];
+    if (typeof score === 'number') {
+      const sc = acc.topicScore.get(t.key)!;
+      sc.sum += score;
+      sc.count += 1;
+    }
+  }
+}
+
+function topicSummaries(acc: SnapshotAcc): ReportTopicSummary[] {
+  return RUBRIC_TOPICS.map((t) => {
+    const base = acc.topicMap.get(t.key)!;
+    const sc = acc.topicScore.get(t.key)!;
+    return {
+      ...base,
+      averageScore: sc.count === 0 ? null : Math.round((10 * sc.sum) / sc.count) / 10,
+      scoredCount: sc.count,
+    };
+  });
+}
+
+const mean1 = (xs: number[]): number | null =>
+  xs.length === 0 ? null : Math.round((10 * xs.reduce((a, b) => a + b, 0)) / xs.length) / 10;
+
 /**
  * Build the frozen snapshot a report renders from: counts, band distribution,
  * per-course rows, and the Section 3.1 aggregation of assessor comments across
@@ -104,76 +180,23 @@ export async function buildReportSnapshot(
   const db = getAdminDb();
   const offerings = await offeringsInScope(db, academicProgramId, academicYear, semester);
 
-  const totalOfferings = offerings.length;
-  const bandDistribution = { improve: 0, good: 0, excellent: 0 };
+  const acc = newAcc();
   const courseRows: ReportCourseRow[] = [];
-
-  // Per-topic comment buckets, seeded in rubric order.
-  const topicMap = new Map<string, ReportTopicSummary>(
-    RUBRIC_TOPICS.map((t) => [
-      t.key,
-      { key: t.key, number: t.number, labelTh: t.labelTh, strengths: [], improvements: [] },
-    ]),
-  );
-  // Per-topic numeric score accumulators (N/A excluded), and overall percents.
-  const topicScore = new Map<string, { sum: number; count: number }>(
-    RUBRIC_TOPICS.map((t) => [t.key, { sum: 0, count: 0 }]),
-  );
-  const coursePercents: number[] = [];
-
   let assessedOfferings = 0;
 
   for (const o of offerings) {
     const isAssessed = o.status === 'assessed';
     const lecturerName = await lecturerNameOf(db, o);
-
     let band: ReportCourseRow['band'] = null;
     let percentScore: ReportCourseRow['percentScore'] = null;
 
     if (isAssessed) {
       assessedOfferings += 1;
-      // Prefer the linked assessment; fall back to the latest one.
-      let assessment: AssessmentDoc | null = null;
-      if (o.assessmentId) {
-        const s = await db
-          .collection('offerings')
-          .doc(o.id)
-          .collection('assessments')
-          .doc(o.assessmentId)
-          .get();
-        if (s.exists) assessment = s.data() as AssessmentDoc;
-      }
-      if (!assessment) {
-        const s = await db
-          .collection('offerings')
-          .doc(o.id)
-          .collection('assessments')
-          .orderBy('createdAt', 'desc')
-          .limit(1)
-          .get();
-        if (!s.empty) assessment = s.docs[0].data() as AssessmentDoc;
-      }
-
+      const assessment = await readAssessment(db, o.id, o.assessmentId);
       if (assessment) {
         band = assessment.band;
         percentScore = assessment.percentScore;
-        bandDistribution[assessment.band] += 1;
-        coursePercents.push(assessment.percentScore);
-        for (const t of RUBRIC_TOPICS) {
-          const key = t.key as keyof AssessmentDoc['scores'];
-          const c = assessment.comments?.[key];
-          const bucket = topicMap.get(t.key)!;
-          const s = c?.strengths?.trim();
-          const imp = c?.improvements?.trim();
-          if (s) bucket.strengths.push(s);
-          if (imp) bucket.improvements.push(imp);
-          const score = assessment.scores?.[key];
-          if (typeof score === 'number') {
-            const acc = topicScore.get(t.key)!;
-            acc.sum += score;
-            acc.count += 1;
-          }
-        }
+        accumulate(acc, assessment);
       }
     }
 
@@ -192,38 +215,111 @@ export async function buildReportSnapshot(
 
   courseRows.sort(
     (a, b) =>
+      Number(a.semester) - Number(b.semester) || a.courseCode.localeCompare(b.courseCode),
+  );
+
+  const totalOfferings = offerings.length;
+  return {
+    totalOfferings,
+    assessedOfferings,
+    percent: totalOfferings === 0 ? 0 : Math.round((1000 * assessedOfferings) / totalOfferings) / 10,
+    bandDistribution: acc.bandDistribution,
+    overallAveragePercent: mean1(acc.coursePercents),
+    courseRows,
+    assessorTopicSummary: topicSummaries(acc),
+  };
+}
+
+/**
+ * Build the school-wide snapshot: one accumulator across every given program,
+ * a per-program rollup table, and per-course rows tagged with their program.
+ */
+export async function buildAllProgramsSnapshot(
+  programs: { id: string; code: string; nameTh: string }[],
+  academicYear: number,
+  scope: ReportScope,
+  semester: Semester | null,
+): Promise<ReportSnapshot> {
+  const db = getAdminDb();
+  const acc = newAcc();
+  const courseRows: ReportCourseRow[] = [];
+  const programRollup: ProgramRollupRow[] = [];
+  let totalOfferings = 0;
+  let assessedOfferings = 0;
+
+  for (const p of programs) {
+    const offerings = await offeringsInScope(db, p.id, academicYear, semester);
+    let pAssessed = 0;
+    const pPercents: number[] = [];
+
+    for (const o of offerings) {
+      const isAssessed = o.status === 'assessed';
+      const lecturerName = await lecturerNameOf(db, o);
+      let band: ReportCourseRow['band'] = null;
+      let percentScore: ReportCourseRow['percentScore'] = null;
+
+      if (isAssessed) {
+        pAssessed += 1;
+        const assessment = await readAssessment(db, o.id, o.assessmentId);
+        if (assessment) {
+          band = assessment.band;
+          percentScore = assessment.percentScore;
+          pPercents.push(assessment.percentScore);
+          accumulate(acc, assessment);
+        }
+      }
+
+      courseRows.push({
+        offeringId: o.id,
+        courseCode: o.courseCode,
+        courseNameTh: o.courseNameTh,
+        courseNameEn: o.courseNameEn,
+        semester: o.semester,
+        lecturerName,
+        assessed: isAssessed,
+        band,
+        percentScore,
+        status: o.status,
+        academicYear: o.academicYear,
+        academicProgramId: p.id,
+        academicProgramCode: p.code,
+        academicProgramName: p.nameTh,
+      });
+    }
+
+    totalOfferings += offerings.length;
+    assessedOfferings += pAssessed;
+    const avgScorePercent = mean1(pPercents);
+    programRollup.push({
+      academicProgramId: p.id,
+      code: p.code,
+      name: p.nameTh,
+      totalOfferings: offerings.length,
+      assessedOfferings: pAssessed,
+      assessedPercent:
+        offerings.length === 0 ? 0 : Math.round((1000 * pAssessed) / offerings.length) / 10,
+      avgScorePercent,
+      band: avgScorePercent == null ? null : bandFromPercent(avgScorePercent),
+    });
+  }
+
+  programRollup.sort((a, b) => a.code.localeCompare(b.code));
+  courseRows.sort(
+    (a, b) =>
+      (a.academicProgramCode ?? '').localeCompare(b.academicProgramCode ?? '') ||
       Number(a.semester) - Number(b.semester) ||
       a.courseCode.localeCompare(b.courseCode),
   );
 
-  const percent =
-    totalOfferings === 0
-      ? 0
-      : Math.round((1000 * assessedOfferings) / totalOfferings) / 10;
-
-  const overallAveragePercent =
-    coursePercents.length === 0
-      ? null
-      : Math.round(
-          (10 * coursePercents.reduce((a, b) => a + b, 0)) / coursePercents.length,
-        ) / 10;
-
   return {
     totalOfferings,
     assessedOfferings,
-    percent,
-    bandDistribution,
-    overallAveragePercent,
+    percent: totalOfferings === 0 ? 0 : Math.round((1000 * assessedOfferings) / totalOfferings) / 10,
+    bandDistribution: acc.bandDistribution,
+    overallAveragePercent: mean1(acc.coursePercents),
     courseRows,
-    assessorTopicSummary: RUBRIC_TOPICS.map((t) => {
-      const base = topicMap.get(t.key)!;
-      const acc = topicScore.get(t.key)!;
-      return {
-        ...base,
-        averageScore: acc.count === 0 ? null : Math.round((10 * acc.sum) / acc.count) / 10,
-        scoredCount: acc.count,
-      };
-    }),
+    assessorTopicSummary: topicSummaries(acc),
+    programRollup,
   };
 }
 
@@ -231,6 +327,7 @@ export async function buildReportSnapshot(
 export interface ReportSummary {
   id: string;
   academicProgramId: string;
+  coverage: ReportCoverage;
   academicYear: number;
   scope: ReportScope;
   semester: Semester | null;
@@ -254,6 +351,7 @@ export async function getReportsForAcademicPrograms(
       out.push({
         id: d.id,
         academicProgramId: r.academicProgramId,
+        coverage: r.coverage ?? 'program',
         academicYear: r.academicYear,
         scope: r.scope,
         semester: r.semester,

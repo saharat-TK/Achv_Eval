@@ -24,7 +24,31 @@ export interface SummarySemesterGroup {
   rows: SummaryCourseRow[];
 }
 
+export interface SummaryProgramRollup {
+  code: string;
+  name: string;
+  totalOfferings: number;
+  assessedOfferings: number;
+  assessedPercent: number;
+  avgScorePercent: number | null;
+}
+
+export interface SummaryProgramCourseRow {
+  courseCode: string;
+  courseNameEn: string;
+  semesterLabel: string;
+  academicYear?: number;
+  percentScore: number | null;
+  statusLabel: string;
+}
+
+export interface SummaryProgramCourseGroup {
+  programLabel: string;
+  rows: SummaryProgramCourseRow[];
+}
+
 export interface SummaryReportData {
+  coverage: 'program' | 'all';
   academicProgramLabel: string;
   academicYear: number;
   scopeLabel: string; // "ภาคต้น" / "ประจำปีการศึกษา" ...
@@ -39,6 +63,9 @@ export interface SummaryReportData {
   overallAveragePercent?: number | null;
   bandDistribution: { improve: number; good: number; excellent: number };
   semesterGroups: SummarySemesterGroup[];
+  /** All-programs only — §2 rollup and the appendix course listing. */
+  programRollup?: SummaryProgramRollup[];
+  programCourseGroups?: SummaryProgramCourseGroup[];
   assessorTopics: SummaryTopic[];
   aiTopics: SummaryTopic[];
   generatedAt: string;
@@ -108,6 +135,54 @@ function signatureSection(committee: { name: string; role: string }[]): string {
   return `<div style="page-break-before: always;">
     <h2>ลายมือชื่อคณะกรรมการทวนสอบ</h2>
     <table style="border:none;"><tbody>${rows.join('')}</tbody></table>
+  </div>`;
+}
+
+/** §2 for the all-programs report — one row per academic program. */
+function programRollupTable(rows: SummaryProgramRollup[]): string {
+  const body = rows
+    .map(
+      (p) => `<tr>
+        <td>${esc(p.code)}</td>
+        <td>${esc(p.name)}</td>
+        <td>${p.totalOfferings}</td>
+        <td>${p.assessedOfferings} (${p.assessedPercent}%)</td>
+        <td>${p.avgScorePercent == null ? '—' : `${p.avgScorePercent}%`}</td>
+        <td>${p.avgScorePercent == null ? '—' : BAND_TH(p.avgScorePercent)}</td>
+      </tr>`,
+    )
+    .join('');
+  return `<table>
+    <thead><tr><th>รหัสหลักสูตร</th><th>ชื่อหลักสูตร</th><th>รายวิชา</th><th>ทวนสอบแล้ว</th><th>คะแนนเฉลี่ย</th><th>ระดับ</th></tr></thead>
+    <tbody>${body}</tbody>
+  </table>`;
+}
+
+/** Appendix for the all-programs report — course list grouped by program. */
+function programCourseListSection(groups: SummaryProgramCourseGroup[]): string {
+  if (groups.length === 0) return '';
+  const blocks = groups
+    .map(
+      (g) => `<h3>${esc(g.programLabel)}</h3>
+    <table>
+      <thead><tr><th>รหัส/ชื่อรายวิชา</th><th>ภาค/ปี</th><th>คะแนน</th><th>ระดับ</th><th>สถานะ</th></tr></thead>
+      <tbody>${g.rows
+        .map(
+          (r) => `<tr>
+          <td>${esc(r.courseCode)} ${esc(r.courseNameEn)}</td>
+          <td>${esc(r.semesterLabel)}${r.academicYear ? ` / ${r.academicYear}` : ''}</td>
+          <td>${r.percentScore == null ? '—' : `${r.percentScore}%`}</td>
+          <td>${r.percentScore == null ? '—' : BAND_TH(r.percentScore)}</td>
+          <td>${esc(r.statusLabel)}</td>
+        </tr>`,
+        )
+        .join('')}</tbody>
+    </table>`,
+    )
+    .join('');
+  return `<div style="page-break-before: always;">
+    <h2>ภาคผนวก — รายวิชาทั้งหมด (จำแนกตามหลักสูตร)</h2>
+    ${blocks}
   </div>`;
 }
 
@@ -184,7 +259,7 @@ ${d.totalOfferings} รายวิชา ดำเนินการทวน�
   &nbsp; ดีเยี่ยม ${d.bandDistribution.excellent}
 </div>
 
-${semesterTables}
+${d.coverage === 'all' && d.programRollup ? programRollupTable(d.programRollup) : semesterTables}
 
 <h2>สรุปข้อเสนอแนะตามหัวข้อการทวนสอบ (7 รายการ) — จากผู้ทวนสอบ</h2>
 ${
@@ -200,8 +275,10 @@ ${topicBlock(d.aiTopics)}
 ${signatureSection(d.header.committee)}
 
 ${
-  d.semesterGroups.some((g) => g.rows.length > 0)
-    ? `<div style="page-break-before: always;">
+  d.coverage === 'all'
+    ? programCourseListSection(d.programCourseGroups ?? [])
+    : d.semesterGroups.some((g) => g.rows.length > 0)
+      ? `<div style="page-break-before: always;">
   <h2>ภาคผนวก — รายงานการทวนสอบผลลัพธ์การเรียนรู้รายวิชา (รายฉบับ)</h2>
   <p>เอกสารส่วนนี้รวบรวมรายงานการทวนสอบฉบับลงนามของแต่ละรายวิชาที่ดำเนินการทวนสอบแล้ว ตามลำดับดังนี้</p>
   ${d.semesterGroups
@@ -211,7 +288,7 @@ ${
     )
     .join('')}
 </div>`
-    : ''
+      : ''
 }
 
 <p class="muted" style="margin-top:14px;font-size:10px;">

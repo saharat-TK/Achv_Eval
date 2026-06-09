@@ -5,7 +5,14 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import type { ManagedOffering } from '@/lib/data/offeringManager';
 import type { ReportSummary, CourseReportLinks } from '@/lib/data/assessmentReports';
-import { bandFromPercent, type AssessmentBand, type ReportScope, type Semester } from '@/lib/types/models';
+import {
+  ALL_PROGRAMS_ID,
+  bandFromPercent,
+  type AssessmentBand,
+  type ReportCoverage,
+  type ReportScope,
+  type Semester,
+} from '@/lib/types/models';
 import { httpsCallable } from 'firebase/functions';
 import { getFirebaseAuth, getFirebaseFunctions } from '@/lib/firebase/config';
 import { SEMESTER_LABEL, REPORT_THRESHOLD } from '@/lib/constants';
@@ -42,6 +49,7 @@ const BAND_BADGE: Record<AssessmentBand, string> = {
 
 interface CreateTarget {
   academicProgramId: string;
+  coverage: ReportCoverage;
   academicYear: number;
   scope: ReportScope;
   semester: Semester | null;
@@ -73,6 +81,17 @@ interface ProgramRow {
   stats: Stats;
 }
 
+/** Synthetic row aggregating every program's offerings (school-wide). */
+function allProgramsRow(rows: ProgramRow[]): ProgramRow {
+  const offerings = rows.flatMap((r) => r.offerings);
+  return {
+    academicProgramId: ALL_PROGRAMS_ID,
+    label: 'ทุกหลักสูตร (ทั้งสำนักวิชา)',
+    offerings,
+    stats: computeStats(offerings),
+  };
+}
+
 interface SemGroup {
   sem: Semester;
   programs: ProgramRow[];
@@ -89,11 +108,13 @@ export default function AssessmentReportsClient({
   offerings,
   reports,
   courseReportLinks,
+  isAdmin,
   academicPrograms,
 }: {
   offerings: ManagedOffering[];
   reports: ReportSummary[];
   courseReportLinks: Record<string, CourseReportLinks>;
+  isAdmin: boolean;
   academicPrograms: ProgramOpt[];
 }) {
   const router = useRouter();
@@ -319,6 +340,29 @@ export default function AssessmentReportsClient({
                     ภาพรวมทั้งปีการศึกษา (รายงานประจำปี)
                   </div>
                   <div className="space-y-2">
+                    {isAdmin && (() => {
+                      const allRow = allProgramsRow(g.annual);
+                      return (
+                        <ProgramProgressRow
+                          key="annual-all"
+                          row={allRow}
+                          courseReportLinks={courseReportLinks}
+                          highlight
+                          {...rowReportState(ALL_PROGRAMS_ID, g.year, 'annual', null)}
+                          onCreate={() =>
+                            setCreateTarget({
+                              academicProgramId: ALL_PROGRAMS_ID,
+                              coverage: 'all',
+                              academicYear: g.year,
+                              scope: 'annual',
+                              semester: null,
+                              label: `รายงานประจำปี ${g.year} · ทุกหลักสูตร`,
+                            })
+                          }
+                          createLabel="สร้างรายงานประจำปี (ทุกหลักสูตร)"
+                        />
+                      );
+                    })()}
                     {g.annual.map((row) => (
                       <ProgramProgressRow
                         key={`annual-${row.academicProgramId ?? 'none'}`}
@@ -329,6 +373,7 @@ export default function AssessmentReportsClient({
                           row.academicProgramId &&
                           setCreateTarget({
                             academicProgramId: row.academicProgramId,
+                            coverage: 'program',
                             academicYear: g.year,
                             scope: 'annual',
                             semester: null,
@@ -348,6 +393,29 @@ export default function AssessmentReportsClient({
                       {SEMESTER_LABEL[s.sem]}
                     </div>
                     <div className="space-y-2">
+                      {isAdmin && (() => {
+                        const allRow = allProgramsRow(s.programs);
+                        return (
+                          <ProgramProgressRow
+                            key={`${s.sem}-all`}
+                            row={allRow}
+                            courseReportLinks={courseReportLinks}
+                            highlight
+                            {...rowReportState(ALL_PROGRAMS_ID, g.year, 'semester', s.sem)}
+                            onCreate={() =>
+                              setCreateTarget({
+                                academicProgramId: ALL_PROGRAMS_ID,
+                                coverage: 'all',
+                                academicYear: g.year,
+                                scope: 'semester',
+                                semester: s.sem,
+                                label: `รายงาน${SEMESTER_LABEL[s.sem]} ${g.year} · ทุกหลักสูตร`,
+                              })
+                            }
+                            createLabel={`สร้างรายงาน${SEMESTER_LABEL[s.sem]} (ทุกหลักสูตร)`}
+                          />
+                        );
+                      })()}
                       {s.programs.map((row) => (
                         <ProgramProgressRow
                           key={`${s.sem}-${row.academicProgramId ?? 'none'}`}
@@ -359,6 +427,7 @@ export default function AssessmentReportsClient({
                             row.academicProgramId &&
                             setCreateTarget({
                               academicProgramId: row.academicProgramId,
+                              coverage: 'program',
                               academicYear: g.year,
                               scope: 'semester',
                               semester: s.sem,
@@ -395,6 +464,7 @@ function ProgramProgressRow({
   reportId = null,
   synthesizing = false,
   collapsible = false,
+  highlight = false,
   courseReportLinks = {},
 }: {
   row: ProgramRow;
@@ -405,6 +475,8 @@ function ProgramProgressRow({
   synthesizing?: boolean;
   /** Semester rows expand to a course-status list; the annual rollup does not. */
   collapsible?: boolean;
+  /** Emphasize the school-wide (all-programs) row. */
+  highlight?: boolean;
   courseReportLinks?: Record<string, CourseReportLinks>;
 }) {
   const [expanded, setExpanded] = useState(false);
@@ -433,7 +505,11 @@ function ProgramProgressRow({
   }, [row.offerings, courseReportLinks]);
 
   return (
-    <div className="rounded-lg border border-slate-200 bg-white px-3 py-2.5">
+    <div
+      className={`rounded-lg border px-3 py-2.5 ${
+        highlight ? 'border-mfu-primary/40 bg-mfu-primary/[0.04]' : 'border-slate-200 bg-white'
+      }`}
+    >
       <div className="flex items-center justify-between gap-3">
         {collapsible ? (
           <button
@@ -600,6 +676,7 @@ function CreateReportModal({
     try {
       const res = await createAssessmentReport({
         academicProgramId: target.academicProgramId,
+        coverage: target.coverage,
         academicYear: target.academicYear,
         scope: target.scope,
         semester: target.semester,

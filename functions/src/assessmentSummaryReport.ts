@@ -23,6 +23,14 @@ const BAND_LABEL: Record<string, string> = {
   good: 'ดี',
   excellent: 'ดีเยี่ยม',
 };
+const STATUS_TH: Record<string, string> = {
+  draft: 'ฉบับร่าง',
+  documents_pending: 'รอเอกสาร',
+  ai_complete: 'วิเคราะห์ AI แล้ว',
+  pending_assessment: 'รอทวนสอบ',
+  assessor_review: 'กำลังทวนสอบ',
+  assessed: 'ทวนสอบแล้ว',
+};
 const RUBRIC_TOPICS: { key: string; number: string; labelTh: string }[] = [
   { key: 'item1Clo', number: '1', labelTh: 'ผลลัพธ์การเรียนรู้รายวิชา' },
   { key: 'item21Content', number: '2.1', labelTh: 'เนื้อหาการเรียนการสอน' },
@@ -42,6 +50,20 @@ interface CourseRow {
   lecturerName: string | null;
   assessed: boolean;
   band: string | null;
+  percentScore?: number | null;
+  status?: string;
+  academicYear?: number;
+  academicProgramCode?: string;
+  academicProgramName?: string;
+}
+
+interface ProgramRollup {
+  code: string;
+  name: string;
+  totalOfferings: number;
+  assessedOfferings: number;
+  assessedPercent: number;
+  avgScorePercent: number | null;
 }
 
 interface StoredTopic {
@@ -56,6 +78,7 @@ interface StoredTopic {
 interface ReportData {
   academicProgramId: string;
   academicProgramLabel: string;
+  coverage?: 'program' | 'all';
   academicYear: number;
   scope: 'semester' | 'annual';
   semester: string | null;
@@ -68,6 +91,7 @@ interface ReportData {
     bandDistribution: { improve: number; good: number; excellent: number };
     courseRows: CourseRow[];
     assessorTopicSummary: StoredTopic[];
+    programRollup?: ProgramRollup[];
   };
   aiSynthesis: StoredTopic[] | null;
 }
@@ -223,7 +247,53 @@ function assembleData(report: ReportData, aiTopics: SummaryTopic[]): SummaryRepo
       })),
     }));
 
+  const coverage = report.coverage === 'all' ? 'all' : 'program';
+
+  // All-programs: rollup table (§2) and the course list grouped by program.
+  const programRollup =
+    coverage === 'all'
+      ? (report.snapshot.programRollup ?? []).map((p) => ({
+          code: p.code,
+          name: p.name,
+          totalOfferings: p.totalOfferings,
+          assessedOfferings: p.assessedOfferings,
+          assessedPercent: p.assessedPercent,
+          avgScorePercent: p.avgScorePercent,
+        }))
+      : undefined;
+
+  let programCourseGroups: SummaryReportData['programCourseGroups'];
+  if (coverage === 'all') {
+    const byProgram = new Map<string, { label: string; rows: CourseRow[] }>();
+    for (const r of report.snapshot.courseRows) {
+      const key = r.academicProgramCode ?? r.academicProgramName ?? '—';
+      const label = `${r.academicProgramCode ?? ''} ${r.academicProgramName ?? ''}`.trim() || '—';
+      if (!byProgram.has(key)) byProgram.set(key, { label, rows: [] });
+      byProgram.get(key)!.rows.push(r);
+    }
+    programCourseGroups = [...byProgram.values()]
+      .sort((a, b) => a.label.localeCompare(b.label, 'th'))
+      .map((g) => ({
+        programLabel: g.label,
+        rows: g.rows
+          .sort(
+            (a, b) =>
+              Number(a.semester) - Number(b.semester) ||
+              a.courseCode.localeCompare(b.courseCode),
+          )
+          .map((r) => ({
+            courseCode: r.courseCode,
+            courseNameEn: r.courseNameEn,
+            semesterLabel: SEMESTER_LABEL[r.semester] ?? r.semester,
+            academicYear: r.academicYear,
+            percentScore: r.percentScore ?? null,
+            statusLabel: r.status ? STATUS_TH[r.status] ?? r.status : '—',
+          })),
+      }));
+  }
+
   return {
+    coverage,
     academicProgramLabel: report.academicProgramLabel,
     academicYear: report.academicYear,
     scopeLabel:
@@ -237,6 +307,8 @@ function assembleData(report: ReportData, aiTopics: SummaryTopic[]): SummaryRepo
     overallAveragePercent: report.snapshot.overallAveragePercent ?? null,
     bandDistribution: report.snapshot.bandDistribution,
     semesterGroups,
+    programRollup,
+    programCourseGroups,
     assessorTopics: report.snapshot.assessorTopicSummary.map((t) => ({
       number: t.number,
       labelTh: t.labelTh,
@@ -325,13 +397,14 @@ export const generateAssessmentSummaryReport = onCall(
       const html = buildAssessmentSummaryHtml(data);
       const summaryPdf = await renderHtmlToPdf(html);
 
-      // Appendix: append each assessed course's signed combined report PDF, in
-      // report order (semester, then course code). Missing/unreadable ones are
-      // skipped so a single bad artifact never fails the whole report.
-      const appendixParts = await collectCourseCombinedPdfs(db, report.snapshot.courseRows);
-      const finalPdf = appendixParts.length
-        ? await mergePdfs([summaryPdf, ...appendixParts])
-        : summaryPdf;
+      // Per-program reports append each assessed course's signed combined PDF.
+      // The all-programs report instead renders a grouped course list in the
+      // HTML appendix, so there's nothing to merge.
+      let finalPdf = summaryPdf;
+      if (report.coverage !== 'all') {
+        const appendixParts = await collectCourseCombinedPdfs(db, report.snapshot.courseRows);
+        if (appendixParts.length) finalPdf = await mergePdfs([summaryPdf, ...appendixParts]);
+      }
 
       const dir = `reports/summary/${report.academicProgramId}/${report.academicYear}`;
       const base = report.scope === 'annual' ? 'annual' : `sem${report.semester}`;

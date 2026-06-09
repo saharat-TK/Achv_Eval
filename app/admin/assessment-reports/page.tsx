@@ -8,6 +8,7 @@ import {
   getCourseReportLinks,
   getReportsForAcademicPrograms,
 } from '@/lib/data/assessmentReports';
+import { ALL_PROGRAMS_ID } from '@/lib/types/models';
 import AssessmentReportsClient from '@/components/AssessmentReportsClient';
 
 export const dynamic = 'force-dynamic';
@@ -25,9 +26,13 @@ export default async function AssessmentReportsPage() {
   // curriculum → offering) and already carry the academicProgramId.
   const { programs } = await getManagedAcademicPrograms(profile);
   const academicProgramIds = programs.map((p) => p.id);
+  // Admins can also see school-wide (all-programs) reports.
+  const reportScopeIds = isAdmin
+    ? [...academicProgramIds, ALL_PROGRAMS_ID]
+    : academicProgramIds;
   const [offerings, reports] = await Promise.all([
     getOfferingsForAcademicPrograms(academicProgramIds),
-    getReportsForAcademicPrograms(academicProgramIds),
+    getReportsForAcademicPrograms(reportScopeIds),
   ]);
   const courseReportLinks = await getCourseReportLinks(offerings);
 
@@ -43,6 +48,7 @@ export default async function AssessmentReportsPage() {
         offerings={offerings}
         reports={reports}
         courseReportLinks={courseReportLinks}
+        isAdmin={isAdmin}
         academicPrograms={programs.map((p) => ({
           id: p.id,
           code: p.code,
