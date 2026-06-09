@@ -1,10 +1,14 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import type { ManagedOffering } from '@/lib/data/offeringManager';
-import type { Semester } from '@/lib/types/models';
-import { SEMESTER_LABEL } from '@/lib/constants';
+import type { ReportSummary } from '@/lib/data/assessmentReports';
+import type { ReportScope, Semester } from '@/lib/types/models';
+import { SEMESTER_LABEL, REPORT_THRESHOLD } from '@/lib/constants';
 import StatusBadge from '@/components/StatusBadge';
+import { createAssessmentReport } from '@/app/admin/assessment-reports/actions';
 
 interface ProgramOpt {
   id: string;
@@ -12,9 +16,24 @@ interface ProgramOpt {
   nameTh: string;
 }
 
-/** Minimum share of offerings that must be assessed before a report can be
- *  created — 25% for both a single semester and a whole academic year. */
-const REPORT_THRESHOLD = 0.25;
+/** Mirror of reportDocId() in lib/data/assessmentReports.ts. */
+function reportKey(
+  academicProgramId: string,
+  academicYear: number,
+  scope: ReportScope,
+  semester: Semester | null,
+): string {
+  const suffix = scope === 'annual' ? 'annual' : `sem${semester}`;
+  return `${academicProgramId}__${academicYear}__${suffix}`;
+}
+
+interface CreateTarget {
+  academicProgramId: string;
+  academicYear: number;
+  scope: ReportScope;
+  semester: Semester | null;
+  label: string;
+}
 
 interface Stats {
   total: number;
@@ -55,12 +74,23 @@ interface YearGroup {
 
 export default function AssessmentReportsClient({
   offerings,
+  reports,
   academicPrograms,
 }: {
   offerings: ManagedOffering[];
+  reports: ReportSummary[];
   academicPrograms: ProgramOpt[];
 }) {
-  const [notice, setNotice] = useState<string | null>(null);
+  const router = useRouter();
+  const [createTarget, setCreateTarget] = useState<CreateTarget | null>(null);
+
+  const reportByKey = useMemo(() => {
+    const m = new Map<string, ReportSummary>();
+    reports.forEach((r) =>
+      m.set(reportKey(r.academicProgramId, r.academicYear, r.scope, r.semester), r),
+    );
+    return m;
+  }, [reports]);
 
   const apLabel = useMemo(() => {
     const m = new Map<string, string>();
@@ -149,9 +179,14 @@ export default function AssessmentReportsClient({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filtered, apLabel]);
 
-  // Phase 2 wires this to the committee-info form + generation flow.
-  function handleCreate(scopeLabel: string) {
-    setNotice(`การสร้าง “${scopeLabel}” จะเปิดใช้งานในขั้นถัดไป`);
+  function existingReportId(
+    apId: string | null,
+    year: number,
+    scope: ReportScope,
+    sem: Semester | null,
+  ): string | null {
+    if (!apId) return null;
+    return reportByKey.get(reportKey(apId, year, scope, sem))?.id ?? null;
   }
 
   return (
@@ -204,18 +239,6 @@ export default function AssessmentReportsClient({
         </label>
       </div>
 
-      {notice && (
-        <div className="mt-4 flex items-center justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-800">
-          <span>{notice}</span>
-          <button
-            onClick={() => setNotice(null)}
-            className="text-xs text-amber-600 hover:underline"
-          >
-            ปิด
-          </button>
-        </div>
-      )}
-
       {groups.length === 0 ? (
         <div className="mt-6 rounded-xl border border-dashed border-slate-300 p-10 text-center text-sm text-slate-500">
           ไม่มีรายวิชาที่เปิดสอนตามตัวกรอง
@@ -244,10 +267,16 @@ export default function AssessmentReportsClient({
                       <ProgramProgressRow
                         key={`annual-${row.academicProgramId ?? 'none'}`}
                         row={row}
+                        reportId={existingReportId(row.academicProgramId, g.year, 'annual', null)}
                         onCreate={() =>
-                          handleCreate(
-                            `รายงานประจำปี ${g.year} · ${row.label}`,
-                          )
+                          row.academicProgramId &&
+                          setCreateTarget({
+                            academicProgramId: row.academicProgramId,
+                            academicYear: g.year,
+                            scope: 'annual',
+                            semester: null,
+                            label: `รายงานประจำปี ${g.year} · ${row.label}`,
+                          })
                         }
                         createLabel="สร้างรายงานประจำปี"
                       />
@@ -267,10 +296,16 @@ export default function AssessmentReportsClient({
                           key={`${s.sem}-${row.academicProgramId ?? 'none'}`}
                           row={row}
                           collapsible
+                          reportId={existingReportId(row.academicProgramId, g.year, 'semester', s.sem)}
                           onCreate={() =>
-                            handleCreate(
-                              `รายงาน${SEMESTER_LABEL[s.sem]} ${g.year} · ${row.label}`,
-                            )
+                            row.academicProgramId &&
+                            setCreateTarget({
+                              academicProgramId: row.academicProgramId,
+                              academicYear: g.year,
+                              scope: 'semester',
+                              semester: s.sem,
+                              label: `รายงาน${SEMESTER_LABEL[s.sem]} ${g.year} · ${row.label}`,
+                            })
                           }
                           createLabel={`สร้างรายงาน${SEMESTER_LABEL[s.sem]}`}
                         />
@@ -283,6 +318,17 @@ export default function AssessmentReportsClient({
           ))}
         </div>
       )}
+
+      {createTarget && (
+        <CreateReportModal
+          target={createTarget}
+          onClose={() => setCreateTarget(null)}
+          onCreated={(reportId) => {
+            setCreateTarget(null);
+            router.push(`/admin/assessment-reports/${reportId}`);
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -291,11 +337,13 @@ function ProgramProgressRow({
   row,
   onCreate,
   createLabel,
+  reportId = null,
   collapsible = false,
 }: {
   row: ProgramRow;
   onCreate: () => void;
   createLabel: string;
+  reportId?: string | null;
   /** Semester rows expand to a course-status list; the annual rollup does not. */
   collapsible?: boolean;
 }) {
@@ -352,6 +400,14 @@ function ProgramProgressRow({
             title="เกณฑ์ขั้นต่ำ 25%"
           />
         </div>
+        {reportId && (
+          <Link
+            href={`/admin/assessment-reports/${reportId}`}
+            className="shrink-0 rounded-lg border border-mfu-primary px-3 py-1.5 text-xs font-medium text-mfu-primary hover:bg-mfu-primary/5"
+          >
+            ดูรายงาน
+          </Link>
+        )}
         <button
           type="button"
           onClick={onCreate}
@@ -363,7 +419,7 @@ function ProgramProgressRow({
           }
           className="shrink-0 rounded-lg bg-mfu-primary px-3 py-1.5 text-xs font-medium text-white hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
         >
-          {createLabel}
+          {reportId ? 'สร้างใหม่' : createLabel}
         </button>
       </div>
 
@@ -388,6 +444,151 @@ function ProgramProgressRow({
           )}
         </ul>
       )}
+    </div>
+  );
+}
+
+const DEFAULT_COMMITTEE: { name: string; role: string }[] = [
+  { name: '', role: 'ประธานกรรมการ' },
+  { name: '', role: 'กรรมการ' },
+  { name: '', role: 'กรรมการและเลขานุการ' },
+];
+
+function CreateReportModal({
+  target,
+  onClose,
+  onCreated,
+}: {
+  target: CreateTarget;
+  onClose: () => void;
+  onCreated: (reportId: string) => void;
+}) {
+  const [venue, setVenue] = useState('');
+  const [meetingDateTime, setMeetingDateTime] = useState('');
+  const [committee, setCommittee] = useState(DEFAULT_COMMITTEE);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  function setMember(i: number, field: 'name' | 'role', value: string) {
+    setCommittee((prev) => prev.map((m, idx) => (idx === i ? { ...m, [field]: value } : m)));
+  }
+  function addMember() {
+    setCommittee((prev) => [...prev, { name: '', role: 'กรรมการ' }]);
+  }
+  function removeMember(i: number) {
+    setCommittee((prev) => prev.filter((_, idx) => idx !== i));
+  }
+
+  async function submit() {
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await createAssessmentReport({
+        academicProgramId: target.academicProgramId,
+        academicYear: target.academicYear,
+        scope: target.scope,
+        semester: target.semester,
+        header: { venue, meetingDateTime, committee },
+      });
+      if (!res.ok) {
+        setError(res.error);
+        setBusy(false);
+        return;
+      }
+      onCreated(res.reportId);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'เกิดข้อผิดพลาด');
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-xl bg-white p-5 shadow-xl">
+        <h3 className="text-base font-semibold text-slate-800">สร้างรายงานการทวนสอบ</h3>
+        <p className="mt-1 text-xs text-slate-500">{target.label}</p>
+
+        <div className="mt-4 space-y-3">
+          <label className="block text-xs font-medium text-slate-600">
+            สถานที่และวันเวลาประชุม
+            <input
+              value={meetingDateTime}
+              onChange={(e) => setMeetingDateTime(e.target.value)}
+              placeholder="เช่น วันศุกร์ที่ 5 กุมภาพันธ์ 2567 เวลา 16.00-17.00 น."
+              className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-mfu-primary focus:outline-none"
+            />
+          </label>
+          <label className="block text-xs font-medium text-slate-600">
+            ณ สถานที่
+            <input
+              value={venue}
+              onChange={(e) => setVenue(e.target.value)}
+              placeholder="เช่น ห้องประชุมสำนักวิชาวิทยาศาสตร์สุขภาพ"
+              className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-mfu-primary focus:outline-none"
+            />
+          </label>
+
+          <div>
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-medium text-slate-600">คณะกรรมการทวนสอบ</span>
+              <button
+                type="button"
+                onClick={addMember}
+                className="text-xs text-mfu-primary hover:underline"
+              >
+                + เพิ่มกรรมการ
+              </button>
+            </div>
+            <div className="mt-2 space-y-2">
+              {committee.map((m, i) => (
+                <div key={i} className="flex items-center gap-2">
+                  <input
+                    value={m.name}
+                    onChange={(e) => setMember(i, 'name', e.target.value)}
+                    placeholder="ชื่อ-นามสกุล"
+                    className="min-w-0 flex-1 rounded-lg border border-slate-300 px-3 py-1.5 text-sm focus:border-mfu-primary focus:outline-none"
+                  />
+                  <input
+                    value={m.role}
+                    onChange={(e) => setMember(i, 'role', e.target.value)}
+                    placeholder="ตำแหน่ง"
+                    className="w-40 shrink-0 rounded-lg border border-slate-300 px-3 py-1.5 text-sm focus:border-mfu-primary focus:outline-none"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => removeMember(i)}
+                    className="shrink-0 px-1 text-slate-400 hover:text-red-500"
+                    aria-label="ลบกรรมการ"
+                  >
+                    ✕
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
+
+        <div className="mt-5 flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={busy}
+            className="rounded-lg border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+          >
+            ยกเลิก
+          </button>
+          <button
+            type="button"
+            onClick={submit}
+            disabled={busy}
+            className="rounded-lg bg-mfu-primary px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
+          >
+            {busy ? 'กำลังสร้าง…' : 'สร้างรายงาน'}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

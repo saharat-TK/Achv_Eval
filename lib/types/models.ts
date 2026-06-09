@@ -430,6 +430,80 @@ export interface AuditLogDoc {
   after: Record<string, unknown> | null;
 }
 
+// ----- assessmentSummaryReports/{reportId} --------------------------
+export type ReportScope = 'semester' | 'annual';
+export type ReportStatus = 'draft' | 'generating' | 'ready' | 'failed';
+
+export interface ReportCommitteeMember {
+  name: string;
+  role: string; // ประธานกรรมการ / กรรมการ / กรรมการและเลขานุการ ...
+}
+
+/** One assessed-or-not offering captured at report-generation time. */
+export interface ReportCourseRow {
+  offeringId: string;
+  courseCode: string;
+  courseNameTh: string;
+  courseNameEn: string;
+  semester: Semester;
+  lecturerName: string | null;
+  assessed: boolean;
+  band: AssessmentBand | null;
+  percentScore: number | null;
+}
+
+/** Aggregated commentary for one of the 7 rubric topics. */
+export interface ReportTopicSummary {
+  key: string; // rubric item key, e.g. item1Clo
+  number: string; // '1', '2.1', ...
+  labelTh: string;
+  strengths: string[];
+  improvements: string[];
+}
+
+export interface ReportSnapshot {
+  totalOfferings: number;
+  assessedOfferings: number;
+  percent: number; // 0–100, one decimal
+  bandDistribution: { improve: number; good: number; excellent: number };
+  courseRows: ReportCourseRow[];
+  /** Section 3.1 — aggregated from assessor comments per rubric topic. */
+  assessorTopicSummary: ReportTopicSummary[];
+}
+
+export interface AssessmentSummaryReportDoc {
+  academicProgramId: string;
+  academicProgramLabel: string; // denormalized "code — nameTh"
+  academicYear: number; // Buddhist year
+  scope: ReportScope;
+  semester: Semester | null; // null for annual scope
+
+  /** Manually supplied by the director/admin at creation time. */
+  header: {
+    venue: string;
+    meetingDateTime: string;
+    committee: ReportCommitteeMember[];
+  };
+
+  /** Frozen data the report renders from (computed at create/regenerate). */
+  snapshot: ReportSnapshot;
+
+  /** Section 3.2 — Gemini-synthesized cross-course suggestions (Phase 3). */
+  aiSynthesis: ReportTopicSummary[] | null;
+
+  status: ReportStatus;
+  pdfStoragePath: string | null;
+  pdfUrl: string | null;
+  docxStoragePath: string | null;
+  docxUrl: string | null;
+  generatedAt: Ts | null;
+
+  createdAt: Ts;
+  updatedAt: Ts;
+  createdBy: string;
+  updatedBy: string;
+}
+
 // ----- Rubric scoring helper ----------------------------------------
 /**
  * Computes total/max/percent/band for an assessment.

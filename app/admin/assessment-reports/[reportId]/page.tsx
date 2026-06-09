@@ -1,0 +1,180 @@
+import Link from 'next/link';
+import { notFound, redirect } from 'next/navigation';
+import { getCurrentProfile } from '@/lib/firebase/auth-server';
+import { getReportById } from '@/lib/data/assessmentReports';
+import { SEMESTER_LABEL } from '@/lib/constants';
+import type { AssessmentBand, Semester } from '@/lib/types/models';
+
+export const dynamic = 'force-dynamic';
+
+const BAND_LABEL: Record<AssessmentBand, string> = {
+  improve: 'ควรปรับปรุง',
+  good: 'ดี',
+  excellent: 'ดีเยี่ยม',
+};
+
+export default async function AssessmentReportPage({
+  params,
+}: {
+  params: { reportId: string };
+}) {
+  const profile = await getCurrentProfile();
+  if (!profile) redirect('/login');
+
+  const report = await getReportById(params.reportId);
+  if (!report) notFound();
+
+  const isAdmin = profile.roles.isAdmin === true;
+  const isDirector = (profile.roles.directorOfAcademicPrograms ?? []).includes(
+    report.academicProgramId,
+  );
+  if (!isAdmin && !isDirector) notFound();
+
+  const { snapshot, header } = report;
+  const scopeLabel =
+    report.scope === 'annual'
+      ? 'ประจำปีการศึกษา'
+      : SEMESTER_LABEL[report.semester as Semester];
+  const assessedRows = snapshot.courseRows.filter((r) => r.assessed);
+
+  // Group assessed courses by semester for the detail table.
+  const bySemester = new Map<Semester, typeof assessedRows>();
+  for (const r of assessedRows) {
+    if (!bySemester.has(r.semester)) bySemester.set(r.semester, []);
+    bySemester.get(r.semester)!.push(r);
+  }
+  const semesters = [...bySemester.keys()].sort((a, b) => Number(a) - Number(b));
+
+  return (
+    <div className="space-y-6">
+      <Link
+        href="/admin/assessment-reports"
+        className="text-sm text-slate-500 hover:underline"
+      >
+        ← กลับไปหน้ารายงานการทวนสอบ
+      </Link>
+
+      {/* Header */}
+      <header className="rounded-xl border border-slate-200 bg-white p-5">
+        <h1 className="text-lg font-semibold text-slate-800">
+          รายงานการประชุมทวนสอบผลสัมฤทธิ์การศึกษา {scopeLabel} ปีการศึกษา{' '}
+          {report.academicYear}
+        </h1>
+        <p className="mt-1 text-sm text-slate-600">{report.academicProgramLabel}</p>
+        {header.meetingDateTime && (
+          <p className="mt-2 text-sm text-slate-600">{header.meetingDateTime}</p>
+        )}
+        {header.venue && <p className="text-sm text-slate-600">ณ {header.venue}</p>}
+
+        {header.committee.length > 0 && (
+          <div className="mt-3">
+            <div className="text-xs font-semibold text-slate-500">
+              รายนามคณะกรรมการ
+            </div>
+            <ul className="mt-1 space-y-0.5 text-sm text-slate-700">
+              {header.committee.map((m, i) => (
+                <li key={i} className="flex justify-between gap-4">
+                  <span>{m.name}</span>
+                  <span className="text-slate-500">{m.role}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        <span className="mt-3 inline-flex items-center rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-600">
+          สถานะ: {report.status === 'ready' ? 'พร้อมใช้งาน' : 'ฉบับร่าง'}
+        </span>
+      </header>
+
+      {/* Section 2 — Assessment detail */}
+      <section className="rounded-xl border border-slate-200 bg-white p-5">
+        <h2 className="text-base font-semibold text-slate-800">
+          รายละเอียดการทวนสอบ
+        </h2>
+        <p className="mt-2 text-sm text-slate-700">
+          มีรายวิชาที่รับผิดชอบสอนในหลักสูตร {snapshot.totalOfferings} รายวิชา
+          ดำเนินการทวนสอบผลสัมฤทธิ์แล้ว {snapshot.assessedOfferings} รายวิชา
+          คิดเป็นร้อยละ {snapshot.percent} ของรายวิชาที่เปิดสอน
+        </p>
+
+        {/* Band distribution */}
+        <div className="mt-3 flex flex-wrap gap-2 text-xs">
+          <span className="rounded-full bg-amber-50 px-2.5 py-1 text-amber-800">
+            ควรปรับปรุง {snapshot.bandDistribution.improve}
+          </span>
+          <span className="rounded-full bg-blue-50 px-2.5 py-1 text-blue-800">
+            ดี {snapshot.bandDistribution.good}
+          </span>
+          <span className="rounded-full bg-green-50 px-2.5 py-1 text-green-800">
+            ดีเยี่ยม {snapshot.bandDistribution.excellent}
+          </span>
+        </div>
+
+        {/* Assessed-course table grouped by semester */}
+        {semesters.map((sem) => (
+          <div key={sem} className="mt-4">
+            <div className="text-sm font-semibold text-slate-600">
+              {SEMESTER_LABEL[sem]} ({bySemester.get(sem)!.length} รายวิชา)
+            </div>
+            <table className="mt-1 w-full text-sm">
+              <thead className="text-left text-xs text-slate-500">
+                <tr>
+                  <th className="py-1 pr-3 font-medium">รหัส/ชื่อรายวิชา</th>
+                  <th className="py-1 pr-3 font-medium">ผู้รับผิดชอบ</th>
+                  <th className="py-1 font-medium">ผลการประเมิน</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {bySemester.get(sem)!.map((r) => (
+                  <tr key={r.offeringId}>
+                    <td className="py-1.5 pr-3 text-slate-700">
+                      {r.courseCode} {r.courseNameEn}
+                    </td>
+                    <td className="py-1.5 pr-3 text-slate-600">
+                      {r.lecturerName ?? '—'}
+                    </td>
+                    <td className="py-1.5 text-slate-600">
+                      {r.band ? BAND_LABEL[r.band] : '—'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ))}
+      </section>
+
+      {/* Section 3.1 — Assessor topic summary */}
+      <section className="rounded-xl border border-slate-200 bg-white p-5">
+        <h2 className="text-base font-semibold text-slate-800">
+          สรุปข้อเสนอแนะตามหัวข้อการทวนสอบ (7 รายการ) — จากผู้ทวนสอบ
+        </h2>
+        <div className="mt-3 space-y-3">
+          {snapshot.assessorTopicSummary.map((t) => (
+            <div key={t.key} className="border-l-2 border-slate-200 pl-3">
+              <div className="text-sm font-medium text-slate-700">
+                {t.number}. {t.labelTh}
+              </div>
+              {t.improvements.length === 0 && t.strengths.length === 0 ? (
+                <p className="text-xs text-slate-400">ไม่มีความเห็นเพิ่มเติม</p>
+              ) : (
+                <ul className="mt-1 list-disc space-y-0.5 pl-5 text-xs text-slate-600">
+                  {t.improvements.map((s, i) => (
+                    <li key={`imp-${i}`}>{s}</li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* Section 3.2 + downloads — produced in the generation phase */}
+      <section className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-5 text-sm text-slate-500">
+        ข้อเสนอแนะเพิ่มเติมจากการวิเคราะห์ AI (หัวข้อการทวนสอบ 7 รายการ) และการ
+        ดาวน์โหลดรายงานในรูปแบบ PDF / DOCX จะพร้อมใช้งานในขั้นถัดไป
+      </section>
+    </div>
+  );
+}

@@ -4,6 +4,7 @@ import {
   getManagedAcademicPrograms,
   getOfferingsForAcademicPrograms,
 } from '@/lib/data/offeringManager';
+import { getReportsForAcademicPrograms } from '@/lib/data/assessmentReports';
 import AssessmentReportsClient from '@/components/AssessmentReportsClient';
 
 export const dynamic = 'force-dynamic';
@@ -21,7 +22,10 @@ export default async function AssessmentReportsPage() {
   // curriculum → offering) and already carry the academicProgramId.
   const { programs } = await getManagedAcademicPrograms(profile);
   const academicProgramIds = programs.map((p) => p.id);
-  const offerings = await getOfferingsForAcademicPrograms(academicProgramIds);
+  const [offerings, reports] = await Promise.all([
+    getOfferingsForAcademicPrograms(academicProgramIds),
+    getReportsForAcademicPrograms(academicProgramIds),
+  ]);
 
   return (
     <div>
@@ -33,6 +37,7 @@ export default async function AssessmentReportsPage() {
 
       <AssessmentReportsClient
         offerings={offerings}
+        reports={reports}
         academicPrograms={programs.map((p) => ({
           id: p.id,
           code: p.code,
