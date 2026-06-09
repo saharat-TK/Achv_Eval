@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { FieldValue } from 'firebase-admin/firestore';
-import { getAdminDb } from '@/lib/firebase/admin';
+import { getAdminDb, getAdminStorage } from '@/lib/firebase/admin';
 import { getSessionUser, getCurrentProfile } from '@/lib/firebase/auth-server';
 import { REPORT_THRESHOLD } from '@/lib/constants';
 import {
@@ -139,4 +139,49 @@ export async function createAssessmentReport(
   revalidatePath('/admin/assessment-reports');
   revalidatePath(`/admin/assessment-reports/${id}`);
   return { ok: true, reportId: id };
+}
+
+export type DeleteReportResult = { ok: true } | { ok: false; error: string };
+
+/** Delete a report and best-effort remove its stored PDF/DOCX artifacts. */
+export async function deleteAssessmentReport(
+  reportId: string,
+): Promise<DeleteReportResult> {
+  const access = await resolveAccess();
+  if (!access) return { ok: false, error: 'ไม่มีสิทธิ์ดำเนินการ' };
+
+  const ref = getAdminDb().collection('assessmentSummaryReports').doc(reportId);
+  const snap = await ref.get();
+  if (!snap.exists) return { ok: false, error: 'ไม่พบรายงาน' };
+  const data = snap.data() as {
+    academicProgramId: string;
+    pdfStoragePath: string | null;
+    docxStoragePath: string | null;
+  };
+  if (!canAccess(access, data.academicProgramId))
+    return { ok: false, error: 'ไม่มีสิทธิ์ในหลักสูตรนี้' };
+
+  // Best-effort artifact cleanup — never block the delete on storage errors.
+  const bucket = getAdminStorage().bucket();
+  await Promise.allSettled(
+    [data.pdfStoragePath, data.docxStoragePath]
+      .filter((p): p is string => !!p)
+      .map((p) => bucket.file(p).delete()),
+  );
+
+  await ref.delete();
+
+  await getAdminDb().collection('auditLog').add({
+    occurredAt: FieldValue.serverTimestamp(),
+    actorId: access.uid,
+    actorEmail: access.email,
+    action: 'delete',
+    entityType: 'assessmentSummaryReports',
+    entityId: reportId,
+    before: { academicProgramId: data.academicProgramId },
+    after: null,
+  });
+
+  revalidatePath('/admin/assessment-reports');
+  return { ok: true };
 }

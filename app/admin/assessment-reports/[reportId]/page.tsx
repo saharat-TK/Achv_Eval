@@ -4,6 +4,7 @@ import { getCurrentProfile } from '@/lib/firebase/auth-server';
 import { getReportById } from '@/lib/data/assessmentReports';
 import { SEMESTER_LABEL } from '@/lib/constants';
 import ReportArtifacts from '@/components/ReportArtifacts';
+import DeleteReportButton from '@/components/DeleteReportButton';
 import type { AssessmentBand, ReportTopicSummary, Semester } from '@/lib/types/models';
 
 export const dynamic = 'force-dynamic';
@@ -83,9 +84,12 @@ export default async function AssessmentReportPage({
           </div>
         )}
 
-        <span className="mt-3 inline-flex items-center rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-600">
-          สถานะ: {report.status === 'ready' ? 'พร้อมใช้งาน' : 'ฉบับร่าง'}
-        </span>
+        <div className="mt-3 flex items-center justify-between gap-3">
+          <span className="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-600">
+            สถานะ: {report.status === 'ready' ? 'พร้อมใช้งาน' : 'ฉบับร่าง'}
+          </span>
+          <DeleteReportButton reportId={report.id} />
+        </div>
       </header>
 
       {/* Section 2 — Assessment detail */}
