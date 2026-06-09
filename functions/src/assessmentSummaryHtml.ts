@@ -88,6 +88,29 @@ function topicBlock(topics: SummaryTopic[]): string {
     .join('');
 }
 
+/** A page of committee signature blocks: signature line, name, and position. */
+function signatureSection(committee: { name: string; role: string }[]): string {
+  if (committee.length === 0) return '';
+  const cellStyle =
+    'width:50%; border:none; padding:26px 12px 6px; vertical-align:top; text-align:center;';
+  const cell = (m: { name: string; role: string }) =>
+    `<td style="${cellStyle}">
+      <div style="margin-bottom:4px;">ลงชื่อ ......................................................</div>
+      <div>( ${esc(m.name)} )</div>
+      <div>ตำแหน่ง ${esc(m.role)}</div>
+    </td>`;
+  const rows: string[] = [];
+  for (let i = 0; i < committee.length; i += 2) {
+    const pair = committee.slice(i, i + 2).map(cell);
+    if (pair.length === 1) pair.push(`<td style="${cellStyle}"></td>`);
+    rows.push(`<tr>${pair.join('')}</tr>`);
+  }
+  return `<div style="page-break-before: always;">
+    <h2>ลายมือชื่อคณะกรรมการทวนสอบ</h2>
+    <table style="border:none;"><tbody>${rows.join('')}</tbody></table>
+  </div>`;
+}
+
 /** Builds the printable HTML for an assessment summary (meeting-minutes) report. */
 export function buildAssessmentSummaryHtml(d: SummaryReportData): string {
   const committeeRows = d.header.committee
@@ -173,6 +196,8 @@ ${assessorTopicTable(d.assessorTopics)}
 
 <h2>ข้อเสนอแนะเพิ่มเติมตามหัวข้อการทวนสอบ (7 รายการ) — จากการวิเคราะห์ AI</h2>
 ${topicBlock(d.aiTopics)}
+
+${signatureSection(d.header.committee)}
 
 ${
   d.semesterGroups.some((g) => g.rows.length > 0)
