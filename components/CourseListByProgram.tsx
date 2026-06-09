@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { Fragment, useMemo, useState } from 'react';
 import { SEMESTER_LABEL, OFFERING_STATUS } from '@/lib/constants';
 import {
   bandFromPercent,
@@ -79,58 +79,65 @@ export default function CourseListByProgram({ rows }: { rows: ReportCourseRow[] 
         </label>
       </div>
 
-      <div className="mt-3 space-y-4">
-        {groups.map((g) => (
-          <div key={g.key}>
-            <div className="text-sm font-semibold text-slate-600">{g.label}</div>
-            <table className="mt-1 w-full text-xs">
-              <thead className="text-left text-slate-500">
-                <tr>
-                  <th className="py-1 pr-3 font-medium">รหัส/ชื่อรายวิชา</th>
-                  <th className="py-1 pr-3 font-medium">ภาค/ปี</th>
-                  <th className="py-1 pr-3 font-medium">คะแนน</th>
-                  <th className="py-1 pr-3 font-medium">ระดับ</th>
-                  <th className="py-1 font-medium">สถานะ</th>
+      {/* Single table so columns stay consistent across every program group.
+          Course-name column flexes (w-full); the rest fit their content. */}
+      <table className="mt-3 w-full text-xs">
+        <thead className="text-left text-slate-500">
+          <tr>
+            <th className="w-full py-1 pr-3 font-medium">รหัส/ชื่อรายวิชา</th>
+            <th className="whitespace-nowrap py-1 pr-3 font-medium">ภาค/ปี</th>
+            <th className="whitespace-nowrap py-1 pr-3 font-medium">คะแนน</th>
+            <th className="whitespace-nowrap py-1 pr-3 font-medium">ระดับ</th>
+            <th className="whitespace-nowrap py-1 font-medium">สถานะ</th>
+          </tr>
+        </thead>
+        <tbody>
+          {groups.map((g) => (
+            <Fragment key={g.key}>
+              <tr>
+                <td
+                  colSpan={5}
+                  className="border-t border-slate-200 pt-3 pb-1 text-sm font-semibold text-slate-700"
+                >
+                  {g.label}
+                </td>
+              </tr>
+              {g.rows.map((r) => (
+                <tr key={r.offeringId} className="border-t border-slate-100">
+                  <td className="py-1.5 pr-3 text-slate-700">
+                    {r.courseCode} {r.courseNameEn}
+                  </td>
+                  <td className="whitespace-nowrap py-1.5 pr-3 text-slate-600">
+                    {SEMESTER_LABEL[r.semester as Semester]}
+                    {r.academicYear ? ` / ${r.academicYear}` : ''}
+                  </td>
+                  <td className="whitespace-nowrap py-1.5 pr-3 text-slate-600">
+                    {r.percentScore != null ? `${r.percentScore}%` : '—'}
+                  </td>
+                  <td className="whitespace-nowrap py-1.5 pr-3">
+                    {r.percentScore != null ? (
+                      <span
+                        className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium ${
+                          BAND_BADGE[r.band ?? bandFromPercent(r.percentScore)]
+                        }`}
+                      >
+                        {BAND_LABEL[r.band ?? bandFromPercent(r.percentScore)]}
+                      </span>
+                    ) : (
+                      '—'
+                    )}
+                  </td>
+                  <td className="whitespace-nowrap py-1.5 text-slate-600">
+                    {OFFERING_STATUS[r.status as keyof typeof OFFERING_STATUS]?.labelTh ??
+                      r.status ??
+                      '—'}
+                  </td>
                 </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {g.rows.map((r) => (
-                  <tr key={r.offeringId}>
-                    <td className="py-1.5 pr-3 text-slate-700">
-                      {r.courseCode} {r.courseNameEn}
-                    </td>
-                    <td className="whitespace-nowrap py-1.5 pr-3 text-slate-600">
-                      {SEMESTER_LABEL[r.semester as Semester]}
-                      {r.academicYear ? ` / ${r.academicYear}` : ''}
-                    </td>
-                    <td className="whitespace-nowrap py-1.5 pr-3 text-slate-600">
-                      {r.percentScore != null ? `${r.percentScore}%` : '—'}
-                    </td>
-                    <td className="py-1.5 pr-3">
-                      {r.percentScore != null ? (
-                        <span
-                          className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium ${
-                            BAND_BADGE[r.band ?? bandFromPercent(r.percentScore)]
-                          }`}
-                        >
-                          {BAND_LABEL[r.band ?? bandFromPercent(r.percentScore)]}
-                        </span>
-                      ) : (
-                        '—'
-                      )}
-                    </td>
-                    <td className="py-1.5 text-slate-600">
-                      {OFFERING_STATUS[r.status as keyof typeof OFFERING_STATUS]?.labelTh ??
-                        r.status ??
-                        '—'}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        ))}
-      </div>
+              ))}
+            </Fragment>
+          ))}
+        </tbody>
+      </table>
     </section>
   );
 }
