@@ -1,0 +1,145 @@
+import { REPORT_STYLES, esc } from './reportShared';
+
+export interface SummaryTopic {
+  number: string;
+  labelTh: string;
+  strengths: string[];
+  improvements: string[];
+}
+
+export interface SummaryCourseRow {
+  courseCode: string;
+  courseNameEn: string;
+  courseNameTh: string;
+  lecturerName: string | null;
+  bandLabel: string | null;
+}
+
+export interface SummarySemesterGroup {
+  semesterLabel: string;
+  rows: SummaryCourseRow[];
+}
+
+export interface SummaryReportData {
+  academicProgramLabel: string;
+  academicYear: number;
+  scopeLabel: string; // "ภาคต้น" / "ประจำปีการศึกษา" ...
+  header: {
+    venue: string;
+    meetingDateTime: string;
+    committee: { name: string; role: string }[];
+  };
+  totalOfferings: number;
+  assessedOfferings: number;
+  percent: number;
+  bandDistribution: { improve: number; good: number; excellent: number };
+  semesterGroups: SummarySemesterGroup[];
+  assessorTopics: SummaryTopic[];
+  aiTopics: SummaryTopic[];
+  generatedAt: string;
+}
+
+function topicBlock(topics: SummaryTopic[]): string {
+  return topics
+    .map((t) => {
+      const items = [...t.improvements];
+      const body = items.length
+        ? `<ul>${items.map((s) => `<li>${esc(s)}</li>`).join('')}</ul>`
+        : '<p class="muted">ไม่มีความเห็นเพิ่มเติม</p>';
+      return `<div style="margin-bottom:8px;">
+        <div><strong>${esc(t.number)}. ${esc(t.labelTh)}</strong></div>
+        ${body}
+      </div>`;
+    })
+    .join('');
+}
+
+/** Builds the printable HTML for an assessment summary (meeting-minutes) report. */
+export function buildAssessmentSummaryHtml(d: SummaryReportData): string {
+  const committeeRows = d.header.committee
+    .map(
+      (m) =>
+        `<tr><td>${esc(m.name)}</td><td style="text-align:right;">${esc(m.role)}</td></tr>`,
+    )
+    .join('');
+
+  const semesterTables = d.semesterGroups
+    .map(
+      (g) => `
+    <h3>${esc(g.semesterLabel)} (จำนวน ${g.rows.length} รายวิชา)</h3>
+    <table>
+      <thead>
+        <tr><th>รหัส/ชื่อรายวิชา</th><th>ผู้รับผิดชอบรายวิชา</th><th>ผลการประเมิน</th></tr>
+      </thead>
+      <tbody>
+        ${g.rows
+          .map(
+            (r) => `<tr>
+              <td>${esc(r.courseCode)} ${esc(r.courseNameEn)}</td>
+              <td>${esc(r.lecturerName ?? '—')}</td>
+              <td>${esc(r.bandLabel ?? '—')}</td>
+            </tr>`,
+          )
+          .join('')}
+      </tbody>
+    </table>`,
+    )
+    .join('');
+
+  return `<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;600;700&display=swap" rel="stylesheet" />
+<style>${REPORT_STYLES}
+  @page { size: A4; margin: 18mm 16mm; }
+</style>
+</head>
+<body>
+
+<div class="cover">
+  <h1>รายงานการประชุมทวนสอบผลสัมฤทธิ์การศึกษา ${esc(d.scopeLabel)} ปีการศึกษา ${d.academicYear}</h1>
+  <table class="meta">
+    <tr><td><strong>หลักสูตร</strong></td><td>${esc(d.academicProgramLabel)}</td></tr>
+    ${d.header.meetingDateTime ? `<tr><td><strong>วันเวลาประชุม</strong></td><td>${esc(d.header.meetingDateTime)}</td></tr>` : ''}
+    ${d.header.venue ? `<tr><td><strong>สถานที่</strong></td><td>${esc(d.header.venue)}</td></tr>` : ''}
+    <tr><td><strong>วันที่จัดทำรายงาน</strong></td><td>${esc(d.generatedAt)}</td></tr>
+  </table>
+</div>
+
+${
+  committeeRows
+    ? `<h2>รายนามคณะกรรมการทวนสอบ</h2>
+<table><tbody>${committeeRows}</tbody></table>`
+    : ''
+}
+
+<h2>รายละเอียดการทวนสอบ</h2>
+<p>ประจำปีการศึกษา ${d.academicYear} ${esc(d.scopeLabel)} มีรายวิชาที่รับผิดชอบสอนในหลักสูตร
+${d.totalOfferings} รายวิชา ดำเนินการทวนสอบผลสัมฤทธิ์แล้ว ${d.assessedOfferings} รายวิชา
+คิดเป็นร้อยละ ${d.percent} ของรายวิชาที่เปิดสอน</p>
+
+<div class="result-box">
+  <strong>สัดส่วนผลการประเมิน 3 กลุ่ม:</strong>
+  &nbsp; ควรปรับปรุง ${d.bandDistribution.improve}
+  &nbsp; ดี ${d.bandDistribution.good}
+  &nbsp; ดีเยี่ยม ${d.bandDistribution.excellent}
+</div>
+
+${semesterTables}
+
+<h2>สรุปข้อเสนอแนะตามหัวข้อการทวนสอบ (7 รายการ) — จากผู้ทวนสอบ</h2>
+${topicBlock(d.assessorTopics)}
+
+<h2>ข้อเสนอแนะเพิ่มเติมตามหัวข้อการทวนสอบ (7 รายการ) — จากการวิเคราะห์ AI</h2>
+${topicBlock(d.aiTopics)}
+
+<p class="muted" style="margin-top:14px;font-size:10px;">
+  เอกสารนี้เป็นส่วนหนึ่งของกระบวนการทวนสอบผลลัพธ์การเรียนรู้รายวิชา
+  จัดทำโดยระบบประเมินและทวนสอบรายวิชา สำนักวิชาวิทยาศาสตร์สุขภาพ มหาวิทยาลัยแม่ฟ้าหลวง
+</p>
+
+</body>
+</html>`;
+}

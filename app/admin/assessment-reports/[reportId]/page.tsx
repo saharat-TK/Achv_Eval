@@ -3,7 +3,8 @@ import { notFound, redirect } from 'next/navigation';
 import { getCurrentProfile } from '@/lib/firebase/auth-server';
 import { getReportById } from '@/lib/data/assessmentReports';
 import { SEMESTER_LABEL } from '@/lib/constants';
-import type { AssessmentBand, Semester } from '@/lib/types/models';
+import ReportArtifacts from '@/components/ReportArtifacts';
+import type { AssessmentBand, ReportTopicSummary, Semester } from '@/lib/types/models';
 
 export const dynamic = 'force-dynamic';
 
@@ -170,11 +171,40 @@ export default async function AssessmentReportPage({
         </div>
       </section>
 
-      {/* Section 3.2 + downloads — produced in the generation phase */}
-      <section className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-5 text-sm text-slate-500">
-        ข้อเสนอแนะเพิ่มเติมจากการวิเคราะห์ AI (หัวข้อการทวนสอบ 7 รายการ) และการ
-        ดาวน์โหลดรายงานในรูปแบบ PDF / DOCX จะพร้อมใช้งานในขั้นถัดไป
-      </section>
+      {/* Section 3.2 — AI-synthesized topic suggestions (once generated) */}
+      {report.aiSynthesis && report.aiSynthesis.length > 0 && (
+        <section className="rounded-xl border border-slate-200 bg-white p-5">
+          <h2 className="text-base font-semibold text-slate-800">
+            ข้อเสนอแนะเพิ่มเติมตามหัวข้อการทวนสอบ (7 รายการ) — จากการวิเคราะห์ AI
+          </h2>
+          <div className="mt-3 space-y-3">
+            {report.aiSynthesis.map((t: ReportTopicSummary) => (
+              <div key={t.key} className="border-l-2 border-slate-200 pl-3">
+                <div className="text-sm font-medium text-slate-700">
+                  {t.number}. {t.labelTh}
+                </div>
+                {t.improvements.length === 0 ? (
+                  <p className="text-xs text-slate-400">ไม่มีข้อเสนอแนะเพิ่มเติม</p>
+                ) : (
+                  <ul className="mt-1 list-disc space-y-0.5 pl-5 text-xs text-slate-600">
+                    {t.improvements.map((s, i) => (
+                      <li key={i}>{s}</li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* Generate / download PDF + DOCX */}
+      <ReportArtifacts
+        reportId={report.id}
+        status={report.status}
+        pdfUrl={report.pdfUrl}
+        docxUrl={report.docxUrl}
+      />
     </div>
   );
 }

@@ -25,19 +25,20 @@ export async function renderHtmlToPdf(html: string): Promise<Buffer> {
 }
 
 /**
- * Stores a PDF in Firebase Storage with a download token and returns a
+ * Stores a file in Firebase Storage with a download token and returns a
  * token URL that works without authentication (unguessable, internal use).
  */
-export async function storePdf(
-  pdf: Buffer,
+export async function storeFile(
+  data: Buffer,
   filePath: string,
+  contentType: string,
   downloadName?: string,
 ): Promise<{ filePath: string; downloadUrl: string }> {
   const bucket = admin.storage().bucket();
   const token = randomUUID();
-  await bucket.file(filePath).save(pdf, {
+  await bucket.file(filePath).save(data, {
     metadata: {
-      contentType: 'application/pdf',
+      contentType,
       ...(downloadName
         ? { contentDisposition: `attachment; filename="${downloadName}"` }
         : {}),
@@ -48,4 +49,16 @@ export async function storePdf(
     `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/` +
     `${encodeURIComponent(filePath)}?alt=media&token=${token}`;
   return { filePath, downloadUrl };
+}
+
+/**
+ * Stores a PDF in Firebase Storage with a download token and returns a
+ * token URL that works without authentication (unguessable, internal use).
+ */
+export async function storePdf(
+  pdf: Buffer,
+  filePath: string,
+  downloadName?: string,
+): Promise<{ filePath: string; downloadUrl: string }> {
+  return storeFile(pdf, filePath, 'application/pdf', downloadName);
 }
