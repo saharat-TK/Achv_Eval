@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import type { ManagedOffering } from '@/lib/data/offeringManager';
 import type { ReportSummary, CourseReportLinks } from '@/lib/data/assessmentReports';
-import type { AssessmentBand, ReportScope, Semester } from '@/lib/types/models';
+import { bandFromPercent, type AssessmentBand, type ReportScope, type Semester } from '@/lib/types/models';
 import { httpsCallable } from 'firebase/functions';
 import { getFirebaseAuth, getFirebaseFunctions } from '@/lib/firebase/config';
 import { SEMESTER_LABEL, REPORT_THRESHOLD } from '@/lib/constants';
@@ -323,6 +323,7 @@ export default function AssessmentReportsClient({
                       <ProgramProgressRow
                         key={`annual-${row.academicProgramId ?? 'none'}`}
                         row={row}
+                        courseReportLinks={courseReportLinks}
                         {...rowReportState(row.academicProgramId, g.year, 'annual', null)}
                         onCreate={() =>
                           row.academicProgramId &&
@@ -409,7 +410,6 @@ function ProgramProgressRow({
   const [expanded, setExpanded] = useState(false);
   const { stats } = row;
   const percent = Math.round(stats.ratio * 1000) / 10;
-  const fillColor = stats.eligible ? 'bg-[#00704A]' : 'bg-amber-400';
 
   const courses = useMemo(
     () =>
@@ -418,6 +418,19 @@ function ProgramProgressRow({
         .sort((a, b) => a.courseCode.localeCompare(b.courseCode)),
     [row.offerings],
   );
+
+  // Average assessment result across this row's assessed courses.
+  const avg = useMemo(() => {
+    const vals = row.offerings
+      .map((o) => courseReportLinks[o.id])
+      .filter((l): l is CourseReportLinks => !!l && l.percentScore != null);
+    if (vals.length === 0) return null;
+    const n = vals.length;
+    const meanTotal = vals.reduce((a, l) => a + (l.totalScore ?? 0), 0) / n;
+    const meanMax = vals.reduce((a, l) => a + (l.maxScore ?? 0), 0) / n;
+    const pct = meanMax === 0 ? 0 : Math.round((1000 * meanTotal) / meanMax) / 10;
+    return { meanTotal, meanMax, pct, band: bandFromPercent(pct) };
+  }, [row.offerings, courseReportLinks]);
 
   return (
     <div className="rounded-lg border border-slate-200 bg-white px-3 py-2.5">
@@ -439,56 +452,56 @@ function ProgramProgressRow({
             <span className="truncate text-sm font-medium text-slate-700">{row.label}</span>
           </button>
         ) : (
-          <span className="truncate text-sm font-medium text-slate-700">{row.label}</span>
-        )}
-        <span className="shrink-0 text-xs text-slate-500">
-          ทวนสอบแล้ว {stats.assessed}/{stats.total} ({percent}%)
-        </span>
-      </div>
-
-      {/* Progress bar with a 25% threshold marker */}
-      <div className="mt-2 flex items-center gap-3">
-        <div className="relative h-2 flex-1 overflow-hidden rounded-full bg-slate-100">
-          <div
-            className={`h-full ${fillColor} transition-all`}
-            style={{ width: `${Math.min(100, stats.ratio * 100)}%` }}
-          />
-          <div
-            className="absolute top-0 h-full w-px bg-slate-400/70"
-            style={{ left: `${REPORT_THRESHOLD * 100}%` }}
-            title="เกณฑ์ขั้นต่ำ 25%"
-          />
-        </div>
-        {synthesizing ? (
-          <span className="shrink-0 inline-flex items-center gap-1.5 rounded-lg border border-purple-300 bg-purple-50 px-3 py-1.5 text-xs font-medium text-purple-700">
-            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-purple-500" />
-            กำลังสังเคราะห์ข้อเสนอแนะ…
+          <span className="min-w-0 flex-1 truncate text-sm font-medium text-slate-700">
+            {row.label}
           </span>
-        ) : (
-          <>
-            {reportId && (
-              <Link
-                href={`/admin/assessment-reports/${reportId}`}
-                className="shrink-0 rounded-lg border border-mfu-primary px-3 py-1.5 text-xs font-medium text-mfu-primary hover:bg-mfu-primary/5"
-              >
-                ดูรายงาน
-              </Link>
-            )}
-            <button
-              type="button"
-              onClick={onCreate}
-              disabled={!stats.eligible}
-              title={
-                stats.eligible
-                  ? undefined
-                  : 'ต้องทวนสอบอย่างน้อย 25% ของรายวิชาก่อนจึงจะสร้างรายงานได้'
-              }
-              className="shrink-0 rounded-lg bg-mfu-primary px-3 py-1.5 text-xs font-medium text-white hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              {reportId ? 'สร้างใหม่' : createLabel}
-            </button>
-          </>
         )}
+
+        <div className="flex shrink-0 items-center gap-3">
+          <span className="text-xs text-slate-500">
+            ทวนสอบแล้ว {stats.assessed}/{stats.total} ({percent}%)
+          </span>
+          {avg && (
+            <span className="inline-flex items-center gap-1.5 text-xs text-slate-500">
+              เฉลี่ย {avg.meanTotal.toFixed(1)}/{avg.meanMax.toFixed(1)} ({avg.pct}%)
+              <span
+                className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium ${BAND_BADGE[avg.band]}`}
+              >
+                {BAND_LABEL[avg.band]}
+              </span>
+            </span>
+          )}
+          {synthesizing ? (
+            <span className="inline-flex items-center gap-1.5 rounded-lg border border-purple-300 bg-purple-50 px-3 py-1.5 text-xs font-medium text-purple-700">
+              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-purple-500" />
+              กำลังสังเคราะห์ข้อเสนอแนะ…
+            </span>
+          ) : (
+            <>
+              {reportId && (
+                <Link
+                  href={`/admin/assessment-reports/${reportId}`}
+                  className="rounded-lg border border-mfu-primary px-3 py-1.5 text-xs font-medium text-mfu-primary hover:bg-mfu-primary/5"
+                >
+                  ดูรายงาน
+                </Link>
+              )}
+              <button
+                type="button"
+                onClick={onCreate}
+                disabled={!stats.eligible}
+                title={
+                  stats.eligible
+                    ? undefined
+                    : 'ต้องทวนสอบอย่างน้อย 25% ของรายวิชาก่อนจึงจะสร้างรายงานได้'
+                }
+                className="rounded-lg bg-mfu-primary px-3 py-1.5 text-xs font-medium text-white hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                {reportId ? 'สร้างใหม่' : createLabel}
+              </button>
+            </>
+          )}
+        </div>
       </div>
 
       {/* Collapsible course-status list (semester rows only) */}
