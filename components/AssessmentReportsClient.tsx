@@ -162,8 +162,9 @@ export default function AssessmentReportsClient({
           }))
           .sort((a, b) => a.label.localeCompare(b.label, 'th'));
 
+        // Display order per year: Summer (3) → second (2) → first (1).
         const semesters: SemGroup[] = [...semMap.keys()]
-          .sort((a, b) => Number(a) - Number(b))
+          .sort((a, b) => Number(b) - Number(a))
           .map((sem) => {
             const apMap = semMap.get(sem)!;
             const programs: ProgramRow[] = [...apMap.entries()]
