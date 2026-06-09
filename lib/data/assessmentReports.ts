@@ -263,6 +263,43 @@ export async function getReportsForAcademicPrograms(
   return out;
 }
 
+export interface CourseReportLinks {
+  /** AI analysis report PDF — shown as the "draft" report. */
+  aiReportUrl: string | null;
+  /** Signed combined report PDF — shown as the "final" report. */
+  combinedReportUrl: string | null;
+}
+
+/**
+ * Resolve the downloadable AI-report and combined-report PDF URLs for each
+ * offering, keyed by offering id. Reads the latest AI report doc and the
+ * signed assessment doc only where their ids exist.
+ */
+export async function getCourseReportLinks(
+  offerings: { id: string; latestAiReportId: string | null; assessmentId: string | null }[],
+): Promise<Record<string, CourseReportLinks>> {
+  const db = getAdminDb();
+  const out: Record<string, CourseReportLinks> = {};
+  await Promise.all(
+    offerings.map(async (o) => {
+      if (!o.latestAiReportId && !o.assessmentId) return;
+      const offRef = db.collection('offerings').doc(o.id);
+      const [aiSnap, aSnap] = await Promise.all([
+        o.latestAiReportId
+          ? offRef.collection('aiReports').doc(o.latestAiReportId).get()
+          : Promise.resolve(null),
+        o.assessmentId
+          ? offRef.collection('assessments').doc(o.assessmentId).get()
+          : Promise.resolve(null),
+      ]);
+      const aiReportUrl = (aiSnap?.data()?.reportDownloadUrl as string | undefined) ?? null;
+      const combinedReportUrl = (aSnap?.data()?.signedPdfUrl as string | undefined) ?? null;
+      if (aiReportUrl || combinedReportUrl) out[o.id] = { aiReportUrl, combinedReportUrl };
+    }),
+  );
+  return out;
+}
+
 export async function getReportById(reportId: string): Promise<ReportWithId | null> {
   const snap = await getAdminDb()
     .collection('assessmentSummaryReports')

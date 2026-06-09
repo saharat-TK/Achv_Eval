@@ -4,7 +4,10 @@ import {
   getManagedAcademicPrograms,
   getOfferingsForAcademicPrograms,
 } from '@/lib/data/offeringManager';
-import { getReportsForAcademicPrograms } from '@/lib/data/assessmentReports';
+import {
+  getCourseReportLinks,
+  getReportsForAcademicPrograms,
+} from '@/lib/data/assessmentReports';
 import AssessmentReportsClient from '@/components/AssessmentReportsClient';
 
 export const dynamic = 'force-dynamic';
@@ -26,6 +29,7 @@ export default async function AssessmentReportsPage() {
     getOfferingsForAcademicPrograms(academicProgramIds),
     getReportsForAcademicPrograms(academicProgramIds),
   ]);
+  const courseReportLinks = await getCourseReportLinks(offerings);
 
   return (
     <div>
@@ -38,6 +42,7 @@ export default async function AssessmentReportsPage() {
       <AssessmentReportsClient
         offerings={offerings}
         reports={reports}
+        courseReportLinks={courseReportLinks}
         academicPrograms={programs.map((p) => ({
           id: p.id,
           code: p.code,

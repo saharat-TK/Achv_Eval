@@ -4,7 +4,7 @@ import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import type { ManagedOffering } from '@/lib/data/offeringManager';
-import type { ReportSummary } from '@/lib/data/assessmentReports';
+import type { ReportSummary, CourseReportLinks } from '@/lib/data/assessmentReports';
 import type { ReportScope, Semester } from '@/lib/types/models';
 import { httpsCallable } from 'firebase/functions';
 import { getFirebaseAuth, getFirebaseFunctions } from '@/lib/firebase/config';
@@ -77,10 +77,12 @@ interface YearGroup {
 export default function AssessmentReportsClient({
   offerings,
   reports,
+  courseReportLinks,
   academicPrograms,
 }: {
   offerings: ManagedOffering[];
   reports: ReportSummary[];
+  courseReportLinks: Record<string, CourseReportLinks>;
   academicPrograms: ProgramOpt[];
 }) {
   const router = useRouter();
@@ -339,6 +341,7 @@ export default function AssessmentReportsClient({
                           key={`${s.sem}-${row.academicProgramId ?? 'none'}`}
                           row={row}
                           collapsible
+                          courseReportLinks={courseReportLinks}
                           {...rowReportState(row.academicProgramId, g.year, 'semester', s.sem)}
                           onCreate={() =>
                             row.academicProgramId &&
@@ -380,6 +383,7 @@ function ProgramProgressRow({
   reportId = null,
   synthesizing = false,
   collapsible = false,
+  courseReportLinks = {},
 }: {
   row: ProgramRow;
   onCreate: () => void;
@@ -389,6 +393,7 @@ function ProgramProgressRow({
   synthesizing?: boolean;
   /** Semester rows expand to a course-status list; the annual rollup does not. */
   collapsible?: boolean;
+  courseReportLinks?: Record<string, CourseReportLinks>;
 }) {
   const [expanded, setExpanded] = useState(false);
   const { stats } = row;
@@ -481,18 +486,38 @@ function ProgramProgressRow({
           {courses.length === 0 ? (
             <li className="py-2 text-xs text-slate-400">ไม่มีรายวิชา</li>
           ) : (
-            courses.map((o) => (
-              <li
-                key={o.id}
-                className="flex items-center justify-between gap-3 py-2"
-              >
-                <span className="min-w-0 truncate text-xs text-slate-700">
-                  <span className="font-medium">{o.courseCode}</span>{' '}
-                  {o.courseNameTh}
-                </span>
-                <StatusBadge status={o.status} />
-              </li>
-            ))
+            courses.map((o) => {
+              const links = courseReportLinks[o.id];
+              return (
+                <li
+                  key={o.id}
+                  className="flex items-center justify-between gap-3 py-2"
+                >
+                  <span className="min-w-0 truncate text-xs text-slate-700">
+                    <span className="font-medium">{o.courseCode}</span>{' '}
+                    {o.courseNameTh}
+                  </span>
+                  <span className="flex shrink-0 items-center gap-2">
+                    {links?.combinedReportUrl ? (
+                      <a
+                        href={links.combinedReportUrl}
+                        className="rounded-full border border-green-300 bg-green-50 px-2.5 py-0.5 text-[11px] font-medium text-green-800 hover:bg-green-100"
+                      >
+                        ⬇ รายงานฉบับสมบูรณ์
+                      </a>
+                    ) : links?.aiReportUrl ? (
+                      <a
+                        href={links.aiReportUrl}
+                        className="rounded-full border border-slate-300 bg-slate-50 px-2.5 py-0.5 text-[11px] font-medium text-slate-600 hover:bg-slate-100"
+                      >
+                        ⬇ รายงานฉบับร่าง
+                      </a>
+                    ) : null}
+                    <StatusBadge status={o.status} />
+                  </span>
+                </li>
+              );
+            })
           )}
         </ul>
       )}
