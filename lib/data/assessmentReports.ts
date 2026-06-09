@@ -2,6 +2,7 @@ import 'server-only';
 import { getAdminDb } from '@/lib/firebase/admin';
 import { RUBRIC_TOPICS } from '@/lib/constants';
 import type {
+  AssessmentBand,
   AssessmentDoc,
   AssessmentSummaryReportDoc,
   OfferingDoc,
@@ -268,12 +269,17 @@ export interface CourseReportLinks {
   aiReportUrl: string | null;
   /** Signed combined report PDF — shown as the "final" report. */
   combinedReportUrl: string | null;
+  /** Assessment result (from the signed assessment), null if not assessed. */
+  totalScore: number | null;
+  maxScore: number | null;
+  percentScore: number | null;
+  band: AssessmentBand | null;
 }
 
 /**
- * Resolve the downloadable AI-report and combined-report PDF URLs for each
- * offering, keyed by offering id. Reads the latest AI report doc and the
- * signed assessment doc only where their ids exist.
+ * Resolve per-offering report links and the signed assessment result, keyed by
+ * offering id. Reads the latest AI report doc and the signed assessment doc
+ * only where their ids exist.
  */
 export async function getCourseReportLinks(
   offerings: { id: string; latestAiReportId: string | null; assessmentId: string | null }[],
@@ -293,8 +299,17 @@ export async function getCourseReportLinks(
           : Promise.resolve(null),
       ]);
       const aiReportUrl = (aiSnap?.data()?.reportDownloadUrl as string | undefined) ?? null;
-      const combinedReportUrl = (aSnap?.data()?.signedPdfUrl as string | undefined) ?? null;
-      if (aiReportUrl || combinedReportUrl) out[o.id] = { aiReportUrl, combinedReportUrl };
+      const a = aSnap?.data() as AssessmentDoc | undefined;
+      const combinedReportUrl = a?.signedPdfUrl ?? null;
+      const info: CourseReportLinks = {
+        aiReportUrl,
+        combinedReportUrl,
+        totalScore: a?.totalScore ?? null,
+        maxScore: a?.maxScore ?? null,
+        percentScore: a?.percentScore ?? null,
+        band: a?.band ?? null,
+      };
+      if (aiReportUrl || combinedReportUrl || a) out[o.id] = info;
     }),
   );
   return out;

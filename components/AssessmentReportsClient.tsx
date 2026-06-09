@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import type { ManagedOffering } from '@/lib/data/offeringManager';
 import type { ReportSummary, CourseReportLinks } from '@/lib/data/assessmentReports';
-import type { ReportScope, Semester } from '@/lib/types/models';
+import type { AssessmentBand, ReportScope, Semester } from '@/lib/types/models';
 import { httpsCallable } from 'firebase/functions';
 import { getFirebaseAuth, getFirebaseFunctions } from '@/lib/firebase/config';
 import { SEMESTER_LABEL, REPORT_THRESHOLD } from '@/lib/constants';
@@ -28,6 +28,17 @@ function reportKey(
   const suffix = scope === 'annual' ? 'annual' : `sem${semester}`;
   return `${academicProgramId}__${academicYear}__${suffix}`;
 }
+
+const BAND_LABEL: Record<AssessmentBand, string> = {
+  improve: 'ปรับปรุง',
+  good: 'ดี',
+  excellent: 'ดีเยี่ยม',
+};
+const BAND_BADGE: Record<AssessmentBand, string> = {
+  improve: 'border-amber-200 bg-amber-50 text-amber-800',
+  good: 'border-blue-200 bg-blue-50 text-blue-800',
+  excellent: 'border-green-200 bg-green-50 text-green-800',
+};
 
 interface CreateTarget {
   academicProgramId: string;
@@ -493,9 +504,23 @@ function ProgramProgressRow({
                   key={o.id}
                   className="flex items-center justify-between gap-3 py-2"
                 >
-                  <span className="min-w-0 truncate text-xs text-slate-700">
-                    <span className="font-medium">{o.courseCode}</span>{' '}
-                    {o.courseNameTh}
+                  <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-700">
+                    <span className="truncate">
+                      <span className="font-medium">{o.courseCode}</span>{' '}
+                      {o.courseNameTh}
+                    </span>
+                    {links?.band != null && links.percentScore != null && (
+                      <span className="inline-flex items-center gap-1.5 text-slate-500">
+                        <span>
+                          {links.totalScore}/{links.maxScore} ({links.percentScore}%)
+                        </span>
+                        <span
+                          className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium ${BAND_BADGE[links.band]}`}
+                        >
+                          {BAND_LABEL[links.band]}
+                        </span>
+                      </span>
+                    )}
                   </span>
                   <span className="flex shrink-0 items-center gap-2">
                     {links?.combinedReportUrl ? (
