@@ -85,6 +85,8 @@ export default function AssessmentReportsClient({
 }) {
   const router = useRouter();
   const [createTarget, setCreateTarget] = useState<CreateTarget | null>(null);
+  // Report keys whose AI synthesis is running in the background (after create).
+  const [synthesizingKeys, setSynthesizingKeys] = useState<Set<string>>(new Set());
 
   const reportByKey = useMemo(() => {
     const m = new Map<string, ReportSummary>();
@@ -181,14 +183,52 @@ export default function AssessmentReportsClient({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filtered, apLabel]);
 
-  function existingReportId(
+  function rowReportState(
     apId: string | null,
     year: number,
     scope: ReportScope,
     sem: Semester | null,
-  ): string | null {
-    if (!apId) return null;
-    return reportByKey.get(reportKey(apId, year, scope, sem))?.id ?? null;
+  ): { reportId: string | null; synthesizing: boolean } {
+    if (!apId) return { reportId: null, synthesizing: false };
+    const key = reportKey(apId, year, scope, sem);
+    const summary = reportByKey.get(key) ?? null;
+    return {
+      reportId: summary?.id ?? null,
+      synthesizing: synthesizingKeys.has(key) || summary?.status === 'synthesizing',
+    };
+  }
+
+  // After a report is created the modal closes immediately; AI synthesis runs
+  // in the background and the row shows a "synthesizing" state until it lands.
+  function handleCreated(target: CreateTarget, reportId: string) {
+    const key = reportKey(
+      target.academicProgramId,
+      target.academicYear,
+      target.scope,
+      target.semester,
+    );
+    setCreateTarget(null);
+    setSynthesizingKeys((prev) => new Set(prev).add(key));
+    void (async () => {
+      try {
+        await getFirebaseAuth().authStateReady();
+        const callable = httpsCallable(
+          getFirebaseFunctions(),
+          'synthesizeAssessmentReport',
+          { timeout: 180_000 },
+        );
+        await callable({ reportId });
+      } catch {
+        // Non-fatal: the report exists and synthesis can be retried.
+      } finally {
+        setSynthesizingKeys((prev) => {
+          const next = new Set(prev);
+          next.delete(key);
+          return next;
+        });
+        router.refresh();
+      }
+    })();
   }
 
   return (
@@ -269,7 +309,7 @@ export default function AssessmentReportsClient({
                       <ProgramProgressRow
                         key={`annual-${row.academicProgramId ?? 'none'}`}
                         row={row}
-                        reportId={existingReportId(row.academicProgramId, g.year, 'annual', null)}
+                        {...rowReportState(row.academicProgramId, g.year, 'annual', null)}
                         onCreate={() =>
                           row.academicProgramId &&
                           setCreateTarget({
@@ -298,7 +338,7 @@ export default function AssessmentReportsClient({
                           key={`${s.sem}-${row.academicProgramId ?? 'none'}`}
                           row={row}
                           collapsible
-                          reportId={existingReportId(row.academicProgramId, g.year, 'semester', s.sem)}
+                          {...rowReportState(row.academicProgramId, g.year, 'semester', s.sem)}
                           onCreate={() =>
                             row.academicProgramId &&
                             setCreateTarget({
@@ -325,10 +365,7 @@ export default function AssessmentReportsClient({
         <CreateReportModal
           target={createTarget}
           onClose={() => setCreateTarget(null)}
-          onCreated={(reportId) => {
-            setCreateTarget(null);
-            router.push(`/admin/assessment-reports/${reportId}`);
-          }}
+          onCreated={(reportId) => handleCreated(createTarget, reportId)}
         />
       )}
     </div>
@@ -340,12 +377,15 @@ function ProgramProgressRow({
   onCreate,
   createLabel,
   reportId = null,
+  synthesizing = false,
   collapsible = false,
 }: {
   row: ProgramRow;
   onCreate: () => void;
   createLabel: string;
   reportId?: string | null;
+  /** AI synthesis is running after a create — show a pending state. */
+  synthesizing?: boolean;
   /** Semester rows expand to a course-status list; the annual rollup does not. */
   collapsible?: boolean;
 }) {
@@ -402,27 +442,36 @@ function ProgramProgressRow({
             title="เกณฑ์ขั้นต่ำ 25%"
           />
         </div>
-        {reportId && (
-          <Link
-            href={`/admin/assessment-reports/${reportId}`}
-            className="shrink-0 rounded-lg border border-mfu-primary px-3 py-1.5 text-xs font-medium text-mfu-primary hover:bg-mfu-primary/5"
-          >
-            ดูรายงาน
-          </Link>
+        {synthesizing ? (
+          <span className="shrink-0 inline-flex items-center gap-1.5 rounded-lg border border-purple-300 bg-purple-50 px-3 py-1.5 text-xs font-medium text-purple-700">
+            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-purple-500" />
+            กำลังสังเคราะห์ข้อเสนอแนะ…
+          </span>
+        ) : (
+          <>
+            {reportId && (
+              <Link
+                href={`/admin/assessment-reports/${reportId}`}
+                className="shrink-0 rounded-lg border border-mfu-primary px-3 py-1.5 text-xs font-medium text-mfu-primary hover:bg-mfu-primary/5"
+              >
+                ดูรายงาน
+              </Link>
+            )}
+            <button
+              type="button"
+              onClick={onCreate}
+              disabled={!stats.eligible}
+              title={
+                stats.eligible
+                  ? undefined
+                  : 'ต้องทวนสอบอย่างน้อย 25% ของรายวิชาก่อนจึงจะสร้างรายงานได้'
+              }
+              className="shrink-0 rounded-lg bg-mfu-primary px-3 py-1.5 text-xs font-medium text-white hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              {reportId ? 'สร้างใหม่' : createLabel}
+            </button>
+          </>
         )}
-        <button
-          type="button"
-          onClick={onCreate}
-          disabled={!stats.eligible}
-          title={
-            stats.eligible
-              ? undefined
-              : 'ต้องทวนสอบอย่างน้อย 25% ของรายวิชาก่อนจึงจะสร้างรายงานได้'
-          }
-          className="shrink-0 rounded-lg bg-mfu-primary px-3 py-1.5 text-xs font-medium text-white hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
-        >
-          {reportId ? 'สร้างใหม่' : createLabel}
-        </button>
       </div>
 
       {/* Collapsible course-status list (semester rows only) */}
@@ -469,7 +518,6 @@ function CreateReportModal({
   const [meetingDateTime, setMeetingDateTime] = useState('');
   const [committee, setCommittee] = useState(DEFAULT_COMMITTEE);
   const [busy, setBusy] = useState(false);
-  const [phase, setPhase] = useState<'idle' | 'creating' | 'synthesizing'>('idle');
   const [error, setError] = useState<string | null>(null);
 
   function setMember(i: number, field: 'name' | 'role', value: string) {
@@ -485,7 +533,6 @@ function CreateReportModal({
   async function submit() {
     setBusy(true);
     setError(null);
-    setPhase('creating');
     try {
       const res = await createAssessmentReport({
         academicProgramId: target.academicProgramId,
@@ -497,31 +544,14 @@ function CreateReportModal({
       if (!res.ok) {
         setError(res.error);
         setBusy(false);
-        setPhase('idle');
         return;
       }
-
-      // Run AI analysis + synthesis now so Section 3.2 is ready ahead of
-      // PDF/DOCX rendering. The report already persists, so a slow or failed
-      // synthesis never loses it — the report page can retry.
-      setPhase('synthesizing');
-      try {
-        await getFirebaseAuth().authStateReady();
-        const callable = httpsCallable(
-          getFirebaseFunctions(),
-          'synthesizeAssessmentReport',
-          { timeout: 180_000 },
-        );
-        await callable({ reportId: res.reportId });
-      } catch {
-        // Non-fatal: navigate anyway; the report exists and can be retried.
-      }
-
+      // Modal closes immediately; the parent runs AI synthesis in the
+      // background and reflects progress on the report's row button.
       onCreated(res.reportId);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'เกิดข้อผิดพลาด');
       setBusy(false);
-      setPhase('idle');
     }
   }
 
@@ -608,11 +638,7 @@ function CreateReportModal({
             disabled={busy}
             className="rounded-lg bg-mfu-primary px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
           >
-            {phase === 'synthesizing'
-              ? 'กำลังวิเคราะห์และสังเคราะห์ข้อเสนอแนะ AI…'
-              : phase === 'creating'
-                ? 'กำลังสร้าง…'
-                : 'สร้างรายงาน'}
+            {busy ? 'กำลังสร้าง…' : 'สร้างรายงาน'}
           </button>
         </div>
       </div>
