@@ -70,6 +70,10 @@ export interface ManagedOffering {
   curriculumNameTh: string;
   /** Parent academic program, resolved via curriculum.parentProgramId. */
   academicProgramId: string | null;
+  /** Latest AI analysis report id (for resolving the AI report PDF link). */
+  latestAiReportId: string | null;
+  /** Signed assessment id (for resolving the combined report PDF link). */
+  assessmentId: string | null;
   /** True when the offering has no aiReports/assessments/verifications,
    *  i.e. safe for a director to delete (status draft / documents_pending). */
   hasData: boolean;
@@ -136,6 +140,8 @@ export async function getOfferingsForAcademicPrograms(
         curriculumId: o.programId,
         curriculumNameTh: meta?.nameTh ?? '(ไม่พบเล่มหลักสูตร)',
         academicProgramId: meta?.academicProgramId ?? null,
+        latestAiReportId: o.latestAiReportId ?? null,
+        assessmentId: o.assessmentId ?? null,
         hasData: !NO_DATA_STATUSES.includes(o.status),
       });
     }

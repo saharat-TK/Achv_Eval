@@ -45,3 +45,6 @@ next-env.d.ts
 
 # Local scratch space — secret-setup temp files, never commit
 scratch/
+
+# Scratch input documents (not part of the app)
+Ex_documents/

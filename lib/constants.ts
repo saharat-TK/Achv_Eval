@@ -113,6 +113,21 @@ export const SEMESTER_LABEL: Record<Semester, string> = {
   '3': 'ภาคฤดูร้อน',
 };
 
+/** The 7 official rubric topics (ordered) — keys mirror AssessmentDoc.scores. */
+export const RUBRIC_TOPICS: { key: string; number: string; labelTh: string }[] = [
+  { key: 'item1Clo', number: '1', labelTh: 'ผลลัพธ์การเรียนรู้รายวิชา' },
+  { key: 'item21Content', number: '2.1', labelTh: 'เนื้อหาการเรียนการสอน' },
+  { key: 'item22Methods', number: '2.2', labelTh: 'วิธีการเรียนการสอน' },
+  { key: 'item31AssessmentMethods', number: '3.1', labelTh: 'วิธีการวัดและประเมินผล' },
+  { key: 'item32AssessmentForms', number: '3.2', labelTh: 'รูปแบบการประเมินผล' },
+  { key: 'item33Proportions', number: '3.3', labelTh: 'สัดส่วนในแต่ละวิธีการวัดและประเมินผล' },
+  { key: 'item34ExamQuality', number: '3.4', labelTh: 'คุณภาพข้อสอบ' },
+];
+
+/** Minimum assessed share (of active offerings) before an assessment summary
+ *  report may be created — applies to both a semester and a whole year. */
+export const REPORT_THRESHOLD = 0.25;
+
 export const REPORT_STATUS_TH: Record<AiReportStatus, string> = {
   queued: 'รอดำเนินการ',
   running: 'กำลังวิเคราะห์',

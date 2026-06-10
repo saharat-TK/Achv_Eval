@@ -430,7 +430,140 @@ export interface AuditLogDoc {
   after: Record<string, unknown> | null;
 }
 
+// ----- assessmentSummaryReports/{reportId} --------------------------
+export type ReportScope = 'semester' | 'annual';
+/** A report covers one academic program, or all programs (school-wide). */
+export type ReportCoverage = 'program' | 'all';
+/** Sentinel academicProgramId for school-wide (all-programs) reports. */
+export const ALL_PROGRAMS_ID = '__ALL__';
+export type ReportStatus =
+  | 'draft' // created; AI synthesis not yet run
+  | 'synthesizing' // AI synthesis in progress
+  | 'synthesized' // aiSynthesis ready; PDF/DOCX not yet rendered
+  | 'rendering' // PDF/DOCX generation in progress
+  | 'ready' // artifacts available
+  | 'failed';
+
+export interface ReportCommitteeMember {
+  name: string;
+  role: string; // ประธานกรรมการ / กรรมการ / กรรมการและเลขานุการ ...
+}
+
+/** One assessed-or-not offering captured at report-generation time. */
+export interface ReportCourseRow {
+  offeringId: string;
+  courseCode: string;
+  courseNameTh: string;
+  courseNameEn: string;
+  semester: Semester;
+  lecturerName: string | null;
+  assessed: boolean;
+  band: AssessmentBand | null;
+  percentScore: number | null;
+  /** Offering status — included for all-programs course listings. */
+  status?: string;
+  /** Academic year — included for all-programs (annual) course listings. */
+  academicYear?: number;
+  /** Owning academic program — set on all-programs reports for grouping. */
+  academicProgramId?: string;
+  academicProgramCode?: string;
+  academicProgramName?: string;
+}
+
+/** Per-program rollup row for the all-programs (school-wide) report. */
+export interface ProgramRollupRow {
+  academicProgramId: string;
+  code: string;
+  name: string;
+  totalOfferings: number;
+  assessedOfferings: number;
+  assessedPercent: number; // 0–100, one decimal
+  avgScorePercent: number | null; // mean of assessed courses' percent
+  band: AssessmentBand | null;
+}
+
+/** Aggregated commentary for one of the 7 rubric topics. */
+export interface ReportTopicSummary {
+  key: string; // rubric item key, e.g. item1Clo
+  number: string; // '1', '2.1', ...
+  labelTh: string;
+  strengths: string[];
+  improvements: string[];
+  /** Mean of assessor scores (1–3) across assessed courses; null if all N/A. */
+  averageScore?: number | null;
+  /** How many assessed courses contributed a numeric (non-N/A) score. */
+  scoredCount?: number;
+}
+
+export interface ReportSnapshot {
+  totalOfferings: number;
+  assessedOfferings: number;
+  percent: number; // 0–100, one decimal
+  bandDistribution: { improve: number; good: number; excellent: number };
+  /** Mean of assessed courses' overall percent scores; null if none assessed. */
+  overallAveragePercent?: number | null;
+  courseRows: ReportCourseRow[];
+  /** Section 3.1 — aggregated from assessor comments per rubric topic. */
+  assessorTopicSummary: ReportTopicSummary[];
+  /** All-programs reports only — per-program rollup for the §2 table. */
+  programRollup?: ProgramRollupRow[];
+}
+
+export interface AssessmentSummaryReportDoc {
+  /** Owning academic program, or ALL_PROGRAMS_ID for school-wide reports. */
+  academicProgramId: string;
+  academicProgramLabel: string; // denormalized "code — nameTh" (or "ทุกหลักสูตร")
+  coverage: ReportCoverage;
+  academicYear: number; // Buddhist year
+  scope: ReportScope;
+  semester: Semester | null; // null for annual scope
+
+  /** Manually supplied by the director/admin at creation time. */
+  header: {
+    venue: string;
+    meetingDateTime: string;
+    committee: ReportCommitteeMember[];
+  };
+
+  /** Frozen data the report renders from (computed at create/regenerate). */
+  snapshot: ReportSnapshot;
+
+  /** Section 3.2 — Gemini-synthesized cross-course suggestions (Phase 3). */
+  aiSynthesis: ReportTopicSummary[] | null;
+
+  /** Section 3.1 — Gemini synthesis of assessor comments into an overall
+   *  per-topic view. The raw comments stay in snapshot.assessorTopicSummary
+   *  (audit trail + fallback when synthesis is missing or failed). */
+  assessorSynthesis?: ReportTopicSummary[] | null;
+
+  /** True once a report has been generated — gates program directors to one
+   *  generation per row. Admins bypass it; an admin reset clears it. */
+  directorLocked?: boolean;
+
+  status: ReportStatus;
+  pdfStoragePath: string | null;
+  pdfUrl: string | null;
+  docxStoragePath: string | null;
+  docxUrl: string | null;
+  generatedAt: Ts | null;
+
+  createdAt: Ts;
+  updatedAt: Ts;
+  createdBy: string;
+  updatedBy: string;
+}
+
 // ----- Rubric scoring helper ----------------------------------------
+/** Grade bands from a percent: <70 improve, 70–79 good, 80–100 excellent. */
+export function bandFromPercent(percent: number): AssessmentBand {
+  return percent >= 80 ? 'excellent' : percent >= 70 ? 'good' : 'improve';
+}
+
+/** Band for a mean topic score on the 1–3 scale (score/3 → percent). */
+export function bandFromScore(score: number): AssessmentBand {
+  return bandFromPercent((score / 3) * 100);
+}
+
 /**
  * Computes total/max/percent/band for an assessment.
  * `na` items are excluded from both numerator and denominator.
