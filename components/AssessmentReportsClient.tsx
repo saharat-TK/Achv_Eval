@@ -86,7 +86,7 @@ function allProgramsRow(rows: ProgramRow[]): ProgramRow {
   const offerings = rows.flatMap((r) => r.offerings);
   return {
     academicProgramId: ALL_PROGRAMS_ID,
-    label: 'ทุกหลักสูตร (ทั้งสำนักวิชา)',
+    label: 'ทุกหลักสูตร',
     offerings,
     stats: computeStats(offerings),
   };
@@ -325,7 +325,7 @@ export default function AssessmentReportsClient({
           {groups.map((g) => (
             <section
               key={g.year}
-              className="rounded-xl border border-[#00704A]/20 border-l-4 border-l-[#00704A] bg-[#00704A]/[0.04]"
+              className="rounded-xl border border-slate-200 border-l-4 border-l-[#00704A] bg-slate-50"
             >
               <div className="flex items-center justify-between px-4 py-3">
                 <h2 className="text-base font-semibold text-[#00704A]">
@@ -336,8 +336,9 @@ export default function AssessmentReportsClient({
               <div className="space-y-4 px-3 pb-3">
                 {/* Annual rollup per program */}
                 <div>
-                  <div className="mb-1 px-1 text-xs font-semibold text-slate-500">
+                  <div className="mb-1.5 flex items-center gap-3 px-1 text-sm font-semibold text-slate-700">
                     ภาพรวมทั้งปีการศึกษา (รายงานประจำปี)
+                    <span className="h-px flex-1 bg-slate-200" />
                   </div>
                   <div className="space-y-2">
                     {isAdmin && (() => {
@@ -389,8 +390,9 @@ export default function AssessmentReportsClient({
                 {/* Per-semester per-program progress */}
                 {g.semesters.map((s) => (
                   <div key={s.sem}>
-                    <div className="mb-1 px-1 text-xs font-semibold text-slate-500">
+                    <div className="mb-1.5 flex items-center gap-3 px-1 text-sm font-semibold text-slate-700">
                       {SEMESTER_LABEL[s.sem]}
+                      <span className="h-px flex-1 bg-slate-200" />
                     </div>
                     <div className="space-y-2">
                       {isAdmin && (() => {
@@ -506,8 +508,8 @@ function ProgramProgressRow({
 
   return (
     <div
-      className={`rounded-lg border px-3 py-2.5 ${
-        highlight ? 'border-mfu-primary/40 bg-mfu-primary/[0.04]' : 'border-slate-200 bg-white'
+      className={`rounded-lg border bg-white px-3 py-2.5 ${
+        highlight ? 'border-slate-300 shadow-sm' : 'border-slate-200'
       }`}
     >
       <div className="flex items-center justify-between gap-3">
@@ -528,18 +530,31 @@ function ProgramProgressRow({
             <span className="truncate text-sm font-medium text-slate-700">{row.label}</span>
           </button>
         ) : (
-          <span className="min-w-0 flex-1 truncate text-sm font-medium text-slate-700">
-            {row.label}
+          <span className="flex min-w-0 flex-1 items-center gap-2">
+            <span className="truncate text-sm font-medium text-slate-700">{row.label}</span>
+            {highlight && (
+              <span className="shrink-0 rounded-full border border-slate-300 bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-600">
+                ทั้งสำนักวิชา
+              </span>
+            )}
           </span>
         )}
 
-        <div className="flex shrink-0 items-center gap-3">
-          <span className="text-xs text-slate-500">
-            ทวนสอบแล้ว {stats.assessed}/{stats.total} ({percent}%)
+        <div className="flex shrink-0 items-center gap-2">
+          {/* Coverage chip (progress) and quality chip (average + band) —
+              labelled, with tabular numbers so values align across rows. */}
+          <span className="inline-flex items-baseline gap-1 rounded-md bg-slate-100 px-2 py-1 text-[11px]">
+            <span className="text-slate-400">ทวนสอบแล้ว</span>
+            <span className="font-medium tabular-nums text-slate-700">
+              {stats.assessed}/{stats.total} ({percent}%)
+            </span>
           </span>
           {avg && (
-            <span className="inline-flex items-center gap-1.5 text-xs text-slate-500">
-              เฉลี่ย {avg.meanTotal.toFixed(1)}/{avg.meanMax.toFixed(1)} ({avg.pct}%)
+            <span className="inline-flex items-center gap-1.5 rounded-md bg-slate-100 px-2 py-1 text-[11px]">
+              <span className="text-slate-400">เฉลี่ย</span>
+              <span className="font-medium tabular-nums text-slate-700">
+                {avg.meanTotal.toFixed(1)}/{avg.meanMax.toFixed(1)} ({avg.pct}%)
+              </span>
               <span
                 className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium ${BAND_BADGE[avg.band]}`}
               >
@@ -571,7 +586,7 @@ function ProgramProgressRow({
                     ? undefined
                     : 'ต้องทวนสอบอย่างน้อย 25% ของรายวิชาก่อนจึงจะสร้างรายงานได้'
                 }
-                className="rounded-lg bg-mfu-primary px-3 py-1.5 text-xs font-medium text-white hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+                className="rounded-lg bg-mfu-primary px-3 py-1.5 text-xs font-medium text-white enabled:hover:opacity-90 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
               >
                 {reportId ? 'สร้างใหม่' : createLabel}
               </button>
