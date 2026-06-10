@@ -248,7 +248,11 @@ ${
 }
 
 <h2>รายละเอียดการทวนสอบ</h2>
-<p>ประจำปีการศึกษา ${d.academicYear} ${esc(d.scopeLabel)} มีรายวิชาที่รับผิดชอบสอนในหลักสูตร
+<p>ประจำปีการศึกษา ${d.academicYear} ${esc(d.scopeLabel)} ${
+    d.coverage === 'all' && d.programRollup
+      ? `มีหลักสูตรทั้งหมด ${d.programRollup.length} หลักสูตร มีรายวิชาที่รับผิดชอบสอน`
+      : 'มีรายวิชาที่รับผิดชอบสอนในหลักสูตร'
+  }
 ${d.totalOfferings} รายวิชา ดำเนินการทวนสอบผลสัมฤทธิ์แล้ว ${d.assessedOfferings} รายวิชา
 คิดเป็นร้อยละ ${d.percent} ของรายวิชาที่เปิดสอน</p>
 

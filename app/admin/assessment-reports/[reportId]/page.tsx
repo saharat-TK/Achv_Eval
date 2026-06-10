@@ -132,9 +132,12 @@ export default async function AssessmentReportPage({
           รายละเอียดการทวนสอบ
         </h2>
         <p className="mt-2 text-sm text-slate-700">
-          มีรายวิชาที่รับผิดชอบสอนในหลักสูตร {snapshot.totalOfferings} รายวิชา
-          ดำเนินการทวนสอบผลสัมฤทธิ์แล้ว {snapshot.assessedOfferings} รายวิชา
-          คิดเป็นร้อยละ {snapshot.percent} ของรายวิชาที่เปิดสอน
+          {isAll && snapshot.programRollup
+            ? `มีหลักสูตรทั้งหมด ${snapshot.programRollup.length} หลักสูตร มีรายวิชาที่รับผิดชอบสอน`
+            : 'มีรายวิชาที่รับผิดชอบสอนในหลักสูตร'}{' '}
+          {snapshot.totalOfferings} รายวิชา ดำเนินการทวนสอบผลสัมฤทธิ์แล้ว{' '}
+          {snapshot.assessedOfferings} รายวิชา คิดเป็นร้อยละ {snapshot.percent}{' '}
+          ของรายวิชาที่เปิดสอน
         </p>
 
         {/* Band distribution */}
