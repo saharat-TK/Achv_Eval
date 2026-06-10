@@ -508,8 +508,8 @@ function ProgramProgressRow({
 
   return (
     <div
-      className={`rounded-lg border bg-white px-3 py-2.5 ${
-        highlight ? 'border-slate-300 shadow-sm' : 'border-slate-200'
+      className={`rounded-lg bg-white px-3 py-2.5 ${
+        highlight ? 'border border-slate-300 shadow-sm' : ''
       }`}
     >
       <div className="flex items-center justify-between gap-3">
