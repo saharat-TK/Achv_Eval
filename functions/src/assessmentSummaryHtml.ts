@@ -270,7 +270,7 @@ ${d.coverage === 'all' && d.programRollup ? programRollupTable(d.programRollup) 
 <h2>สรุปข้อเสนอแนะตามหัวข้อการทวนสอบ (7 รายการ) — จากผู้ทวนสอบ</h2>
 ${
   d.assessorSynthesized
-    ? '<p class="muted" style="font-size:10px;">สรุปภาพรวมโดย AI จากความเห็นของผู้ทวนสอบ</p>'
+    ? '<p class="muted" style="font-size:10px;">สรุปภาพรวมความเห็นของคณะกรรมการทวนสอบ</p>'
     : ''
 }
 ${

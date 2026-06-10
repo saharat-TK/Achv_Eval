@@ -259,7 +259,7 @@ export default async function AssessmentReportPage({
         </div>
         {assessorSynth && (
           <p className="mt-1 text-xs text-slate-400">
-            สรุปภาพรวมโดย AI จากความเห็นของผู้ทวนสอบ
+            สรุปภาพรวมความเห็นของคณะกรรมการทวนสอบ
           </p>
         )}
         <div className="mt-3 overflow-hidden rounded-lg border border-slate-200">
