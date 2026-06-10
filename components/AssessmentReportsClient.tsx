@@ -541,27 +541,32 @@ function ProgramProgressRow({
         )}
 
         <div className="flex shrink-0 items-center gap-2">
-          {/* Coverage chip (progress) and quality chip (average + band) —
+          {/* One stats block: coverage (ทวนสอบแล้ว) | quality (เฉลี่ย + band),
               labelled, with tabular numbers so values align across rows. */}
-          <span className="inline-flex items-baseline gap-1 rounded-md bg-slate-100 px-2 py-1 text-[11px]">
-            <span className="text-slate-400">ทวนสอบแล้ว</span>
-            <span className="font-medium tabular-nums text-slate-700">
-              {stats.assessed}/{stats.total} ({percent}%)
-            </span>
-          </span>
-          {avg && (
-            <span className="inline-flex items-center gap-1.5 rounded-md bg-slate-100 px-2 py-1 text-[11px]">
-              <span className="text-slate-400">เฉลี่ย</span>
+          <span className="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-[11px]">
+            <span className="inline-flex items-baseline gap-1">
+              <span className="text-slate-500">ทวนสอบแล้ว</span>
               <span className="font-medium tabular-nums text-slate-700">
-                {avg.meanTotal.toFixed(1)}/{avg.meanMax.toFixed(1)} ({avg.pct}%)
-              </span>
-              <span
-                className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium ${BAND_BADGE[avg.band]}`}
-              >
-                {BAND_LABEL[avg.band]}
+                {stats.assessed}/{stats.total} ({percent}%)
               </span>
             </span>
-          )}
+            {avg && (
+              <>
+                <span className="h-3.5 w-px bg-slate-300" aria-hidden />
+                <span className="inline-flex items-center gap-1.5">
+                  <span className="text-slate-500">เฉลี่ย</span>
+                  <span className="font-medium tabular-nums text-slate-700">
+                    {avg.meanTotal.toFixed(1)}/{avg.meanMax.toFixed(1)} ({avg.pct}%)
+                  </span>
+                  <span
+                    className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium ${BAND_BADGE[avg.band]}`}
+                  >
+                    {BAND_LABEL[avg.band]}
+                  </span>
+                </span>
+              </>
+            )}
+          </span>
           {synthesizing ? (
             <span className="inline-flex items-center gap-1.5 rounded-lg border border-purple-300 bg-purple-50 px-3 py-1.5 text-xs font-medium text-purple-700">
               <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-purple-500" />
