@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import type { ManagedOffering } from '@/lib/data/offeringManager';
@@ -17,7 +17,11 @@ import { httpsCallable } from 'firebase/functions';
 import { getFirebaseAuth, getFirebaseFunctions } from '@/lib/firebase/config';
 import { SEMESTER_LABEL, REPORT_THRESHOLD } from '@/lib/constants';
 import StatusBadge from '@/components/StatusBadge';
-import { createAssessmentReport } from '@/app/admin/assessment-reports/actions';
+import {
+  createAssessmentReport,
+  deleteAssessmentReport,
+  resetReport,
+} from '@/app/admin/assessment-reports/actions';
 
 interface ProgramOpt {
   id: string;
@@ -54,6 +58,8 @@ interface CreateTarget {
   scope: ReportScope;
   semester: Semester | null;
   label: string;
+  /** A report already exists for this row — creating will overwrite it. */
+  hasReport: boolean;
 }
 
 interface Stats {
@@ -223,13 +229,14 @@ export default function AssessmentReportsClient({
     year: number,
     scope: ReportScope,
     sem: Semester | null,
-  ): { reportId: string | null; synthesizing: boolean } {
-    if (!apId) return { reportId: null, synthesizing: false };
+  ): { reportId: string | null; synthesizing: boolean; directorLocked: boolean } {
+    if (!apId) return { reportId: null, synthesizing: false, directorLocked: false };
     const key = reportKey(apId, year, scope, sem);
     const summary = reportByKey.get(key) ?? null;
     return {
       reportId: summary?.id ?? null,
       synthesizing: synthesizingKeys.has(key) || summary?.status === 'synthesizing',
+      directorLocked: summary?.directorLocked ?? false,
     };
   }
 
@@ -347,6 +354,7 @@ export default function AssessmentReportsClient({
                         <ProgramProgressRow
                           key="annual-all"
                           row={allRow}
+                          isAdmin={isAdmin}
                           courseReportLinks={courseReportLinks}
                           highlight
                           {...rowReportState(ALL_PROGRAMS_ID, g.year, 'annual', null)}
@@ -358,6 +366,8 @@ export default function AssessmentReportsClient({
                               scope: 'annual',
                               semester: null,
                               label: `รายงานประจำปี ${g.year} · ทุกหลักสูตร`,
+                              hasReport: !!rowReportState(ALL_PROGRAMS_ID, g.year, 'annual', null)
+                                .reportId,
                             })
                           }
                           createLabel="สร้างรายงานประจำปี (ทุกหลักสูตร)"
@@ -368,6 +378,7 @@ export default function AssessmentReportsClient({
                       <ProgramProgressRow
                         key={`annual-${row.academicProgramId ?? 'none'}`}
                         row={row}
+                        isAdmin={isAdmin}
                         courseReportLinks={courseReportLinks}
                         {...rowReportState(row.academicProgramId, g.year, 'annual', null)}
                         onCreate={() =>
@@ -379,6 +390,8 @@ export default function AssessmentReportsClient({
                             scope: 'annual',
                             semester: null,
                             label: `รายงานประจำปี ${g.year} · ${row.label}`,
+                            hasReport: !!rowReportState(row.academicProgramId, g.year, 'annual', null)
+                              .reportId,
                           })
                         }
                         createLabel="สร้างรายงานประจำปี"
@@ -401,6 +414,7 @@ export default function AssessmentReportsClient({
                           <ProgramProgressRow
                             key={`${s.sem}-all`}
                             row={allRow}
+                            isAdmin={isAdmin}
                             courseReportLinks={courseReportLinks}
                             highlight
                             {...rowReportState(ALL_PROGRAMS_ID, g.year, 'semester', s.sem)}
@@ -412,6 +426,12 @@ export default function AssessmentReportsClient({
                                 scope: 'semester',
                                 semester: s.sem,
                                 label: `รายงาน${SEMESTER_LABEL[s.sem]} ${g.year} · ทุกหลักสูตร`,
+                                hasReport: !!rowReportState(
+                                  ALL_PROGRAMS_ID,
+                                  g.year,
+                                  'semester',
+                                  s.sem,
+                                ).reportId,
                               })
                             }
                             createLabel={`สร้างรายงาน${SEMESTER_LABEL[s.sem]} (ทุกหลักสูตร)`}
@@ -422,6 +442,7 @@ export default function AssessmentReportsClient({
                         <ProgramProgressRow
                           key={`${s.sem}-${row.academicProgramId ?? 'none'}`}
                           row={row}
+                          isAdmin={isAdmin}
                           collapsible
                           courseReportLinks={courseReportLinks}
                           {...rowReportState(row.academicProgramId, g.year, 'semester', s.sem)}
@@ -434,6 +455,12 @@ export default function AssessmentReportsClient({
                               scope: 'semester',
                               semester: s.sem,
                               label: `รายงาน${SEMESTER_LABEL[s.sem]} ${g.year} · ${row.label}`,
+                              hasReport: !!rowReportState(
+                                row.academicProgramId,
+                                g.year,
+                                'semester',
+                                s.sem,
+                              ).reportId,
                             })
                           }
                           createLabel={`สร้างรายงาน${SEMESTER_LABEL[s.sem]}`}
@@ -463,8 +490,10 @@ function ProgramProgressRow({
   row,
   onCreate,
   createLabel,
+  isAdmin,
   reportId = null,
   synthesizing = false,
+  directorLocked = false,
   collapsible = false,
   highlight = false,
   courseReportLinks = {},
@@ -472,16 +501,21 @@ function ProgramProgressRow({
   row: ProgramRow;
   onCreate: () => void;
   createLabel: string;
+  isAdmin: boolean;
   reportId?: string | null;
   /** AI synthesis is running after a create — show a pending state. */
   synthesizing?: boolean;
+  /** A director has used their one generation; only an admin reset re-arms it. */
+  directorLocked?: boolean;
   /** Semester rows expand to a course-status list; the annual rollup does not. */
   collapsible?: boolean;
   /** Emphasize the school-wide (all-programs) row. */
   highlight?: boolean;
   courseReportLinks?: Record<string, CourseReportLinks>;
 }) {
+  const router = useRouter();
   const [expanded, setExpanded] = useState(false);
+  const [dialog, setDialog] = useState<null | 'reset' | 'delete'>(null);
   const { stats } = row;
   const percent = Math.round(stats.ratio * 1000) / 10;
 
@@ -577,24 +611,21 @@ function ProgramProgressRow({
               {reportId && (
                 <Link
                   href={`/admin/assessment-reports/${reportId}`}
-                  className="rounded-lg border border-mfu-primary px-3 py-1.5 text-xs font-medium text-mfu-primary hover:bg-mfu-primary/5"
+                  className="rounded-lg bg-mfu-primary px-3 py-1.5 text-xs font-medium text-white hover:opacity-90"
                 >
                   ดูรายงาน
                 </Link>
               )}
-              <button
-                type="button"
-                onClick={onCreate}
-                disabled={!stats.eligible}
-                title={
-                  stats.eligible
-                    ? undefined
-                    : 'ต้องทวนสอบอย่างน้อย 25% ของรายวิชาก่อนจึงจะสร้างรายงานได้'
-                }
-                className="rounded-lg bg-mfu-primary px-3 py-1.5 text-xs font-medium text-white enabled:hover:opacity-90 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
-              >
-                {reportId ? 'สร้างใหม่' : createLabel}
-              </button>
+              <RowMenu
+                hasReport={!!reportId}
+                eligible={stats.eligible}
+                isAdmin={isAdmin}
+                directorLocked={directorLocked}
+                createLabel={createLabel}
+                onCreate={onCreate}
+                onReset={() => setDialog('reset')}
+                onDelete={() => setDialog('delete')}
+              />
             </>
           )}
         </div>
@@ -655,6 +686,223 @@ function ProgramProgressRow({
           )}
         </ul>
       )}
+
+      {dialog === 'reset' && reportId && (
+        <ConfirmDialog
+          title="รีเซ็ตสิทธิ์การสร้างรายงาน"
+          body="อนุญาตให้ผู้อำนวยการหลักสูตรสร้างรายงานสำหรับรอบนี้ได้อีกครั้ง รายงานและไฟล์เดิมจะยังคงอยู่ ต้องการดำเนินการต่อหรือไม่?"
+          confirmLabel="รีเซ็ต"
+          onCancel={() => setDialog(null)}
+          onConfirm={async () => {
+            const res = await resetReport(reportId);
+            if (!res.ok) throw new Error(res.error);
+            setDialog(null);
+            router.refresh();
+          }}
+        />
+      )}
+      {dialog === 'delete' && reportId && (
+        <ConfirmDialog
+          danger
+          title="ลบรายงาน"
+          body="การลบจะลบรายงานและไฟล์ PDF ออกจากระบบอย่างถาวร พิมพ์ “ลบ” เพื่อยืนยัน"
+          confirmLabel="ลบรายงาน"
+          requireType="ลบ"
+          onCancel={() => setDialog(null)}
+          onConfirm={async () => {
+            const res = await deleteAssessmentReport(reportId);
+            if (!res.ok) throw new Error(res.error);
+            setDialog(null);
+            router.refresh();
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+/** Per-row ⋮ menu: create (gated by threshold + director lock), admin-only
+ *  reset, and delete. */
+function RowMenu({
+  hasReport,
+  eligible,
+  isAdmin,
+  directorLocked,
+  createLabel,
+  onCreate,
+  onReset,
+  onDelete,
+}: {
+  hasReport: boolean;
+  eligible: boolean;
+  isAdmin: boolean;
+  directorLocked: boolean;
+  createLabel: string;
+  onCreate: () => void;
+  onReset: () => void;
+  onDelete: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDoc = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    const onEsc = (e: KeyboardEvent) => e.key === 'Escape' && setOpen(false);
+    document.addEventListener('mousedown', onDoc);
+    document.addEventListener('keydown', onEsc);
+    return () => {
+      document.removeEventListener('mousedown', onDoc);
+      document.removeEventListener('keydown', onEsc);
+    };
+  }, [open]);
+
+  // Admins always create (subject to the 25% gate). Directors create only when
+  // no report exists yet, or after an admin has reset the lock.
+  const createAllowed = eligible && (isAdmin || !hasReport || !directorLocked);
+  const createDisabledReason = !eligible
+    ? 'ต้องทวนสอบอย่างน้อย 25% ของรายวิชาก่อนจึงจะสร้างรายงานได้'
+    : hasReport && !isAdmin && directorLocked
+      ? 'ได้สร้างรายงานแล้ว กรุณาติดต่อผู้ดูแลระบบเพื่อรีเซ็ต'
+      : undefined;
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+        aria-label="จัดการ"
+        aria-haspopup="menu"
+        aria-expanded={open}
+      >
+        ⋮
+      </button>
+      {open && (
+        <div
+          role="menu"
+          className="absolute right-0 z-20 mt-1 w-60 overflow-hidden rounded-lg border border-slate-200 bg-white py-1 text-xs shadow-lg"
+        >
+          <button
+            type="button"
+            role="menuitem"
+            disabled={!createAllowed}
+            title={createDisabledReason}
+            onClick={() => {
+              setOpen(false);
+              onCreate();
+            }}
+            className="block w-full px-3 py-2 text-left text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-300 disabled:hover:bg-transparent"
+          >
+            {hasReport ? 'สร้างรายงานใหม่' : createLabel}
+          </button>
+          {hasReport && isAdmin && (
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                setOpen(false);
+                onReset();
+              }}
+              className="block w-full px-3 py-2 text-left text-slate-700 hover:bg-slate-50"
+            >
+              รีเซ็ตสิทธิ์การสร้าง (ผู้ดูแลระบบ)
+            </button>
+          )}
+          {hasReport && isAdmin && (
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                setOpen(false);
+                onDelete();
+              }}
+              className="block w-full px-3 py-2 text-left text-red-600 hover:bg-red-50"
+            >
+              ลบรายงาน
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Confirmation modal. When `requireType` is set the confirm button stays
+ *  disabled until the user types that exact word. */
+function ConfirmDialog({
+  title,
+  body,
+  confirmLabel,
+  requireType,
+  danger = false,
+  onCancel,
+  onConfirm,
+}: {
+  title: string;
+  body: string;
+  confirmLabel: string;
+  requireType?: string;
+  danger?: boolean;
+  onCancel: () => void;
+  onConfirm: () => Promise<void>;
+}) {
+  const [typed, setTyped] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const ready = !requireType || typed.trim() === requireType;
+
+  async function go() {
+    setBusy(true);
+    setError(null);
+    try {
+      await onConfirm();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'เกิดข้อผิดพลาด');
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      <div className="w-full max-w-sm rounded-xl bg-white p-5 shadow-xl">
+        <h3 className="text-base font-semibold text-slate-800">{title}</h3>
+        <p className="mt-2 text-sm text-slate-600">{body}</p>
+        {requireType && (
+          <input
+            value={typed}
+            onChange={(e) => setTyped(e.target.value)}
+            placeholder={requireType}
+            autoFocus
+            className="mt-3 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-mfu-primary focus:outline-none"
+          />
+        )}
+        {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
+        <div className="mt-5 flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={onCancel}
+            disabled={busy}
+            className="rounded-lg border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+          >
+            ยกเลิก
+          </button>
+          <button
+            type="button"
+            onClick={go}
+            disabled={busy || !ready}
+            className={
+              danger
+                ? 'rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50'
+                : 'rounded-lg bg-mfu-primary px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50'
+            }
+          >
+            {busy ? 'กำลังดำเนินการ…' : confirmLabel}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -679,6 +927,11 @@ function CreateReportModal({
   const [committee, setCommittee] = useState(DEFAULT_COMMITTEE);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Two-stage submit: fill the form, then type "ยืนยัน" to confirm — the
+  // director only gets one generation per row.
+  const [confirming, setConfirming] = useState(false);
+  const [confirmText, setConfirmText] = useState('');
+  const hasMember = committee.some((m) => m.name.trim().length > 0);
 
   function setMember(i: number, field: 'name' | 'role', value: string) {
     setCommittee((prev) => prev.map((m, idx) => (idx === i ? { ...m, [field]: value } : m)));
@@ -784,24 +1037,63 @@ function CreateReportModal({
 
         {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
 
-        <div className="mt-5 flex justify-end gap-2">
-          <button
-            type="button"
-            onClick={onClose}
-            disabled={busy}
-            className="rounded-lg border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-          >
-            ยกเลิก
-          </button>
-          <button
-            type="button"
-            onClick={submit}
-            disabled={busy}
-            className="rounded-lg bg-mfu-primary px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
-          >
-            {busy ? 'กำลังสร้าง…' : 'สร้างรายงาน'}
-          </button>
-        </div>
+        {!confirming ? (
+          <div className="mt-5 flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={busy}
+              className="rounded-lg border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+            >
+              ยกเลิก
+            </button>
+            <button
+              type="button"
+              onClick={() => setConfirming(true)}
+              disabled={!hasMember}
+              title={hasMember ? undefined : 'กรุณาระบุรายชื่อคณะกรรมการอย่างน้อย 1 คน'}
+              className="rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-100 disabled:cursor-not-allowed disabled:border-slate-300 disabled:bg-slate-100 disabled:text-slate-400"
+            >
+              สร้างรายงาน
+            </button>
+          </div>
+        ) : (
+          <div className="mt-5 rounded-lg border border-red-200 bg-red-50/50 p-3">
+            <p className="text-xs text-slate-600">
+              {target.hasReport
+                ? 'การสร้างรายงานใหม่จะเขียนทับรายงานและไฟล์ PDF ฉบับเดิมของรอบนี้ — พิมพ์ “ยืนยัน” เพื่อดำเนินการ'
+                : 'ตรวจสอบความถูกต้องของข้อมูล ประธานหลักสูตรสามารถสร้างรายงานได้เพียงครั้งเดียวเท่านั้น — พิมพ์ “ยืนยัน” เพื่อดำเนินการ'}
+            </p>
+            <input
+              value={confirmText}
+              onChange={(e) => setConfirmText(e.target.value)}
+              placeholder="ยืนยัน"
+              autoFocus
+              className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-mfu-primary focus:outline-none"
+            />
+            <div className="mt-3 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setConfirming(false);
+                  setConfirmText('');
+                }}
+                disabled={busy}
+                className="rounded-lg border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+              >
+                ย้อนกลับ
+              </button>
+              <button
+                type="button"
+                onClick={submit}
+                disabled={busy || confirmText.trim() !== 'ยืนยัน'}
+                className="rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-100 disabled:cursor-not-allowed disabled:border-slate-300 disabled:bg-slate-100 disabled:text-slate-400"
+              >
+                {busy ? 'กำลังสร้าง…' : 'ยืนยันการสร้าง'}
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

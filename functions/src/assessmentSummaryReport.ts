@@ -2,7 +2,7 @@ import { onCall, HttpsError, type CallableRequest } from 'firebase-functions/v2/
 import { defineSecret } from 'firebase-functions/params';
 import * as admin from 'firebase-admin';
 import { GoogleGenerativeAI } from '@google/generative-ai';
-import { renderHtmlToPdf, storeFile, mergePdfs, downloadStored } from './pdf';
+import { renderHtmlToPdf, storeFile, mergePdfs, downloadStored, stampFooter } from './pdf';
 import {
   buildAssessmentSummaryHtml,
   type SummaryReportData,
@@ -528,6 +528,13 @@ export const generateAssessmentSummaryReport = onCall(
         const appendixParts = await collectCourseCombinedPdfs(db, report.snapshot.courseRows);
         if (appendixParts.length) finalPdf = await mergePdfs([summaryPdf, ...appendixParts]);
       }
+
+      // Stamp a footer on every page (after the merge, so the page count is
+      // continuous across summary + appendix): title | program | หน้าที่ n/total.
+      const footerPrefix =
+        `รายงานการประชุมทวนสอบผลสัมฤทธิ์การศึกษา ${data.scopeLabel} ปีการศึกษา ${data.academicYear}` +
+        ` | ${data.academicProgramLabel}`;
+      finalPdf = await stampFooter(finalPdf, footerPrefix);
 
       const dir = `reports/summary/${report.academicProgramId}/${report.academicYear}`;
       const base = report.scope === 'annual' ? 'annual' : `sem${report.semester}`;

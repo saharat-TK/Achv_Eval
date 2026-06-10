@@ -87,6 +87,21 @@ export async function createAssessmentReport(
   const semester = input.scope === 'annual' ? null : input.semester;
   const academicProgramId = coverage === 'all' ? ALL_PROGRAMS_ID : input.academicProgramId;
 
+  const id = reportDocId(academicProgramId, input.academicYear, input.scope, semester);
+  const ref = getAdminDb().collection('assessmentSummaryReports').doc(id);
+  const existing = await ref.get();
+
+  // Directors get one generation per row; admins bypass. A locked report must
+  // be reset by an admin (or deleted) before a director can regenerate.
+  if (!access.isAdmin && existing.exists) {
+    const prev = existing.data() as { directorLocked?: boolean };
+    if (prev.directorLocked === true)
+      return {
+        ok: false,
+        error: 'ได้สร้างรายงานสำหรับรอบนี้แล้ว กรุณาติดต่อผู้ดูแลระบบเพื่อรีเซ็ตก่อนสร้างใหม่',
+      };
+  }
+
   // Recompute the snapshot server-side and re-check the 25% gate so the
   // threshold can't be bypassed from the client.
   let snapshot: ReportSnapshot;
@@ -120,10 +135,6 @@ export async function createAssessmentReport(
       error: `ต้องทวนสอบอย่างน้อย ${Math.round(REPORT_THRESHOLD * 100)}% ของรายวิชาก่อนจึงจะสร้างรายงานได้`,
     };
 
-  const id = reportDocId(academicProgramId, input.academicYear, input.scope, semester);
-  const ref = getAdminDb().collection('assessmentSummaryReports').doc(id);
-  const existing = await ref.get();
-
   const now = FieldValue.serverTimestamp();
   await ref.set(
     {
@@ -135,6 +146,8 @@ export async function createAssessmentReport(
       semester,
       header: { venue: input.header.venue.trim(), meetingDateTime: input.header.meetingDateTime.trim(), committee },
       snapshot,
+      // A report now exists for this row — lock directors to one generation.
+      directorLocked: true,
       // Syntheses + artifacts are produced in the generation phase.
       aiSynthesis: null,
       assessorSynthesis: null,
@@ -174,6 +187,38 @@ export async function createAssessmentReport(
   return { ok: true, reportId: id };
 }
 
+export type ResetReportResult = { ok: true } | { ok: false; error: string };
+
+/** Admin/super-admin only — re-arm a program director to generate the report
+ *  for this row again. Keeps the existing report and its PDF intact. */
+export async function resetReport(reportId: string): Promise<ResetReportResult> {
+  const access = await resolveAccess();
+  if (!access) return { ok: false, error: 'ไม่มีสิทธิ์ดำเนินการ' };
+  if (!access.isAdmin) return { ok: false, error: 'เฉพาะผู้ดูแลระบบเท่านั้น' };
+
+  const ref = getAdminDb().collection('assessmentSummaryReports').doc(reportId);
+  const snap = await ref.get();
+  if (!snap.exists) return { ok: false, error: 'ไม่พบรายงาน' };
+
+  const now = FieldValue.serverTimestamp();
+  await ref.update({ directorLocked: false, updatedAt: now, updatedBy: access.uid });
+
+  const data = snap.data() as { academicProgramId: string };
+  await getAdminDb().collection('auditLog').add({
+    occurredAt: now,
+    actorId: access.uid,
+    actorEmail: access.email,
+    action: 'reset',
+    entityType: 'assessmentSummaryReports',
+    entityId: reportId,
+    before: { academicProgramId: data.academicProgramId, directorLocked: true },
+    after: { directorLocked: false },
+  });
+
+  revalidatePath('/admin/assessment-reports');
+  return { ok: true };
+}
+
 export type DeleteReportResult = { ok: true } | { ok: false; error: string };
 
 /** Delete a report and best-effort remove its stored PDF/DOCX artifacts. */
@@ -182,6 +227,9 @@ export async function deleteAssessmentReport(
 ): Promise<DeleteReportResult> {
   const access = await resolveAccess();
   if (!access) return { ok: false, error: 'ไม่มีสิทธิ์ดำเนินการ' };
+  // Admin/super-admin only — keeps the director's one-generation lock airtight
+  // (a director must not delete-then-recreate to bypass it).
+  if (!access.isAdmin) return { ok: false, error: 'เฉพาะผู้ดูแลระบบเท่านั้น' };
 
   const ref = getAdminDb().collection('assessmentSummaryReports').doc(reportId);
   const snap = await ref.get();
@@ -191,8 +239,6 @@ export async function deleteAssessmentReport(
     pdfStoragePath: string | null;
     docxStoragePath: string | null;
   };
-  if (!canAccess(access, data.academicProgramId))
-    return { ok: false, error: 'ไม่มีสิทธิ์ในหลักสูตรนี้' };
 
   // Best-effort artifact cleanup — never block the delete on storage errors.
   const bucket = getAdminStorage().bucket();

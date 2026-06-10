@@ -536,6 +536,10 @@ export interface AssessmentSummaryReportDoc {
    *  (audit trail + fallback when synthesis is missing or failed). */
   assessorSynthesis?: ReportTopicSummary[] | null;
 
+  /** True once a report has been generated — gates program directors to one
+   *  generation per row. Admins bypass it; an admin reset clears it. */
+  directorLocked?: boolean;
+
   status: ReportStatus;
   pdfStoragePath: string | null;
   pdfUrl: string | null;

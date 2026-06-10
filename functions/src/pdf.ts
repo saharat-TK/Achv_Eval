@@ -1,8 +1,65 @@
 import * as admin from 'firebase-admin';
+import * as fs from 'fs';
+import * as path from 'path';
 import { randomUUID } from 'crypto';
 import puppeteer from 'puppeteer-core';
 import chromium from '@sparticuz/chromium';
-import { PDFDocument } from 'pdf-lib';
+import { PDFDocument, rgb } from 'pdf-lib';
+import fontkit from '@pdf-lib/fontkit';
+
+// Thai-capable TTF for pdf-lib footer stamping — pdf-lib's built-in fonts are
+// Latin-only. Bundled under functions/assets and read once, lazily.
+let thaiFontBytes: Buffer | null = null;
+function loadThaiFont(): Buffer {
+  if (!thaiFontBytes) {
+    thaiFontBytes = fs.readFileSync(
+      path.join(__dirname, '..', 'assets', 'Sarabun-Regular.ttf'),
+    );
+  }
+  return thaiFontBytes;
+}
+
+/**
+ * Stamps a footer onto every page of a PDF: `${prefix} | หน้าที่ {n}/{total}`,
+ * centered in the bottom margin. Used after the summary + appendix merge so the
+ * page count is continuous across the whole document. Best-effort: on any
+ * failure the original PDF is returned unstamped.
+ */
+export async function stampFooter(pdf: Buffer, prefix: string): Promise<Buffer> {
+  let doc: PDFDocument;
+  try {
+    doc = await PDFDocument.load(pdf, { ignoreEncryption: true });
+  } catch (err) {
+    console.warn('stampFooter: could not load PDF; returning unstamped', err);
+    return pdf;
+  }
+  try {
+    doc.registerFontkit(fontkit);
+    const font = await doc.embedFont(loadThaiFont(), { subset: true });
+    const pages = doc.getPages();
+    const total = pages.length;
+    const sideMargin = 45; // ~16mm
+    const baseSize = 8;
+    const color = rgb(0.4, 0.4, 0.4);
+    pages.forEach((page, i) => {
+      const { width } = page.getSize();
+      const text = `${prefix} | หน้าที่ ${i + 1}/${total}`;
+      const maxWidth = width - sideMargin * 2;
+      let size = baseSize;
+      let textWidth = font.widthOfTextAtSize(text, size);
+      if (textWidth > maxWidth) {
+        // Shrink to fit rather than overflow the page edges (floor at 6pt).
+        size = Math.max(6, (baseSize * maxWidth) / textWidth);
+        textWidth = font.widthOfTextAtSize(text, size);
+      }
+      page.drawText(text, { x: (width - textWidth) / 2, y: 24, size, font, color });
+    });
+    return Buffer.from(await doc.save());
+  } catch (err) {
+    console.warn('stampFooter: stamping failed; returning unstamped', err);
+    return pdf;
+  }
+}
 
 /** Concatenates several PDFs into one, in order. Invalid parts are skipped. */
 export async function mergePdfs(parts: Buffer[]): Promise<Buffer> {

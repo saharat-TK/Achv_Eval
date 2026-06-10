@@ -332,6 +332,8 @@ export interface ReportSummary {
   scope: ReportScope;
   semester: Semester | null;
   status: AssessmentSummaryReportDoc['status'];
+  /** True when a director has used their one generation and must be reset. */
+  directorLocked: boolean;
 }
 
 export async function getReportsForAcademicPrograms(
@@ -356,6 +358,7 @@ export async function getReportsForAcademicPrograms(
         scope: r.scope,
         semester: r.semester,
         status: r.status,
+        directorLocked: r.directorLocked === true,
       });
     }
   }

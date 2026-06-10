@@ -148,7 +148,7 @@ export default async function AssessmentReportPage({
           <span className="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-600">
             สถานะ: {STATUS_LABEL[report.status] ?? 'ฉบับร่าง'}
           </span>
-          <DeleteReportButton reportId={report.id} />
+          {isAdmin && <DeleteReportButton reportId={report.id} />}
         </div>
       </header>
 
