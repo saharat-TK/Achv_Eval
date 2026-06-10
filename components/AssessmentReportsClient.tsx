@@ -543,7 +543,7 @@ function ProgramProgressRow({
         <div className="flex shrink-0 items-center gap-2">
           {/* One stats block: coverage (ทวนสอบแล้ว) | quality (เฉลี่ย + band),
               labelled, with tabular numbers so values align across rows. */}
-          <span className="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-[11px]">
+          <span className="inline-flex items-center gap-2 rounded-md bg-white px-2 py-1 text-[11px]">
             <span className="inline-flex items-baseline gap-1">
               <span className="text-slate-500">ทวนสอบแล้ว</span>
               <span className="font-medium tabular-nums text-slate-700">
