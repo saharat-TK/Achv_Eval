@@ -135,8 +135,9 @@ export async function createAssessmentReport(
       semester,
       header: { venue: input.header.venue.trim(), meetingDateTime: input.header.meetingDateTime.trim(), committee },
       snapshot,
-      // Section 3.2 + artifacts are produced in the generation phase.
+      // Syntheses + artifacts are produced in the generation phase.
       aiSynthesis: null,
+      assessorSynthesis: null,
       status: 'draft',
       pdfStoragePath: null,
       pdfUrl: null,

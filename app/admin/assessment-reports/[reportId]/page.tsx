@@ -39,6 +39,36 @@ function BandBadge({ band }: { band: AssessmentBand }) {
   );
 }
 
+/** §3.1 comment cell — bullets plus, when synthesized, the raw assessor
+ *  comments behind a native <details> (no client JS needed). */
+function CommentCell({ items, raw }: { items: string[]; raw: string[] | null }) {
+  return (
+    <td className="px-3 py-2 text-slate-600">
+      {items.length === 0 ? (
+        <span className="text-slate-300">—</span>
+      ) : (
+        <ul className="list-disc space-y-0.5 pl-4">
+          {items.map((s, i) => (
+            <li key={i}>{s}</li>
+          ))}
+        </ul>
+      )}
+      {raw && raw.length > 0 && (
+        <details className="mt-1.5">
+          <summary className="cursor-pointer text-[10px] text-slate-400 hover:text-slate-600">
+            ความเห็นต้นฉบับ ({raw.length})
+          </summary>
+          <ul className="mt-1 list-disc space-y-0.5 pl-4 text-[11px] text-slate-500">
+            {raw.map((s, i) => (
+              <li key={i}>{s}</li>
+            ))}
+          </ul>
+        </details>
+      )}
+    </td>
+  );
+}
+
 const STATUS_LABEL: Record<ReportStatus, string> = {
   draft: 'ฉบับร่าง',
   synthesizing: 'กำลังสังเคราะห์ข้อเสนอแนะ',
@@ -72,6 +102,15 @@ export default async function AssessmentReportPage({
       ? 'ประจำปีการศึกษา'
       : SEMESTER_LABEL[report.semester as Semester];
   const assessedRows = snapshot.courseRows.filter((r) => r.assessed);
+
+  // §3.1 synthesized overview, keyed by rubric topic. Usable only when at
+  // least one topic carries text — a failed synthesis stores empty topics,
+  // in which case the table falls back to the raw assessor comments.
+  const assessorSynth = report.assessorSynthesis?.some(
+    (t) => t.strengths.length > 0 || t.improvements.length > 0,
+  )
+    ? new Map(report.assessorSynthesis.map((t) => [t.key, t]))
+    : null;
 
   // Group assessed courses by semester for the detail table.
   const bySemester = new Map<Semester, typeof assessedRows>();
@@ -216,7 +255,9 @@ export default async function AssessmentReportPage({
         )}
       </section>
 
-      {/* Section 3.1 — Assessor topic summary (strengths + suggestions) */}
+      {/* Section 3.1 — Assessor topic summary. Shows the AI-synthesized
+          overview when available; raw assessor comments stay one click away
+          (and are the fallback when no synthesis exists). */}
       <section className="rounded-xl border border-slate-200 bg-white p-5">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h2 className="text-base font-semibold text-slate-800">
@@ -229,6 +270,11 @@ export default async function AssessmentReportPage({
             </span>
           )}
         </div>
+        {assessorSynth && (
+          <p className="mt-1 text-xs text-slate-400">
+            สรุปภาพรวมโดย AI จากความเห็นของผู้ทวนสอบ — ดูความเห็นต้นฉบับได้ในแต่ละหัวข้อ
+          </p>
+        )}
         <div className="mt-3 overflow-hidden rounded-lg border border-slate-200">
           <table className="w-full text-xs">
             <thead className="bg-slate-50 text-left text-slate-500">
@@ -240,45 +286,34 @@ export default async function AssessmentReportPage({
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 align-top">
-              {snapshot.assessorTopicSummary.map((t) => (
-                <tr key={t.key}>
-                  <td className="px-3 py-2 font-medium text-slate-700">
-                    {t.number}. {t.labelTh}
-                  </td>
-                  <td className="whitespace-nowrap px-3 py-2 text-slate-600">
-                    {t.averageScore == null ? (
-                      <span className="text-slate-300">N/A</span>
-                    ) : (
-                      <span className="inline-flex items-center gap-1.5">
-                        {t.averageScore.toFixed(1)}/3
-                        <BandBadge band={bandFromScore(t.averageScore)} />
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-3 py-2 text-slate-600">
-                    {t.strengths.length === 0 ? (
-                      <span className="text-slate-300">—</span>
-                    ) : (
-                      <ul className="list-disc space-y-0.5 pl-4">
-                        {t.strengths.map((s, i) => (
-                          <li key={i}>{s}</li>
-                        ))}
-                      </ul>
-                    )}
-                  </td>
-                  <td className="px-3 py-2 text-slate-600">
-                    {t.improvements.length === 0 ? (
-                      <span className="text-slate-300">—</span>
-                    ) : (
-                      <ul className="list-disc space-y-0.5 pl-4">
-                        {t.improvements.map((s, i) => (
-                          <li key={i}>{s}</li>
-                        ))}
-                      </ul>
-                    )}
-                  </td>
-                </tr>
-              ))}
+              {snapshot.assessorTopicSummary.map((t) => {
+                const synth = assessorSynth?.get(t.key) ?? null;
+                return (
+                  <tr key={t.key}>
+                    <td className="px-3 py-2 font-medium text-slate-700">
+                      {t.number}. {t.labelTh}
+                    </td>
+                    <td className="whitespace-nowrap px-3 py-2 text-slate-600">
+                      {t.averageScore == null ? (
+                        <span className="text-slate-300">N/A</span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1.5">
+                          {t.averageScore.toFixed(1)}/3
+                          <BandBadge band={bandFromScore(t.averageScore)} />
+                        </span>
+                      )}
+                    </td>
+                    <CommentCell
+                      items={synth ? synth.strengths : t.strengths}
+                      raw={synth ? t.strengths : null}
+                    />
+                    <CommentCell
+                      items={synth ? synth.improvements : t.improvements}
+                      raw={synth ? t.improvements : null}
+                    />
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>

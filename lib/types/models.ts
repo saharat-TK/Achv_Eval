@@ -531,6 +531,11 @@ export interface AssessmentSummaryReportDoc {
   /** Section 3.2 — Gemini-synthesized cross-course suggestions (Phase 3). */
   aiSynthesis: ReportTopicSummary[] | null;
 
+  /** Section 3.1 — Gemini synthesis of assessor comments into an overall
+   *  per-topic view. The raw comments stay in snapshot.assessorTopicSummary
+   *  (audit trail + fallback when synthesis is missing or failed). */
+  assessorSynthesis?: ReportTopicSummary[] | null;
+
   status: ReportStatus;
   pdfStoragePath: string | null;
   pdfUrl: string | null;

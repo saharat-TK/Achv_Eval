@@ -94,6 +94,13 @@ interface ReportData {
     programRollup?: ProgramRollup[];
   };
   aiSynthesis: StoredTopic[] | null;
+  assessorSynthesis?: StoredTopic[] | null;
+}
+
+/** True when at least one topic carries synthesized text (a failed or
+ *  comment-less synthesis stores all-empty topics — fall back to raw then). */
+function hasTopicContent(topics: StoredTopic[] | SummaryTopic[] | null | undefined): boolean {
+  return !!topics?.some((t) => t.strengths.length > 0 || t.improvements.length > 0);
 }
 
 const sts = () => admin.firestore.FieldValue.serverTimestamp();
@@ -227,7 +234,101 @@ async function runSynthesis(
   return aiTopics;
 }
 
-function assembleData(report: ReportData, aiTopics: SummaryTopic[]): SummaryReportData {
+/**
+ * Gemini synthesis of the raw assessor comments into an overall per-topic
+ * view (strengths + improvements) for Section 3.1. Constrained to cluster
+ * and restate only what the assessors wrote. Resilient: empty on failure,
+ * which makes the renderers fall back to the raw comments.
+ */
+async function synthesizeAssessorTopics(
+  apiKey: string,
+  topicSummary: StoredTopic[],
+): Promise<SummaryTopic[]> {
+  const empty = RUBRIC_TOPICS.map((t) => ({
+    number: t.number,
+    labelTh: t.labelTh,
+    strengths: [] as string[],
+    improvements: [] as string[],
+  }));
+
+  if (!hasTopicContent(topicSummary)) return empty;
+
+  const payload = topicSummary.map((t) => ({
+    number: t.number,
+    labelTh: t.labelTh,
+    strengths: t.strengths,
+    improvements: t.improvements,
+  }));
+
+  const system =
+    'คุณเป็นผู้ช่วยจัดทำรายงานการทวนสอบผลสัมฤทธิ์รายวิชาของสำนักวิชาวิทยาศาสตร์สุขภาพ ' +
+    'หน้าที่ของคุณคือสรุปความเห็นของผู้ทวนสอบจากหลายรายวิชา ให้เป็นภาพรวมระดับหลักสูตร ' +
+    'ตามหัวข้อการทวนสอบ 7 รายการ ห้ามเพิ่มประเด็นที่ไม่ปรากฏในความเห็นต้นฉบับ ' +
+    'ตอบเป็นภาษาไทยและเป็น JSON เท่านั้น';
+
+  const user =
+    'ด้านล่างคือความเห็นของผู้ทวนสอบ (ข้อดีและข้อเสนอแนะ) จัดกลุ่มตามหัวข้อการทวนสอบ ' +
+    'กรุณาสรุปเป็นภาพรวมที่กระชับ ไม่ผูกกับรายวิชาใดรายวิชาหนึ่ง ไม่ซ้ำซ้อน ' +
+    'หัวข้อละไม่เกิน 4 ข้อต่อด้าน หากหัวข้อใดไม่มีความเห็น ให้ส่งอาร์เรย์ว่าง ' +
+    'ตอบเป็น JSON รูปแบบ {"topics":[{"number":"1","strengths":["..."],"improvements":["..."]}]} ตามลำดับหัวข้อเดิม\n\n' +
+    JSON.stringify(payload, null, 2);
+
+  try {
+    const model = new GoogleGenerativeAI(apiKey).getGenerativeModel({
+      model: process.env.GEMINI_MODEL || 'gemini-2.5-flash',
+      systemInstruction: system,
+      generationConfig: {
+        responseMimeType: 'application/json',
+        temperature: 0.3,
+        maxOutputTokens: 8192,
+      },
+    });
+    const resp = await model.generateContent({
+      contents: [{ role: 'user', parts: [{ text: user }] }],
+    });
+    const parsed = JSON.parse(resp.response.text()) as {
+      topics?: { number?: string; strengths?: string[]; improvements?: string[] }[];
+    };
+    const clean = (xs: string[] | undefined) =>
+      (xs ?? []).filter((s) => typeof s === 'string' && s.trim());
+    const byNumber = new Map((parsed.topics ?? []).map((t) => [t.number, t]));
+    return RUBRIC_TOPICS.map((t) => ({
+      number: t.number,
+      labelTh: t.labelTh,
+      strengths: clean(byNumber.get(t.number)?.strengths),
+      improvements: clean(byNumber.get(t.number)?.improvements),
+    }));
+  } catch (err) {
+    console.warn('assessor synthesis failed; emitting empty topics', err);
+    return empty;
+  }
+}
+
+/** Synthesize + persist the Section 3.1 assessor overview on the report doc. */
+async function runAssessorSynthesis(
+  ref: admin.firestore.DocumentReference,
+  report: ReportData,
+  apiKey: string,
+): Promise<SummaryTopic[]> {
+  const topics = await synthesizeAssessorTopics(apiKey, report.snapshot.assessorTopicSummary);
+  await ref.update({
+    assessorSynthesis: topics.map((t, i) => ({
+      key: RUBRIC_TOPICS[i].key,
+      number: t.number,
+      labelTh: t.labelTh,
+      strengths: t.strengths,
+      improvements: t.improvements,
+    })),
+    updatedAt: sts(),
+  });
+  return topics;
+}
+
+function assembleData(
+  report: ReportData,
+  aiTopics: SummaryTopic[],
+  assessorSynth: SummaryTopic[] | null,
+): SummaryReportData {
   const assessed = report.snapshot.courseRows.filter((r) => r.assessed);
   const groupsMap = new Map<string, CourseRow[]>();
   for (const r of assessed) {
@@ -309,13 +410,19 @@ function assembleData(report: ReportData, aiTopics: SummaryTopic[]): SummaryRepo
     semesterGroups,
     programRollup,
     programCourseGroups,
-    assessorTopics: report.snapshot.assessorTopicSummary.map((t) => ({
-      number: t.number,
-      labelTh: t.labelTh,
-      strengths: t.strengths,
-      improvements: t.improvements,
-      averageScore: t.averageScore ?? null,
-    })),
+    // §3.1 — synthesized overview when available (raw assessor comments as
+    // fallback). The average score always comes from the snapshot.
+    assessorSynthesized: hasTopicContent(assessorSynth),
+    assessorTopics: report.snapshot.assessorTopicSummary.map((t, i) => {
+      const synth = hasTopicContent(assessorSynth) ? assessorSynth![i] : null;
+      return {
+        number: t.number,
+        labelTh: t.labelTh,
+        strengths: synth ? synth.strengths : t.strengths,
+        improvements: synth ? synth.improvements : t.improvements,
+        averageScore: t.averageScore ?? null,
+      };
+    }),
     aiTopics,
     generatedAt: new Date().toLocaleString('th-TH', {
       timeZone: 'Asia/Bangkok',
@@ -359,7 +466,12 @@ export const synthesizeAssessmentReport = onCall(
 
     await ref.update({ status: 'synthesizing', updatedAt: sts() });
     try {
-      await runSynthesis(db, ref, report, GEMINI_API_KEY.value());
+      // §3.2 (cross-course AI suggestions) and §3.1 (assessor-comment overview)
+      // in parallel; each degrades independently to empty topics on failure.
+      await Promise.all([
+        runSynthesis(db, ref, report, GEMINI_API_KEY.value()),
+        runAssessorSynthesis(ref, report, GEMINI_API_KEY.value()),
+      ]);
       await ref.update({ status: 'synthesized', updatedAt: sts() });
       return { ok: true };
     } catch (err) {
@@ -393,7 +505,18 @@ export const generateAssessmentSummaryReport = onCall(
           }))
         : await runSynthesis(db, ref, report, GEMINI_API_KEY.value());
 
-      const data = assembleData(report, aiTopics);
+      // Older reports (or a failed earlier run) have no assessor synthesis —
+      // synthesize inline so the PDF gets the overview too.
+      const assessorSynth: SummaryTopic[] = report.assessorSynthesis
+        ? report.assessorSynthesis.map((t) => ({
+            number: t.number,
+            labelTh: t.labelTh,
+            strengths: t.strengths,
+            improvements: t.improvements,
+          }))
+        : await runAssessorSynthesis(ref, report, GEMINI_API_KEY.value());
+
+      const data = assembleData(report, aiTopics, assessorSynth);
       const html = buildAssessmentSummaryHtml(data);
       const summaryPdf = await renderHtmlToPdf(html);
 
