@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { httpsCallable } from 'firebase/functions';
 import { getFirebaseAuth, getFirebaseFunctions } from '@/lib/firebase/config';
@@ -17,11 +17,12 @@ export default function ReportArtifacts({
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [failedAttempt, setFailedAttempt] = useState(false);
+  const startedRef = useRef(false);
 
   async function generate() {
     setBusy(true);
-    setError(null);
+    setFailedAttempt(false);
     try {
       await getFirebaseAuth().authStateReady();
       const callable = httpsCallable(
@@ -32,59 +33,57 @@ export default function ReportArtifacts({
       await callable({ reportId });
       router.refresh();
     } catch {
-      setError('สร้างรายงานไม่สำเร็จ — กรุณาลองใหม่อีกครั้ง');
+      setFailedAttempt(true);
     } finally {
       setBusy(false);
     }
   }
 
-  const ready = status === 'ready' && pdfUrl;
+  // The PDF is produced automatically here — this page has no manual
+  // (re)generate control; recreating a report is done from the list page. On
+  // open we render the document once if the report's info is ready
+  // (synthesized) but no PDF exists, and retry once per open if a previous
+  // render failed.
+  useEffect(() => {
+    if (startedRef.current) return;
+    if (!pdfUrl && (status === 'synthesized' || status === 'failed')) {
+      startedRef.current = true;
+      void generate();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [status, pdfUrl]);
+
+  const ready = status === 'ready' && !!pdfUrl;
 
   return (
     <section className="rounded-xl border border-slate-200 bg-white p-5">
       <h2 className="text-base font-semibold text-slate-800">เอกสารรายงาน</h2>
 
       {ready ? (
-        <div className="mt-3 flex flex-wrap items-center gap-3">
-          {pdfUrl && (
-            <a
-              href={pdfUrl}
-              className="rounded-lg border border-mfu-primary px-4 py-2 text-sm font-medium text-mfu-primary hover:bg-mfu-primary/5"
-            >
-              ดาวน์โหลด PDF
-            </a>
-          )}
-          <button
-            onClick={generate}
-            disabled={busy}
-            className="text-xs text-slate-500 underline hover:text-slate-700 disabled:opacity-50"
-          >
-            {busy ? 'กำลังสร้างใหม่…' : 'สร้างเอกสารใหม่'}
-          </button>
-        </div>
-      ) : (
         <div className="mt-3">
-          <p className="text-sm text-slate-500">
-            {status === 'synthesized'
-              ? 'สังเคราะห์ข้อเสนอแนะ AI เรียบร้อยแล้ว — สร้างไฟล์ PDF ฉบับสมบูรณ์ (พร้อมภาคผนวกรายงานรายวิชา) ได้เลย'
-              : 'สร้างไฟล์รายงาน PDF พร้อมข้อเสนอแนะที่สังเคราะห์จากการวิเคราะห์ AI และภาคผนวกรายงานการทวนสอบรายวิชา'}
-          </p>
-          <button
-            onClick={generate}
-            disabled={busy}
-            className="mt-3 rounded-lg bg-mfu-primary px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
+          <a
+            href={pdfUrl!}
+            className="inline-block rounded-lg border border-mfu-primary px-4 py-2 text-sm font-medium text-mfu-primary hover:bg-mfu-primary/5"
           >
-            {busy ? 'กำลังสร้างรายงาน…' : 'สร้างรายงาน PDF'}
-          </button>
+            ดาวน์โหลด PDF
+          </a>
         </div>
-      )}
-
-      {status === 'failed' && !busy && (
-        <p className="mt-2 text-sm text-amber-700">
-          การสร้างครั้งก่อนไม่สำเร็จ — สามารถกดสร้างใหม่ได้
+      ) : failedAttempt ? (
+        <p className="mt-3 text-sm text-amber-700">
+          การสร้างเอกสารไม่สำเร็จ — กรุณาเปิดหน้านี้อีกครั้งเพื่อลองใหม่
+          หรือสร้างรายงานใหม่จากหน้ารายการรายงานการทวนสอบ
+        </p>
+      ) : status === 'synthesizing' || status === 'draft' ? (
+        <p className="mt-3 inline-flex items-center gap-2 text-sm text-slate-500">
+          <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-slate-400" />
+          กำลังเตรียมข้อมูลรายงาน…
+        </p>
+      ) : (
+        <p className="mt-3 inline-flex items-center gap-2 text-sm text-slate-500">
+          <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-mfu-primary" />
+          กำลังสร้างเอกสารรายงาน… (อาจใช้เวลาสักครู่)
         </p>
       )}
-      {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
     </section>
   );
 }
