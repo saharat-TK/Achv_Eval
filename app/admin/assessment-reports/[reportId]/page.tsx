@@ -39,9 +39,8 @@ function BandBadge({ band }: { band: AssessmentBand }) {
   );
 }
 
-/** §3.1 comment cell — bullets plus, when synthesized, the raw assessor
- *  comments behind a native <details> (no client JS needed). */
-function CommentCell({ items, raw }: { items: string[]; raw: string[] | null }) {
+/** §3.1 comment cell — synthesized overview, or raw comments as fallback. */
+function CommentCell({ items }: { items: string[] }) {
   return (
     <td className="px-3 py-2 text-slate-600">
       {items.length === 0 ? (
@@ -52,18 +51,6 @@ function CommentCell({ items, raw }: { items: string[]; raw: string[] | null }) 
             <li key={i}>{s}</li>
           ))}
         </ul>
-      )}
-      {raw && raw.length > 0 && (
-        <details className="mt-1.5">
-          <summary className="cursor-pointer text-[10px] text-slate-400 hover:text-slate-600">
-            ความเห็นต้นฉบับ ({raw.length})
-          </summary>
-          <ul className="mt-1 list-disc space-y-0.5 pl-4 text-[11px] text-slate-500">
-            {raw.map((s, i) => (
-              <li key={i}>{s}</li>
-            ))}
-          </ul>
-        </details>
       )}
     </td>
   );
@@ -256,8 +243,8 @@ export default async function AssessmentReportPage({
       </section>
 
       {/* Section 3.1 — Assessor topic summary. Shows the AI-synthesized
-          overview when available; raw assessor comments stay one click away
-          (and are the fallback when no synthesis exists). */}
+          overview when available; raw assessor comments are the fallback
+          when no synthesis exists. */}
       <section className="rounded-xl border border-slate-200 bg-white p-5">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h2 className="text-base font-semibold text-slate-800">
@@ -272,7 +259,7 @@ export default async function AssessmentReportPage({
         </div>
         {assessorSynth && (
           <p className="mt-1 text-xs text-slate-400">
-            สรุปภาพรวมโดย AI จากความเห็นของผู้ทวนสอบ — ดูความเห็นต้นฉบับได้ในแต่ละหัวข้อ
+            สรุปภาพรวมโดย AI จากความเห็นของผู้ทวนสอบ
           </p>
         )}
         <div className="mt-3 overflow-hidden rounded-lg border border-slate-200">
@@ -303,14 +290,8 @@ export default async function AssessmentReportPage({
                         </span>
                       )}
                     </td>
-                    <CommentCell
-                      items={synth ? synth.strengths : t.strengths}
-                      raw={synth ? t.strengths : null}
-                    />
-                    <CommentCell
-                      items={synth ? synth.improvements : t.improvements}
-                      raw={synth ? t.improvements : null}
-                    />
+                    <CommentCell items={synth ? synth.strengths : t.strengths} />
+                    <CommentCell items={synth ? synth.improvements : t.improvements} />
                   </tr>
                 );
               })}
