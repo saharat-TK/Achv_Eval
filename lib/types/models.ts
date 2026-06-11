@@ -446,7 +446,9 @@ export type ReportStatus =
 
 export interface ReportCommitteeMember {
   name: string;
-  role: string; // ประธานกรรมการ / กรรมการ / กรรมการและเลขานุการ ...
+  role: string; // ประธานกรรมการ / กรรมการ / กรรมการและเลขานุการ / ผู้ทรงคุณวุฒิ
+  /** Linked user id when chosen from the directory; free-typed names omit it. */
+  uid?: string;
 }
 
 /** One assessed-or-not offering captured at report-generation time. */
@@ -521,7 +523,12 @@ export interface AssessmentSummaryReportDoc {
   /** Manually supplied by the director/admin at creation time. */
   header: {
     venue: string;
+    /** Formatted Thai display string derived from the structured fields below. */
     meetingDateTime: string;
+    /** Structured meeting inputs (added 2026-06). */
+    meetingDate?: string; // yyyy-mm-dd (Gregorian)
+    meetingStartTime?: string; // HH:mm
+    meetingEndTime?: string; // HH:mm
     committee: ReportCommitteeMember[];
   };
 

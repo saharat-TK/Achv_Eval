@@ -8,6 +8,7 @@ import {
   getCourseReportLinks,
   getReportsForAcademicPrograms,
 } from '@/lib/data/assessmentReports';
+import { getAllUsers } from '@/lib/data/users';
 import { ALL_PROGRAMS_ID } from '@/lib/types/models';
 import AssessmentReportsClient from '@/components/AssessmentReportsClient';
 
@@ -30,11 +31,22 @@ export default async function AssessmentReportsPage() {
   const reportScopeIds = isAdmin
     ? [...academicProgramIds, ALL_PROGRAMS_ID]
     : academicProgramIds;
-  const [offerings, reports] = await Promise.all([
+  const [offerings, reports, users] = await Promise.all([
     getOfferingsForAcademicPrograms(academicProgramIds),
     getReportsForAcademicPrograms(reportScopeIds),
+    getAllUsers(),
   ]);
   const courseReportLinks = await getCourseReportLinks(offerings);
+
+  // All users (active and inactive) feed the committee-name combobox; id kept
+  // for traceability.
+  const committeeOptions = users
+    .map((u) => ({
+      id: u.id,
+      name: `${u.titleTh ? `${u.titleTh} ` : ''}${u.nameTh}`.trim(),
+    }))
+    .filter((u) => u.name.length > 0)
+    .sort((a, b) => a.name.localeCompare(b.name, 'th'));
 
   return (
     <div>
@@ -49,6 +61,7 @@ export default async function AssessmentReportsPage() {
         reports={reports}
         courseReportLinks={courseReportLinks}
         isAdmin={isAdmin}
+        committeeOptions={committeeOptions}
         academicPrograms={programs.map((p) => ({
           id: p.id,
           code: p.code,
