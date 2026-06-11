@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import type { ManagedOffering } from '@/lib/data/offeringManager';
@@ -8,7 +8,6 @@ import type { ReportSummary, CourseReportLinks } from '@/lib/data/assessmentRepo
 import {
   ALL_PROGRAMS_ID,
   bandFromPercent,
-  type AssessmentBand,
   type ReportCoverage,
   type ReportScope,
   type Semester,
@@ -16,6 +15,8 @@ import {
 import { httpsCallable } from 'firebase/functions';
 import { getFirebaseAuth, getFirebaseFunctions } from '@/lib/firebase/config';
 import {
+  BAND_BADGE,
+  BAND_LABEL,
   COMMITTEE_ROLES,
   REPORT_THRESHOLD,
   SEMESTER_LABEL,
@@ -44,17 +45,6 @@ function reportKey(
   const suffix = scope === 'annual' ? 'annual' : `sem${semester}`;
   return `${academicProgramId}__${academicYear}__${suffix}`;
 }
-
-const BAND_LABEL: Record<AssessmentBand, string> = {
-  improve: 'ปรับปรุง',
-  good: 'ดี',
-  excellent: 'ดีเยี่ยม',
-};
-const BAND_BADGE: Record<AssessmentBand, string> = {
-  improve: 'border-amber-200 bg-amber-50 text-amber-800',
-  good: 'border-blue-200 bg-blue-50 text-blue-800',
-  excellent: 'border-green-200 bg-green-50 text-green-800',
-};
 
 interface CreateTarget {
   academicProgramId: string;
@@ -166,6 +156,7 @@ export default function AssessmentReportsClient({
   const [yearFilter, setYearFilter] = useState<string>('recent'); // recent | all | <year>
   const [semFilter, setSemFilter] = useState<string>('all');
   const [apFilter, setApFilter] = useState<string>('all');
+  const filtersActive = yearFilter !== 'recent' || semFilter !== 'all' || apFilter !== 'all';
 
   const recentYears = useMemo(() => new Set(distinctYears.slice(0, 2)), [distinctYears]);
 
@@ -333,18 +324,47 @@ export default function AssessmentReportsClient({
             ))}
           </select>
         </label>
+        {filtersActive && (
+          <button
+            type="button"
+            onClick={() => {
+              setYearFilter('recent');
+              setSemFilter('all');
+              setApFilter('all');
+            }}
+            className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs text-slate-600 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-mfu-primary/40"
+          >
+            ล้างตัวกรอง
+          </button>
+        )}
       </div>
 
       {groups.length === 0 ? (
         <div className="mt-6 rounded-xl border border-dashed border-slate-300 p-10 text-center text-sm text-slate-500">
           ไม่มีรายวิชาที่เปิดสอนตามตัวกรอง
+          {filtersActive && (
+            <>
+              {' — '}
+              <button
+                type="button"
+                onClick={() => {
+                  setYearFilter('recent');
+                  setSemFilter('all');
+                  setApFilter('all');
+                }}
+                className="text-mfu-primary underline hover:opacity-80"
+              >
+                ล้างตัวกรองเพื่อดูทั้งหมด
+              </button>
+            </>
+          )}
         </div>
       ) : (
         <div className="mt-6 space-y-5">
           {groups.map((g) => (
             <section
               key={g.year}
-              className="rounded-xl border border-slate-200 border-l-4 border-l-[#00704A] bg-slate-50"
+              className="rounded-xl border border-slate-200 bg-slate-50"
             >
               <div className="flex items-center justify-between px-4 py-3">
                 <h2 className="text-base font-semibold text-[#00704A]">
@@ -568,7 +588,7 @@ function ProgramProgressRow({
             aria-expanded={expanded}
           >
             <span
-              className={`shrink-0 text-[10px] text-slate-400 transition-transform duration-150 ${
+              className={`shrink-0 text-[10px] text-slate-500 transition-transform duration-150 ${
                 expanded ? 'rotate-90' : ''
               }`}
             >
@@ -600,11 +620,12 @@ function ProgramProgressRow({
             {avg && (
               <>
                 <span className="h-3.5 w-px bg-slate-300" aria-hidden />
-                <span className="inline-flex items-center gap-1.5">
+                <span
+                  className="inline-flex items-center gap-1.5"
+                  title={`คะแนนเฉลี่ย ${avg.meanTotal.toFixed(1)}/${avg.meanMax.toFixed(1)}`}
+                >
                   <span className="text-slate-500">เฉลี่ย</span>
-                  <span className="font-medium tabular-nums text-slate-700">
-                    {avg.meanTotal.toFixed(1)}/{avg.meanMax.toFixed(1)} ({avg.pct}%)
-                  </span>
+                  <span className="font-medium tabular-nums text-slate-700">{avg.pct}%</span>
                   <span
                     className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium ${BAND_BADGE[avg.band]}`}
                   >
@@ -624,7 +645,7 @@ function ProgramProgressRow({
               {reportId && (
                 <Link
                   href={`/admin/assessment-reports/${reportId}`}
-                  className="rounded-lg bg-mfu-primary px-3 py-1.5 text-xs font-medium text-white hover:opacity-90"
+                  className="rounded-lg bg-mfu-primary px-3 py-1.5 text-xs font-medium text-white hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-mfu-primary/40"
                 >
                   ดูรายงาน
                 </Link>
@@ -648,7 +669,7 @@ function ProgramProgressRow({
       {collapsible && expanded && (
         <ul className="mt-3 divide-y divide-slate-100 border-t border-slate-100">
           {courses.length === 0 ? (
-            <li className="py-2 text-xs text-slate-400">ไม่มีรายวิชา</li>
+            <li className="py-2 text-xs text-slate-500">ไม่มีรายวิชา</li>
           ) : (
             courses.map((o) => {
               const links = courseReportLinks[o.id];
@@ -786,7 +807,7 @@ function RowMenu({
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+        className="rounded p-1 text-slate-500 hover:bg-slate-100 hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-mfu-primary/40"
         aria-label="จัดการ"
         aria-haspopup="menu"
         aria-expanded={open}
@@ -802,15 +823,19 @@ function RowMenu({
             type="button"
             role="menuitem"
             disabled={!createAllowed}
-            title={createDisabledReason}
             onClick={() => {
               setOpen(false);
               onCreate();
             }}
-            className="block w-full px-3 py-2 text-left text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-300 disabled:hover:bg-transparent"
+            className="block w-full px-3 py-2 text-left text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-400 disabled:hover:bg-transparent"
           >
             {hasReport ? 'สร้างรายงานใหม่' : createLabel}
           </button>
+          {createDisabledReason && (
+            <p className="px-3 pb-2 pt-0.5 text-[11px] leading-snug text-amber-700">
+              {createDisabledReason}
+            </p>
+          )}
           {hasReport && isAdmin && (
             <button
               type="button"
@@ -932,8 +957,10 @@ function CommitteeNameInput({
   onChange: (name: string) => void;
 }) {
   const [open, setOpen] = useState(false);
+  const [activeIndex, setActiveIndex] = useState(-1);
   const wrapRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const listId = useId();
   // Fixed-position box anchored to the input — escapes the modal's overflow
   // clip (an absolute dropdown gets cut off at the card edge).
   const [box, setBox] = useState<{
@@ -970,35 +997,72 @@ function CommitteeNameInput({
     const onDoc = (e: MouseEvent) => {
       if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false);
     };
-    const onEsc = (e: KeyboardEvent) => e.key === 'Escape' && setOpen(false);
     document.addEventListener('mousedown', onDoc);
-    document.addEventListener('keydown', onEsc);
     return () => {
       window.removeEventListener('scroll', place, true);
       window.removeEventListener('resize', place);
       document.removeEventListener('mousedown', onDoc);
-      document.removeEventListener('keydown', onEsc);
     };
   }, [open]);
 
   const q = value.trim().toLowerCase();
   const matches = q ? options.filter((o) => o.name.toLowerCase().includes(q)) : options;
 
+  // Reset the keyboard highlight whenever the query or open state changes.
+  useEffect(() => setActiveIndex(-1), [value, open]);
+  // Keep the highlighted option scrolled into view.
+  useEffect(() => {
+    if (activeIndex < 0) return;
+    document.getElementById(`${listId}-opt-${activeIndex}`)?.scrollIntoView({ block: 'nearest' });
+  }, [activeIndex, listId]);
+
+  function choose(name: string) {
+    onChange(name);
+    setOpen(false);
+    setActiveIndex(-1);
+  }
+
+  function onKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      if (!open) return setOpen(true);
+      setActiveIndex((i) => Math.min(i + 1, matches.length - 1));
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setActiveIndex((i) => Math.max(i - 1, 0));
+    } else if (e.key === 'Enter' && open && activeIndex >= 0 && matches[activeIndex]) {
+      e.preventDefault();
+      choose(matches[activeIndex].name);
+    } else if (e.key === 'Escape') {
+      setOpen(false);
+    }
+  }
+
+  const activeId = activeIndex >= 0 ? `${listId}-opt-${activeIndex}` : undefined;
+
   return (
     <div ref={wrapRef} className="relative min-w-0 flex-1">
       <input
         ref={inputRef}
+        role="combobox"
+        aria-expanded={open && matches.length > 0}
+        aria-controls={listId}
+        aria-autocomplete="list"
+        aria-activedescendant={activeId}
         value={value}
         onChange={(e) => {
           onChange(e.target.value);
           setOpen(true);
         }}
         onFocus={() => setOpen(true)}
+        onKeyDown={onKeyDown}
         placeholder="เลือกหรือพิมพ์ชื่อ-นามสกุล"
         className="w-full rounded-lg border border-slate-300 px-3 py-1.5 text-sm focus:border-mfu-primary focus:outline-none"
       />
       {open && matches.length > 0 && box && (
         <ul
+          id={listId}
+          role="listbox"
           style={{
             position: 'fixed',
             left: box.left,
@@ -1009,22 +1073,28 @@ function CommitteeNameInput({
           }}
           className="z-50 overflow-y-auto rounded-lg border border-slate-200 bg-white py-1 text-sm shadow-lg"
         >
-          {matches.map((o, idx) => (
-            <li key={`${o.id}-${o.name}-${idx}`}>
-              <button
-                type="button"
+          {matches.map((o, idx) => {
+            const active = idx === activeIndex;
+            return (
+              <li
+                key={`${o.id}-${o.name}-${idx}`}
+                id={`${listId}-opt-${idx}`}
+                role="option"
+                aria-selected={active}
+                onMouseEnter={() => setActiveIndex(idx)}
                 // onMouseDown fires before the input's blur, so the click lands.
                 onMouseDown={(e) => {
                   e.preventDefault();
-                  onChange(o.name);
-                  setOpen(false);
+                  choose(o.name);
                 }}
-                className="block w-full px-3 py-1.5 text-left text-slate-700 hover:bg-slate-50"
+                className={`cursor-pointer px-3 py-1.5 text-slate-700 ${
+                  active ? 'bg-slate-100' : 'hover:bg-slate-50'
+                }`}
               >
                 {o.name}
-              </button>
-            </li>
-          ))}
+              </li>
+            );
+          })}
         </ul>
       )}
     </div>
@@ -1160,14 +1230,14 @@ function CreateReportModal({
                 onChange={(e) => setStartTime(e.target.value)}
                 className="rounded-lg border border-slate-300 px-2 py-2 text-sm focus:border-mfu-primary focus:outline-none"
               />
-              <span className="text-xs text-slate-400">–</span>
+              <span className="text-xs text-slate-500">–</span>
               <input
                 type="time"
                 value={endTime}
                 onChange={(e) => setEndTime(e.target.value)}
                 className="rounded-lg border border-slate-300 px-2 py-2 text-sm focus:border-mfu-primary focus:outline-none"
               />
-              <span className="text-xs text-slate-400">น.</span>
+              <span className="text-xs text-slate-500">น.</span>
             </div>
             {meetingPreview && (
               <p className="mt-1 text-xs text-slate-500">{meetingPreview}</p>
@@ -1219,7 +1289,7 @@ function CreateReportModal({
                   <button
                     type="button"
                     onClick={() => removeMember(i)}
-                    className="shrink-0 px-1 text-slate-400 hover:text-red-500"
+                    className="shrink-0 px-1 text-slate-500 hover:text-red-600"
                     aria-label="ลบกรรมการ"
                   >
                     ✕
@@ -1250,13 +1320,17 @@ function CreateReportModal({
               onClick={() => setConfirming(true)}
               disabled={!!blockReason}
               title={blockReason}
-              className="rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-100 disabled:cursor-not-allowed disabled:border-slate-300 disabled:bg-slate-100 disabled:text-slate-400"
+              className="rounded-lg bg-mfu-primary px-4 py-2 text-sm font-medium text-white hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-mfu-primary/40 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
             >
               สร้างรายงาน
             </button>
           </div>
         ) : (
-          <div className="mt-5 rounded-lg border border-red-200 bg-red-50/50 p-3">
+          <div
+            className={`mt-5 rounded-lg border p-3 ${
+              target.hasReport ? 'border-amber-200 bg-amber-50/60' : 'border-slate-200 bg-slate-50'
+            }`}
+          >
             <p className="text-xs text-slate-600">
               {target.hasReport
                 ? 'การสร้างรายงานใหม่จะเขียนทับรายงานและไฟล์ PDF ฉบับเดิมของรอบนี้ — พิมพ์ “ยืนยัน” เพื่อดำเนินการ'
@@ -1285,7 +1359,7 @@ function CreateReportModal({
                 type="button"
                 onClick={submit}
                 disabled={busy || confirmText.trim() !== 'ยืนยัน'}
-                className="rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-100 disabled:cursor-not-allowed disabled:border-slate-300 disabled:bg-slate-100 disabled:text-slate-400"
+                className="rounded-lg bg-mfu-primary px-4 py-2 text-sm font-medium text-white hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-mfu-primary/40 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
               >
                 {busy ? 'กำลังสร้าง…' : 'ยืนยันการสร้าง'}
               </button>

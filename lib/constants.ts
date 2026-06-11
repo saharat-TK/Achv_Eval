@@ -3,6 +3,7 @@ import type {
   UploadType,
   Semester,
   AiReportStatus,
+  AssessmentBand,
   ProgramLevel,
   PloSchema,
   PloDomain,
@@ -127,6 +128,20 @@ export const RUBRIC_TOPICS: { key: string; number: string; labelTh: string }[] =
 /** Minimum assessed share (of active offerings) before an assessment summary
  *  report may be created — applies to both a semester and a whole year. */
 export const REPORT_THRESHOLD = 0.25;
+
+/** Rubric band → Thai label. Single source of truth for the whole app. */
+export const BAND_LABEL: Record<AssessmentBand, string> = {
+  improve: 'ปรับปรุง',
+  good: 'ดี',
+  excellent: 'ดีเยี่ยม',
+};
+
+/** Rubric band → pill classes (1px border + soft tint + strong text). */
+export const BAND_BADGE: Record<AssessmentBand, string> = {
+  improve: 'border-amber-200 bg-amber-50 text-amber-800',
+  good: 'border-blue-200 bg-blue-50 text-blue-800',
+  excellent: 'border-green-200 bg-green-50 text-green-800',
+};
 
 /** Allowed committee positions for an assessment summary report. */
 export const COMMITTEE_ROLES = [

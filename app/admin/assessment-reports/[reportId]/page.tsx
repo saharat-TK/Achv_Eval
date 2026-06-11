@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import { getCurrentProfile } from '@/lib/firebase/auth-server';
 import { getReportById } from '@/lib/data/assessmentReports';
-import { SEMESTER_LABEL } from '@/lib/constants';
+import { SEMESTER_LABEL, BAND_LABEL, BAND_BADGE } from '@/lib/constants';
 import ReportArtifacts from '@/components/ReportArtifacts';
 import DeleteReportButton from '@/components/DeleteReportButton';
 import CourseListByProgram from '@/components/CourseListByProgram';
@@ -16,18 +16,6 @@ import {
 } from '@/lib/types/models';
 
 export const dynamic = 'force-dynamic';
-
-const BAND_LABEL: Record<AssessmentBand, string> = {
-  improve: 'ควรปรับปรุง',
-  good: 'ดี',
-  excellent: 'ดีเยี่ยม',
-};
-
-const BAND_BADGE: Record<AssessmentBand, string> = {
-  improve: 'bg-amber-50 text-amber-800 border-amber-200',
-  good: 'bg-blue-50 text-blue-800 border-blue-200',
-  excellent: 'bg-green-50 text-green-800 border-green-200',
-};
 
 function BandBadge({ band }: { band: AssessmentBand }) {
   return (
@@ -44,7 +32,7 @@ function CommentCell({ items }: { items: string[] }) {
   return (
     <td className="px-3 py-2 text-slate-600">
       {items.length === 0 ? (
-        <span className="text-slate-300">—</span>
+        <span className="text-slate-500">—</span>
       ) : (
         <ul className="list-disc space-y-0.5 pl-4">
           {items.map((s, i) => (
@@ -182,7 +170,7 @@ export default async function AssessmentReportPage({
         {/* Band distribution */}
         <div className="mt-3 flex flex-wrap gap-2 text-xs">
           <span className="rounded-full bg-amber-50 px-2.5 py-1 text-amber-800">
-            ควรปรับปรุง {snapshot.bandDistribution.improve}
+            {BAND_LABEL.improve} {snapshot.bandDistribution.improve}
           </span>
           <span className="rounded-full bg-blue-50 px-2.5 py-1 text-blue-800">
             ดี {snapshot.bandDistribution.good}
@@ -271,7 +259,7 @@ export default async function AssessmentReportPage({
           )}
         </div>
         {assessorSynth && (
-          <p className="mt-1 text-xs text-slate-400">
+          <p className="mt-1 text-xs text-slate-500">
             สรุปภาพรวมความเห็นของคณะกรรมการทวนสอบ
           </p>
         )}
@@ -295,7 +283,7 @@ export default async function AssessmentReportPage({
                     </td>
                     <td className="whitespace-nowrap px-3 py-2 text-slate-600">
                       {t.averageScore == null ? (
-                        <span className="text-slate-300">N/A</span>
+                        <span className="text-slate-500">N/A</span>
                       ) : (
                         <span className="inline-flex items-center gap-1.5">
                           {t.averageScore.toFixed(1)}/3
@@ -321,12 +309,12 @@ export default async function AssessmentReportPage({
           </h2>
           <div className="mt-3 space-y-3">
             {report.aiSynthesis.map((t: ReportTopicSummary) => (
-              <div key={t.key} className="border-l-2 border-slate-200 pl-3">
+              <div key={t.key}>
                 <div className="text-sm font-medium text-slate-700">
                   {t.number}. {t.labelTh}
                 </div>
                 {t.improvements.length === 0 ? (
-                  <p className="text-xs text-slate-400">ไม่มีข้อเสนอแนะเพิ่มเติม</p>
+                  <p className="text-xs text-slate-500">ไม่มีข้อเสนอแนะเพิ่มเติม</p>
                 ) : (
                   <ul className="mt-1 list-disc space-y-0.5 pl-5 text-xs text-slate-600">
                     {t.improvements.map((s, i) => (
