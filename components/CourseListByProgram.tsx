@@ -1,24 +1,12 @@
 'use client';
 
 import { Fragment, useMemo, useState } from 'react';
-import { SEMESTER_LABEL, OFFERING_STATUS } from '@/lib/constants';
+import { SEMESTER_LABEL, OFFERING_STATUS, BAND_LABEL, BAND_BADGE } from '@/lib/constants';
 import {
   bandFromPercent,
-  type AssessmentBand,
   type ReportCourseRow,
   type Semester,
 } from '@/lib/types/models';
-
-const BAND_LABEL: Record<AssessmentBand, string> = {
-  improve: 'ปรับปรุง',
-  good: 'ดี',
-  excellent: 'ดีเยี่ยม',
-};
-const BAND_BADGE: Record<AssessmentBand, string> = {
-  improve: 'border-amber-200 bg-amber-50 text-amber-800',
-  good: 'border-blue-200 bg-blue-50 text-blue-800',
-  excellent: 'border-green-200 bg-green-50 text-green-800',
-};
 
 /** Grouped, filterable course listing for the all-programs report (Section under §3.2). */
 export default function CourseListByProgram({ rows }: { rows: ReportCourseRow[] }) {
