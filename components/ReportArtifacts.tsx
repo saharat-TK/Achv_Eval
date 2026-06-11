@@ -10,10 +10,13 @@ export default function ReportArtifacts({
   reportId,
   status,
   pdfUrl,
+  compact = false,
 }: {
   reportId: string;
   status: ReportStatus;
   pdfUrl: string | null;
+  /** Render bare (no card/heading) for the header corner. */
+  compact?: boolean;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
@@ -55,35 +58,38 @@ export default function ReportArtifacts({
 
   const ready = status === 'ready' && !!pdfUrl;
 
+  const content = ready ? (
+    <a
+      href={pdfUrl!}
+      className="inline-block rounded-lg border border-mfu-primary px-4 py-2 text-sm font-medium text-mfu-primary hover:bg-mfu-primary/5"
+    >
+      ดาวน์โหลด PDF
+    </a>
+  ) : failedAttempt ? (
+    <p className={`text-sm text-amber-700 ${compact ? 'max-w-[16rem]' : ''}`}>
+      สร้างเอกสารไม่สำเร็จ —{' '}
+      {compact
+        ? 'เปิดหน้านี้อีกครั้งเพื่อลองใหม่'
+        : 'กรุณาเปิดหน้านี้อีกครั้งเพื่อลองใหม่ หรือสร้างรายงานใหม่จากหน้ารายการรายงานการทวนสอบ'}
+    </p>
+  ) : status === 'synthesizing' || status === 'draft' ? (
+    <p className="inline-flex items-center gap-2 text-sm text-slate-500">
+      <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-slate-400" />
+      กำลังเตรียมข้อมูลรายงาน…
+    </p>
+  ) : (
+    <p className="inline-flex items-center gap-2 text-sm text-slate-500">
+      <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-mfu-primary" />
+      กำลังสร้างเอกสารรายงาน… (อาจใช้เวลาสักครู่)
+    </p>
+  );
+
+  if (compact) return <div className="text-right">{content}</div>;
+
   return (
     <section className="rounded-xl border border-slate-200 bg-white p-5">
       <h2 className="text-base font-semibold text-slate-800">เอกสารรายงาน</h2>
-
-      {ready ? (
-        <div className="mt-3">
-          <a
-            href={pdfUrl!}
-            className="inline-block rounded-lg border border-mfu-primary px-4 py-2 text-sm font-medium text-mfu-primary hover:bg-mfu-primary/5"
-          >
-            ดาวน์โหลด PDF
-          </a>
-        </div>
-      ) : failedAttempt ? (
-        <p className="mt-3 text-sm text-amber-700">
-          การสร้างเอกสารไม่สำเร็จ — กรุณาเปิดหน้านี้อีกครั้งเพื่อลองใหม่
-          หรือสร้างรายงานใหม่จากหน้ารายการรายงานการทวนสอบ
-        </p>
-      ) : status === 'synthesizing' || status === 'draft' ? (
-        <p className="mt-3 inline-flex items-center gap-2 text-sm text-slate-500">
-          <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-slate-400" />
-          กำลังเตรียมข้อมูลรายงาน…
-        </p>
-      ) : (
-        <p className="mt-3 inline-flex items-center gap-2 text-sm text-slate-500">
-          <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-mfu-primary" />
-          กำลังสร้างเอกสารรายงาน… (อาจใช้เวลาสักครู่)
-        </p>
-      )}
+      <div className="mt-3">{content}</div>
     </section>
   );
 }

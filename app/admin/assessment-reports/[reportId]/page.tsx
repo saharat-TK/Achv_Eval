@@ -118,15 +118,28 @@ export default async function AssessmentReportPage({
 
       {/* Header */}
       <header className="rounded-xl border border-slate-200 bg-white p-5">
-        <h1 className="text-lg font-semibold text-slate-800">
-          รายงานการประชุมทวนสอบผลสัมฤทธิ์การศึกษา {scopeLabel} ปีการศึกษา{' '}
-          {report.academicYear}
-        </h1>
-        <p className="mt-1 text-sm text-slate-600">{report.academicProgramLabel}</p>
-        {header.meetingDateTime && (
-          <p className="mt-2 text-sm text-slate-600">{header.meetingDateTime}</p>
-        )}
-        {header.venue && <p className="text-sm text-slate-600">ณ {header.venue}</p>}
+        <div className="flex items-start justify-between gap-4">
+          <div className="min-w-0">
+            <h1 className="text-lg font-semibold text-slate-800">
+              รายงานการประชุมทวนสอบผลสัมฤทธิ์การศึกษา {scopeLabel} ปีการศึกษา{' '}
+              {report.academicYear}
+            </h1>
+            <p className="mt-1 text-sm text-slate-600">{report.academicProgramLabel}</p>
+            {header.meetingDateTime && (
+              <p className="mt-2 text-sm text-slate-600">{header.meetingDateTime}</p>
+            )}
+            {header.venue && <p className="text-sm text-slate-600">ณ {header.venue}</p>}
+          </div>
+          {/* PDF download / generation status — top-right of the detail header */}
+          <div className="shrink-0">
+            <ReportArtifacts
+              compact
+              reportId={report.id}
+              status={report.status}
+              pdfUrl={report.pdfUrl}
+            />
+          </div>
+        </div>
 
         {header.committee.length > 0 && (
           <div className="mt-3">
@@ -329,13 +342,6 @@ export default async function AssessmentReportPage({
 
       {/* All-programs: full course listing grouped by academic program (filterable) */}
       {isAll && <CourseListByProgram rows={snapshot.courseRows} />}
-
-      {/* Generate / download PDF + DOCX */}
-      <ReportArtifacts
-        reportId={report.id}
-        status={report.status}
-        pdfUrl={report.pdfUrl}
-      />
     </div>
   );
 }
