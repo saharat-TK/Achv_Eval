@@ -1,0 +1,153 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-06-11T00:00:00Z",
+  "title": "Design System: Achv Evaluation App",
+  "extensions": {
+    "colorMeta": {
+      "primary": {
+        "role": "primary",
+        "displayName": "Starbucks Green",
+        "canonical": "#00704A",
+        "tonalRamp": ["#03281B", "#064A31", "#005C3D", "#00704A", "#1C8A63", "#49A985", "#9ACFBC", "#E3F1EA"]
+      },
+      "accent": {
+        "role": "secondary",
+        "displayName": "House Green",
+        "canonical": "#1E3932",
+        "tonalRamp": ["#0C1714", "#13241F", "#1E3932", "#2C544A", "#4A7C6F", "#7FA89C", "#B9D0C8", "#E6EFEB"]
+      },
+      "canvas": {
+        "role": "neutral",
+        "displayName": "Mint Cream",
+        "canonical": "#F1F6F3",
+        "tonalRamp": ["#0F1714", "#22302B", "#3B4A44", "#5B6B64", "#8AA89B", "#C2D8CE", "#E3F1EA", "#F1F6F3"]
+      },
+      "ink": {
+        "role": "neutral",
+        "displayName": "Ink (Slate)",
+        "canonical": "#0F172A",
+        "tonalRamp": ["#0F172A", "#1E293B", "#334155", "#475569", "#64748B", "#94A3B8", "#CBD5E1", "#F1F5F9"]
+      },
+      "danger": {
+        "role": "tertiary",
+        "displayName": "Danger Red",
+        "canonical": "#B91C1C",
+        "tonalRamp": ["#450A0A", "#7F1D1D", "#B91C1C", "#DC2626", "#EF4444", "#FCA5A5", "#FECACA", "#FEF2F2"]
+      }
+    },
+    "typographyMeta": {
+      "headline": { "displayName": "Headline", "purpose": "Page titles. Top of the scale — no hero display type." },
+      "title": { "displayName": "Title", "purpose": "Report/detail header titles and major section heads." },
+      "body": { "displayName": "Body", "purpose": "Default UI text, table cells, descriptions." },
+      "label": { "displayName": "Label", "purpose": "Field labels, badges, meta, table headers." }
+    },
+    "shadows": [
+      { "name": "panel-float", "value": "0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1)", "purpose": "Dropdowns, popovers, the committee combobox list (Tailwind shadow-lg)." },
+      { "name": "modal-lift", "value": "0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1)", "purpose": "Dialog/modal cards over the bg-black/40 scrim (Tailwind shadow-xl)." }
+    ],
+    "motion": [
+      { "name": "ease-standard", "value": "cubic-bezier(0.4, 0, 0.2, 1)", "purpose": "Default easing for state transitions (hover, focus, open/close)." },
+      { "name": "duration-fast", "value": "150ms", "purpose": "Most UI state transitions; users are in flow." }
+    ],
+    "breakpoints": [
+      { "name": "content-max", "value": "1026px" },
+      { "name": "sm", "value": "640px" },
+      { "name": "md", "value": "768px" },
+      { "name": "lg", "value": "1024px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Primary affirmative action. Solid green, white text.",
+      "html": "<button class=\"ds-btn-primary\">บันทึก</button>",
+      "css": ".ds-btn-primary { background: #00704A; color: #fff; padding: 0.5rem 1rem; border: none; border-radius: 8px; font: 600 0.875rem 'Sarabun', system-ui, sans-serif; cursor: pointer; transition: opacity 0.15s cubic-bezier(0.4,0,0.2,1); } .ds-btn-primary:hover { opacity: 0.9; } .ds-btn-primary:focus-visible { outline: 2px solid #00704A; outline-offset: 2px; } .ds-btn-primary:disabled { background: #F1F5F9; color: #94A3B8; cursor: not-allowed; }"
+    },
+    {
+      "name": "Outline Button",
+      "kind": "button",
+      "refersTo": "button-outline",
+      "description": "Secondary action / button-styled link (e.g. ดูรายงาน).",
+      "html": "<button class=\"ds-btn-outline\">ดูรายงาน</button>",
+      "css": ".ds-btn-outline { background: #fff; color: #00704A; border: 1px solid #00704A; border-radius: 8px; padding: 0.375rem 0.75rem; font: 500 0.75rem 'Sarabun', system-ui, sans-serif; cursor: pointer; transition: background 0.15s cubic-bezier(0.4,0,0.2,1); } .ds-btn-outline:hover { background: rgba(0,112,74,0.05); } .ds-btn-outline:focus-visible { outline: 2px solid #00704A; outline-offset: 2px; }"
+    },
+    {
+      "name": "Danger Button",
+      "kind": "button",
+      "refersTo": "button-danger",
+      "description": "Destructive / irreversible action (create-overwrite, reset, delete). Light-red, paired with a confirm step.",
+      "html": "<button class=\"ds-btn-danger\">ลบรายงาน</button>",
+      "css": ".ds-btn-danger { background: #FEF2F2; color: #B91C1C; border: 1px solid #FECACA; border-radius: 8px; padding: 0.5rem 1rem; font: 600 0.875rem 'Sarabun', system-ui, sans-serif; cursor: pointer; transition: background 0.15s cubic-bezier(0.4,0,0.2,1); } .ds-btn-danger:hover { background: #FEE2E2; } .ds-btn-danger:disabled { background: #F1F5F9; color: #94A3B8; border-color: #CBD5E1; cursor: not-allowed; }"
+    },
+    {
+      "name": "Text Input",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "Standard text/date/select field. Border shifts green on focus, no glow.",
+      "html": "<input class=\"ds-input\" placeholder=\"เลือกหรือพิมพ์ชื่อ-นามสกุล\" />",
+      "css": ".ds-input { background: #fff; color: #0F172A; border: 1px solid #CBD5E1; border-radius: 8px; padding: 0.5rem 0.75rem; font: 400 0.875rem 'Sarabun', system-ui, sans-serif; width: 100%; } .ds-input::placeholder { color: #64748B; } .ds-input:focus { outline: none; border-color: #00704A; }"
+    },
+    {
+      "name": "Card",
+      "kind": "card",
+      "refersTo": "card",
+      "description": "Content container. White on mint-cream, hairline border, flat at rest.",
+      "html": "<div class=\"ds-card\"><h2 class=\"ds-card-title\">รายละเอียดการทวนสอบ</h2><p class=\"ds-card-body\">มีรายวิชาที่รับผิดชอบสอนในหลักสูตร 12 รายวิชา</p></div>",
+      "css": ".ds-card { background: #fff; border: 1px solid #E2E8F0; border-radius: 12px; padding: 1.25rem; color: #0F172A; } .ds-card-title { margin: 0; font: 600 1rem 'Sarabun', system-ui, sans-serif; color: #1E293B; } .ds-card-body { margin: 0.5rem 0 0; font: 400 0.875rem 'Sarabun', system-ui, sans-serif; color: #475569; }"
+    },
+    {
+      "name": "Status Badge",
+      "kind": "chip",
+      "refersTo": "badge-status",
+      "description": "Read-only state indicator (offering status, rubric band). Tonal fill + strong text, always with a Thai label.",
+      "html": "<span class=\"ds-badge ds-badge-success\">ดีเยี่ยม</span> <span class=\"ds-badge ds-badge-warn\">ปรับปรุง</span> <span class=\"ds-badge ds-badge-info\">ดี</span>",
+      "css": ".ds-badge { display: inline-flex; align-items: center; border-radius: 9999px; padding: 0.125rem 0.625rem; font: 500 0.75rem 'Sarabun', system-ui, sans-serif; } .ds-badge-success { background: #DCFCE7; color: #166534; } .ds-badge-warn { background: #FEF3C7; color: #92400E; } .ds-badge-info { background: #DBEAFE; color: #1E40AF; }"
+    },
+    {
+      "name": "Nav Tab",
+      "kind": "nav",
+      "refersTo": "nav-tab",
+      "description": "Top-level workspace tab. Green underline + green text on hover/active.",
+      "html": "<a class=\"ds-nav-tab\" href=\"#\">รายงานการทวนสอบ</a>",
+      "css": ".ds-nav-tab { display: inline-block; color: #475569; padding: 0.75rem 0; border-bottom: 2px solid transparent; font: 400 0.875rem 'Sarabun', system-ui, sans-serif; text-decoration: none; transition: color 0.15s, border-color 0.15s; } .ds-nav-tab:hover, .ds-nav-tab[aria-current=\"page\"] { color: #00704A; border-bottom-color: #00704A; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Quiet Registrar",
+    "overview": "The interface of a calm, exacting academic record-keeper. White cards float on a mint-cream canvas; a single Starbucks-green voice marks the actions that matter; every state is spelled out in plain Thai rather than left to color. Faculty open it a few times a semester to do real, consequential work, and it earns trust by getting out of the way and being unambiguous about where each course stands. Density serves the task and familiarity is the goal, not novelty.",
+    "keyCharacteristics": [
+      "One green accent on neutral surfaces; restrained by default.",
+      "White cards on a mint-cream page, separated by hairline borders, not shadow.",
+      "Thai-first typography in a single family (Sarabun) at a fixed, compact rem scale.",
+      "Status is always legible as text + color, never color alone.",
+      "Deliberate, confirmable destructive actions (sign-off, regenerate, delete, reset)."
+    ],
+    "rules": [
+      { "name": "The One Green Rule", "body": "Starbucks Green means 'action or current selection.' If it's not clickable, selected, or a primary heading, it is not green. Decoration uses neutrals or House Green.", "section": "colors" },
+      { "name": "The Label-Not-Color Rule", "body": "Every status and band badge carries its Thai label as text. Color reinforces meaning; it never carries meaning alone.", "section": "colors" },
+      { "name": "The AA Floor Rule", "body": "Body and label text never go lighter than Ink Subtle (#64748B) on white/mint. slate-400 and lighter are prohibited for text, placeholders included.", "section": "colors" },
+      { "name": "The No-Eyebrow Rule", "body": "No tiny uppercase tracked kickers. Thai is caseless and the register is a task tool; labels are sentence-case Thai at normal tracking.", "section": "typography" },
+      { "name": "The Fixed-Scale Rule", "body": "Sizes are fixed rem, never fluid clamp(). The same control must look identical in a sidebar and a full-width page.", "section": "typography" },
+      { "name": "The Flat-By-Default Rule", "body": "If a surface sits in the page flow (card, table, panel), it gets a border and no shadow. Shadow appears only on overlays (modals, dropdowns).", "section": "elevation" }
+    ],
+    "dos": [
+      "Do keep Starbucks Green (#00704A) for actions, selection, and primary headings only; carry decoration in neutrals or House Green.",
+      "Do float white cards on the Mint Cream (#F1F6F3) page and separate them with 1px slate-200 borders; reserve shadow for modals and dropdowns.",
+      "Do pair every status/band badge with its Thai label; color only reinforces it.",
+      "Do keep body and label text at Ink Subtle (#64748B) or darker on white; verify 4.5:1.",
+      "Do make destructive/irreversible actions deliberate: light-red styling plus a confirm step (type-to-confirm for create/delete).",
+      "Do use one family (Sarabun) at a fixed rem scale; contrast via weight and size."
+    ],
+    "donts": [
+      "Don't regress toward the cluttered legacy university portal: tiny gray-on-gray tables, no hierarchy, everything the same weight.",
+      "Don't add playful consumer-SaaS decoration: blobs, mascots, emoji, gradient fills.",
+      "Don't bring flashy marketing-landing energy: hero animation, oversized fluid display type, scroll choreography, or gradient text (background-clip: text is banned).",
+      "Don't build over-decorated dashboards: gradient stat cards, neon charts, or glassmorphism.",
+      "Don't use a colored border-left/border-right stripe as an accent on cards, list items, or alerts; use a full border or a tint fill.",
+      "Don't put a resting drop-shadow on content cards, or use color alone to signal status.",
+      "Don't use uppercase tracked eyebrow kickers above sections, or fluid clamp() heading sizes."
+    ]
+  }
+}
