@@ -920,6 +920,117 @@ function ConfirmDialog({
   );
 }
 
+/** Combobox for a committee member's name: free-text input plus a scrollable
+ *  suggestion list (sized to ~10 rows) drawn from the user/allowlist roster. */
+function CommitteeNameInput({
+  value,
+  options,
+  onChange,
+}: {
+  value: string;
+  options: CommitteeOption[];
+  onChange: (name: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  // Fixed-position box anchored to the input — escapes the modal's overflow
+  // clip (an absolute dropdown gets cut off at the card edge).
+  const [box, setBox] = useState<{
+    left: number;
+    top: number;
+    width: number;
+    maxHeight: number;
+    flip: boolean;
+  } | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const place = () => {
+      const el = inputRef.current;
+      if (!el) return;
+      const r = el.getBoundingClientRect();
+      const gap = 4;
+      const margin = 8;
+      const spaceBelow = window.innerHeight - r.bottom - margin;
+      const spaceAbove = r.top - margin;
+      const flip = spaceBelow < 200 && spaceAbove > spaceBelow;
+      const avail = flip ? spaceAbove : spaceBelow;
+      setBox({
+        left: r.left,
+        width: r.width,
+        top: flip ? r.top - gap : r.bottom + gap,
+        maxHeight: Math.max(120, Math.min(320, avail)), // ~10 rows, capped to fit
+        flip,
+      });
+    };
+    place();
+    window.addEventListener('scroll', place, true); // capture: track modal scroll
+    window.addEventListener('resize', place);
+    const onDoc = (e: MouseEvent) => {
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false);
+    };
+    const onEsc = (e: KeyboardEvent) => e.key === 'Escape' && setOpen(false);
+    document.addEventListener('mousedown', onDoc);
+    document.addEventListener('keydown', onEsc);
+    return () => {
+      window.removeEventListener('scroll', place, true);
+      window.removeEventListener('resize', place);
+      document.removeEventListener('mousedown', onDoc);
+      document.removeEventListener('keydown', onEsc);
+    };
+  }, [open]);
+
+  const q = value.trim().toLowerCase();
+  const matches = q ? options.filter((o) => o.name.toLowerCase().includes(q)) : options;
+
+  return (
+    <div ref={wrapRef} className="relative min-w-0 flex-1">
+      <input
+        ref={inputRef}
+        value={value}
+        onChange={(e) => {
+          onChange(e.target.value);
+          setOpen(true);
+        }}
+        onFocus={() => setOpen(true)}
+        placeholder="เลือกหรือพิมพ์ชื่อ-นามสกุล"
+        className="w-full rounded-lg border border-slate-300 px-3 py-1.5 text-sm focus:border-mfu-primary focus:outline-none"
+      />
+      {open && matches.length > 0 && box && (
+        <ul
+          style={{
+            position: 'fixed',
+            left: box.left,
+            top: box.top,
+            width: box.width,
+            maxHeight: box.maxHeight,
+            transform: box.flip ? 'translateY(-100%)' : undefined,
+          }}
+          className="z-50 overflow-y-auto rounded-lg border border-slate-200 bg-white py-1 text-sm shadow-lg"
+        >
+          {matches.map((o, idx) => (
+            <li key={`${o.id}-${o.name}-${idx}`}>
+              <button
+                type="button"
+                // onMouseDown fires before the input's blur, so the click lands.
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  onChange(o.name);
+                  setOpen(false);
+                }}
+                className="block w-full px-3 py-1.5 text-left text-slate-700 hover:bg-slate-50"
+              >
+                {o.name}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 const DEFAULT_COMMITTEE: { name: string; role: string }[] = [
   { name: '', role: 'ประธานกรรมการ' },
   { name: '', role: 'กรรมการ' },
@@ -1089,18 +1200,11 @@ function CreateReportModal({
             <div className="mt-2 space-y-2">
               {committee.map((m, i) => (
                 <div key={i} className="flex items-center gap-2">
-                  <input
-                    list={`committee-opts-${i}`}
+                  <CommitteeNameInput
                     value={m.name}
-                    onChange={(e) => setMember(i, 'name', e.target.value)}
-                    placeholder="เลือกหรือพิมพ์ชื่อ-นามสกุล"
-                    className="min-w-0 flex-1 rounded-lg border border-slate-300 px-3 py-1.5 text-sm focus:border-mfu-primary focus:outline-none"
+                    options={optionsFor(i)}
+                    onChange={(name) => setMember(i, 'name', name)}
                   />
-                  <datalist id={`committee-opts-${i}`}>
-                    {optionsFor(i).map((o) => (
-                      <option key={o.id} value={o.name} />
-                    ))}
-                  </datalist>
                   <select
                     value={m.role}
                     onChange={(e) => setMember(i, 'role', e.target.value)}
