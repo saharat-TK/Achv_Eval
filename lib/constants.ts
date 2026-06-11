@@ -128,6 +128,37 @@ export const RUBRIC_TOPICS: { key: string; number: string; labelTh: string }[] =
  *  report may be created — applies to both a semester and a whole year. */
 export const REPORT_THRESHOLD = 0.25;
 
+/** Allowed committee positions for an assessment summary report. */
+export const COMMITTEE_ROLES = [
+  'ประธานกรรมการ',
+  'กรรมการ',
+  'กรรมการและเลขานุการ',
+  'ผู้ทรงคุณวุฒิ',
+] as const;
+
+const THAI_WEEKDAYS = ['อาทิตย์', 'จันทร์', 'อังคาร', 'พุธ', 'พฤหัสบดี', 'ศุกร์', 'เสาร์'];
+const THAI_MONTHS = [
+  'มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน',
+  'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม',
+];
+
+/**
+ * Formats a meeting date + time range into the official Thai display string,
+ * e.g. "วันศุกร์ที่ 12 มิถุนายน 2569 เวลา 13:00-16:00 น." from a Gregorian
+ * `yyyy-mm-dd` date and `HH:mm` times. Built from name arrays (not Intl) so the
+ * client preview and the server action produce identical output. Empty date → ''.
+ */
+export function formatThaiMeeting(dateISO: string, start: string, end: string): string {
+  if (!dateISO) return '';
+  const [y, m, d] = dateISO.split('-').map(Number);
+  if (!y || !m || !d) return '';
+  // UTC so the weekday can't shift across the local timezone boundary.
+  const weekday = THAI_WEEKDAYS[new Date(Date.UTC(y, m - 1, d)).getUTCDay()];
+  const datePart = `วัน${weekday}ที่ ${d} ${THAI_MONTHS[m - 1]} ${y + 543}`;
+  const timePart = start && end ? ` เวลา ${start}-${end} น.` : start ? ` เวลา ${start} น.` : '';
+  return datePart + timePart;
+}
+
 export const REPORT_STATUS_TH: Record<AiReportStatus, string> = {
   queued: 'รอดำเนินการ',
   running: 'กำลังวิเคราะห์',

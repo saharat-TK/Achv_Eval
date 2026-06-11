@@ -15,7 +15,12 @@ import {
 } from '@/lib/types/models';
 import { httpsCallable } from 'firebase/functions';
 import { getFirebaseAuth, getFirebaseFunctions } from '@/lib/firebase/config';
-import { SEMESTER_LABEL, REPORT_THRESHOLD } from '@/lib/constants';
+import {
+  COMMITTEE_ROLES,
+  REPORT_THRESHOLD,
+  SEMESTER_LABEL,
+  formatThaiMeeting,
+} from '@/lib/constants';
 import StatusBadge from '@/components/StatusBadge';
 import {
   createAssessmentReport,
@@ -110,17 +115,24 @@ interface YearGroup {
   semesters: SemGroup[];
 }
 
+export interface CommitteeOption {
+  id: string;
+  name: string;
+}
+
 export default function AssessmentReportsClient({
   offerings,
   reports,
   courseReportLinks,
   isAdmin,
+  committeeOptions,
   academicPrograms,
 }: {
   offerings: ManagedOffering[];
   reports: ReportSummary[];
   courseReportLinks: Record<string, CourseReportLinks>;
   isAdmin: boolean;
+  committeeOptions: CommitteeOption[];
   academicPrograms: ProgramOpt[];
 }) {
   const router = useRouter();
@@ -478,6 +490,7 @@ export default function AssessmentReportsClient({
       {createTarget && (
         <CreateReportModal
           target={createTarget}
+          committeeOptions={committeeOptions}
           onClose={() => setCreateTarget(null)}
           onCreated={(reportId) => handleCreated(createTarget, reportId)}
         />
@@ -907,6 +920,117 @@ function ConfirmDialog({
   );
 }
 
+/** Combobox for a committee member's name: free-text input plus a scrollable
+ *  suggestion list (sized to ~10 rows) drawn from the user/allowlist roster. */
+function CommitteeNameInput({
+  value,
+  options,
+  onChange,
+}: {
+  value: string;
+  options: CommitteeOption[];
+  onChange: (name: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  // Fixed-position box anchored to the input — escapes the modal's overflow
+  // clip (an absolute dropdown gets cut off at the card edge).
+  const [box, setBox] = useState<{
+    left: number;
+    top: number;
+    width: number;
+    maxHeight: number;
+    flip: boolean;
+  } | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const place = () => {
+      const el = inputRef.current;
+      if (!el) return;
+      const r = el.getBoundingClientRect();
+      const gap = 4;
+      const margin = 8;
+      const spaceBelow = window.innerHeight - r.bottom - margin;
+      const spaceAbove = r.top - margin;
+      const flip = spaceBelow < 200 && spaceAbove > spaceBelow;
+      const avail = flip ? spaceAbove : spaceBelow;
+      setBox({
+        left: r.left,
+        width: r.width,
+        top: flip ? r.top - gap : r.bottom + gap,
+        maxHeight: Math.max(120, Math.min(320, avail)), // ~10 rows, capped to fit
+        flip,
+      });
+    };
+    place();
+    window.addEventListener('scroll', place, true); // capture: track modal scroll
+    window.addEventListener('resize', place);
+    const onDoc = (e: MouseEvent) => {
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false);
+    };
+    const onEsc = (e: KeyboardEvent) => e.key === 'Escape' && setOpen(false);
+    document.addEventListener('mousedown', onDoc);
+    document.addEventListener('keydown', onEsc);
+    return () => {
+      window.removeEventListener('scroll', place, true);
+      window.removeEventListener('resize', place);
+      document.removeEventListener('mousedown', onDoc);
+      document.removeEventListener('keydown', onEsc);
+    };
+  }, [open]);
+
+  const q = value.trim().toLowerCase();
+  const matches = q ? options.filter((o) => o.name.toLowerCase().includes(q)) : options;
+
+  return (
+    <div ref={wrapRef} className="relative min-w-0 flex-1">
+      <input
+        ref={inputRef}
+        value={value}
+        onChange={(e) => {
+          onChange(e.target.value);
+          setOpen(true);
+        }}
+        onFocus={() => setOpen(true)}
+        placeholder="เลือกหรือพิมพ์ชื่อ-นามสกุล"
+        className="w-full rounded-lg border border-slate-300 px-3 py-1.5 text-sm focus:border-mfu-primary focus:outline-none"
+      />
+      {open && matches.length > 0 && box && (
+        <ul
+          style={{
+            position: 'fixed',
+            left: box.left,
+            top: box.top,
+            width: box.width,
+            maxHeight: box.maxHeight,
+            transform: box.flip ? 'translateY(-100%)' : undefined,
+          }}
+          className="z-50 overflow-y-auto rounded-lg border border-slate-200 bg-white py-1 text-sm shadow-lg"
+        >
+          {matches.map((o, idx) => (
+            <li key={`${o.id}-${o.name}-${idx}`}>
+              <button
+                type="button"
+                // onMouseDown fires before the input's blur, so the click lands.
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  onChange(o.name);
+                  setOpen(false);
+                }}
+                className="block w-full px-3 py-1.5 text-left text-slate-700 hover:bg-slate-50"
+              >
+                {o.name}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 const DEFAULT_COMMITTEE: { name: string; role: string }[] = [
   { name: '', role: 'ประธานกรรมการ' },
   { name: '', role: 'กรรมการ' },
@@ -915,15 +1039,19 @@ const DEFAULT_COMMITTEE: { name: string; role: string }[] = [
 
 function CreateReportModal({
   target,
+  committeeOptions,
   onClose,
   onCreated,
 }: {
   target: CreateTarget;
+  committeeOptions: CommitteeOption[];
   onClose: () => void;
   onCreated: (reportId: string) => void;
 }) {
   const [venue, setVenue] = useState('');
-  const [meetingDateTime, setMeetingDateTime] = useState('');
+  const [meetingDate, setMeetingDate] = useState('');
+  const [startTime, setStartTime] = useState('');
+  const [endTime, setEndTime] = useState('');
   const [committee, setCommittee] = useState(DEFAULT_COMMITTEE);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -931,7 +1059,32 @@ function CreateReportModal({
   // director only gets one generation per row.
   const [confirming, setConfirming] = useState(false);
   const [confirmText, setConfirmText] = useState('');
-  const hasMember = committee.some((m) => m.name.trim().length > 0);
+
+  const meetingPreview = formatThaiMeeting(meetingDate, startTime, endTime);
+  const filledNames = committee.map((m) => m.name.trim()).filter(Boolean);
+  const hasMember = filledNames.length > 0;
+  const hasDuplicate =
+    new Set(filledNames.map((n) => n.toLowerCase())).size !== filledNames.length;
+  const timeInvalid = !!startTime && !!endTime && endTime <= startTime;
+  const blockReason = !hasMember
+    ? 'กรุณาระบุรายชื่อคณะกรรมการอย่างน้อย 1 คน'
+    : hasDuplicate
+      ? 'มีรายชื่อคณะกรรมการซ้ำกัน'
+      : timeInvalid
+        ? 'เวลาสิ้นสุดต้องอยู่หลังเวลาเริ่ม'
+        : undefined;
+
+  // Directory names already chosen in other rows are hidden from a row's
+  // suggestions (the row keeps its own value; free-typed names are allowed).
+  function optionsFor(rowIndex: number): CommitteeOption[] {
+    const chosenElsewhere = new Set(
+      committee
+        .filter((_, idx) => idx !== rowIndex)
+        .map((m) => m.name.trim())
+        .filter(Boolean),
+    );
+    return committeeOptions.filter((o) => !chosenElsewhere.has(o.name));
+  }
 
   function setMember(i: number, field: 'name' | 'role', value: string) {
     setCommittee((prev) => prev.map((m, idx) => (idx === i ? { ...m, [field]: value } : m)));
@@ -947,13 +1100,28 @@ function CreateReportModal({
     setBusy(true);
     setError(null);
     try {
+      // Attach the directory uid when a name matches an option exactly.
+      const byName = new Map(committeeOptions.map((o) => [o.name, o.id]));
+      const committeePayload = committee
+        .map((m) => {
+          const name = m.name.trim();
+          const uid = byName.get(name);
+          return { name, role: m.role, ...(uid ? { uid } : {}) };
+        })
+        .filter((m) => m.name.length > 0);
       const res = await createAssessmentReport({
         academicProgramId: target.academicProgramId,
         coverage: target.coverage,
         academicYear: target.academicYear,
         scope: target.scope,
         semester: target.semester,
-        header: { venue, meetingDateTime, committee },
+        header: {
+          venue,
+          meetingDate,
+          meetingStartTime: startTime,
+          meetingEndTime: endTime,
+          committee: committeePayload,
+        },
       });
       if (!res.ok) {
         setError(res.error);
@@ -976,15 +1144,38 @@ function CreateReportModal({
         <p className="mt-1 text-xs text-slate-500">{target.label}</p>
 
         <div className="mt-4 space-y-3">
-          <label className="block text-xs font-medium text-slate-600">
-            สถานที่และวันเวลาประชุม
-            <input
-              value={meetingDateTime}
-              onChange={(e) => setMeetingDateTime(e.target.value)}
-              placeholder="เช่น วันศุกร์ที่ 5 กุมภาพันธ์ 2567 เวลา 16.00-17.00 น."
-              className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-mfu-primary focus:outline-none"
-            />
-          </label>
+          <div>
+            <span className="block text-xs font-medium text-slate-600">วันและเวลาประชุม</span>
+            <div className="mt-1 flex flex-wrap items-center gap-2">
+              <input
+                type="date"
+                value={meetingDate}
+                onChange={(e) => setMeetingDate(e.target.value)}
+                className="rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-mfu-primary focus:outline-none"
+              />
+              <span className="text-xs text-slate-500">เวลา</span>
+              <input
+                type="time"
+                value={startTime}
+                onChange={(e) => setStartTime(e.target.value)}
+                className="rounded-lg border border-slate-300 px-2 py-2 text-sm focus:border-mfu-primary focus:outline-none"
+              />
+              <span className="text-xs text-slate-400">–</span>
+              <input
+                type="time"
+                value={endTime}
+                onChange={(e) => setEndTime(e.target.value)}
+                className="rounded-lg border border-slate-300 px-2 py-2 text-sm focus:border-mfu-primary focus:outline-none"
+              />
+              <span className="text-xs text-slate-400">น.</span>
+            </div>
+            {meetingPreview && (
+              <p className="mt-1 text-xs text-slate-500">{meetingPreview}</p>
+            )}
+            {timeInvalid && (
+              <p className="mt-1 text-xs text-red-600">เวลาสิ้นสุดต้องอยู่หลังเวลาเริ่ม</p>
+            )}
+          </div>
           <label className="block text-xs font-medium text-slate-600">
             ณ สถานที่
             <input
@@ -1009,18 +1200,22 @@ function CreateReportModal({
             <div className="mt-2 space-y-2">
               {committee.map((m, i) => (
                 <div key={i} className="flex items-center gap-2">
-                  <input
+                  <CommitteeNameInput
                     value={m.name}
-                    onChange={(e) => setMember(i, 'name', e.target.value)}
-                    placeholder="ชื่อ-นามสกุล"
-                    className="min-w-0 flex-1 rounded-lg border border-slate-300 px-3 py-1.5 text-sm focus:border-mfu-primary focus:outline-none"
+                    options={optionsFor(i)}
+                    onChange={(name) => setMember(i, 'name', name)}
                   />
-                  <input
+                  <select
                     value={m.role}
                     onChange={(e) => setMember(i, 'role', e.target.value)}
-                    placeholder="ตำแหน่ง"
-                    className="w-40 shrink-0 rounded-lg border border-slate-300 px-3 py-1.5 text-sm focus:border-mfu-primary focus:outline-none"
-                  />
+                    className="w-44 shrink-0 rounded-lg border border-slate-300 px-2 py-1.5 text-sm focus:border-mfu-primary focus:outline-none"
+                  >
+                    {COMMITTEE_ROLES.map((r) => (
+                      <option key={r} value={r}>
+                        {r}
+                      </option>
+                    ))}
+                  </select>
                   <button
                     type="button"
                     onClick={() => removeMember(i)}
@@ -1032,6 +1227,9 @@ function CreateReportModal({
                 </div>
               ))}
             </div>
+            {hasDuplicate && (
+              <p className="mt-1.5 text-xs text-red-600">มีรายชื่อคณะกรรมการซ้ำกัน</p>
+            )}
           </div>
         </div>
 
@@ -1050,8 +1248,8 @@ function CreateReportModal({
             <button
               type="button"
               onClick={() => setConfirming(true)}
-              disabled={!hasMember}
-              title={hasMember ? undefined : 'กรุณาระบุรายชื่อคณะกรรมการอย่างน้อย 1 คน'}
+              disabled={!!blockReason}
+              title={blockReason}
               className="rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-100 disabled:cursor-not-allowed disabled:border-slate-300 disabled:bg-slate-100 disabled:text-slate-400"
             >
               สร้างรายงาน

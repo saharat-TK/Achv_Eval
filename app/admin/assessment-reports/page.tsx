@@ -8,6 +8,8 @@ import {
   getCourseReportLinks,
   getReportsForAcademicPrograms,
 } from '@/lib/data/assessmentReports';
+import { getAllUsers } from '@/lib/data/users';
+import { getAllAllowlistEntries } from '@/lib/data/allowlist';
 import { ALL_PROGRAMS_ID } from '@/lib/types/models';
 import AssessmentReportsClient from '@/components/AssessmentReportsClient';
 
@@ -30,11 +32,31 @@ export default async function AssessmentReportsPage() {
   const reportScopeIds = isAdmin
     ? [...academicProgramIds, ALL_PROGRAMS_ID]
     : academicProgramIds;
-  const [offerings, reports] = await Promise.all([
+  const [offerings, reports, users, allowlist] = await Promise.all([
     getOfferingsForAcademicPrograms(academicProgramIds),
     getReportsForAcademicPrograms(reportScopeIds),
+    getAllUsers(),
+    getAllAllowlistEntries(),
   ]);
   const courseReportLinks = await getCourseReportLinks(offerings);
+
+  // Committee combobox roster = signed-in users + allowlisted faculty who have
+  // not signed in yet (most of the directory lives in `allowlist` until first
+  // sign-in). Deduped by email; signed-in users win since they carry a title
+  // and a uid for traceability, while allowlist entries contribute name only.
+  const committeeByEmail = new Map<string, { id: string; name: string }>();
+  for (const a of allowlist) {
+    const email = a.email?.toLowerCase();
+    const name = (a.nameTh ?? '').trim();
+    if (email && name) committeeByEmail.set(email, { id: '', name });
+  }
+  for (const u of users) {
+    const name = `${u.titleTh ? `${u.titleTh} ` : ''}${u.nameTh ?? ''}`.trim();
+    if (name) committeeByEmail.set(u.email?.toLowerCase() ?? u.id, { id: u.id, name });
+  }
+  const committeeOptions = [...committeeByEmail.values()]
+    .filter((o) => o.name.length > 0)
+    .sort((a, b) => a.name.localeCompare(b.name, 'th'));
 
   return (
     <div>
@@ -49,6 +71,7 @@ export default async function AssessmentReportsPage() {
         reports={reports}
         courseReportLinks={courseReportLinks}
         isAdmin={isAdmin}
+        committeeOptions={committeeOptions}
         academicPrograms={programs.map((p) => ({
           id: p.id,
           code: p.code,

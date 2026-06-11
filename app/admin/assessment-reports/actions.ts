@@ -4,7 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { FieldValue } from 'firebase-admin/firestore';
 import { getAdminDb, getAdminStorage } from '@/lib/firebase/admin';
 import { getSessionUser, getCurrentProfile } from '@/lib/firebase/auth-server';
-import { REPORT_THRESHOLD } from '@/lib/constants';
+import { COMMITTEE_ROLES, REPORT_THRESHOLD, formatThaiMeeting } from '@/lib/constants';
 import {
   academicProgramLabel,
   buildAllProgramsSnapshot,
@@ -31,7 +31,9 @@ export interface CreateReportInput {
   semester: Semester | null;
   header: {
     venue: string;
-    meetingDateTime: string;
+    meetingDate: string; // yyyy-mm-dd (Gregorian)
+    meetingStartTime: string; // HH:mm
+    meetingEndTime: string; // HH:mm
     committee: ReportCommitteeMember[];
   };
 }
@@ -79,10 +81,25 @@ export async function createAssessmentReport(
     return { ok: false, error: 'กรุณาระบุภาคการศึกษา' };
 
   const committee = input.header.committee
-    .map((m) => ({ name: m.name.trim(), role: m.role.trim() }))
+    .map((m) => ({
+      name: m.name.trim(),
+      role: m.role.trim(),
+      ...(m.uid ? { uid: m.uid } : {}),
+    }))
     .filter((m) => m.name.length > 0);
   if (committee.length === 0)
     return { ok: false, error: 'กรุณาระบุรายชื่อคณะกรรมการอย่างน้อย 1 คน' };
+  if (committee.some((m) => !(COMMITTEE_ROLES as readonly string[]).includes(m.role)))
+    return { ok: false, error: 'ตำแหน่งคณะกรรมการไม่ถูกต้อง' };
+  const names = committee.map((m) => m.name.toLowerCase());
+  if (new Set(names).size !== names.length)
+    return { ok: false, error: 'มีรายชื่อคณะกรรมการซ้ำกัน กรุณาตรวจสอบอีกครั้ง' };
+
+  const meetingDateTime = formatThaiMeeting(
+    input.header.meetingDate,
+    input.header.meetingStartTime,
+    input.header.meetingEndTime,
+  );
 
   const semester = input.scope === 'annual' ? null : input.semester;
   const academicProgramId = coverage === 'all' ? ALL_PROGRAMS_ID : input.academicProgramId;
@@ -144,7 +161,14 @@ export async function createAssessmentReport(
       academicYear: input.academicYear,
       scope: input.scope,
       semester,
-      header: { venue: input.header.venue.trim(), meetingDateTime: input.header.meetingDateTime.trim(), committee },
+      header: {
+        venue: input.header.venue.trim(),
+        meetingDateTime,
+        meetingDate: input.header.meetingDate,
+        meetingStartTime: input.header.meetingStartTime,
+        meetingEndTime: input.header.meetingEndTime,
+        committee,
+      },
       snapshot,
       // A report now exists for this row — lock directors to one generation.
       directorLocked: true,
