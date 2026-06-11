@@ -56,12 +56,28 @@ export default async function AdminLayout({
               >
                 แดชบอร์ด
               </Link>
-              {profile.roles.isAdmin && (
+              {(profile.roles.isAdmin ||
+                (profile.roles.directorOfAcademicPrograms?.length ?? 0) > 0) && (
                 <Link
-                  href="/admin/departments"
+                  href="/admin/assessment-reports"
                   className="border-b-2 border-transparent py-3 text-slate-600 hover:border-mfu-primary hover:text-mfu-primary"
                 >
-                  สาขาวิชา
+                  รายงานการทวนสอบ
+                </Link>
+              )}
+              <Link
+                href="/verification"
+                className="border-b-2 border-transparent py-3 text-slate-600 hover:border-mfu-primary hover:text-mfu-primary"
+              >
+                รับรองผล
+              </Link>
+              {(profile.roles.isAdmin ||
+                (profile.roles.directorOfAcademicPrograms?.length ?? 0) > 0) && (
+                <Link
+                  href="/admin/offering-manager"
+                  className="border-b-2 border-transparent py-3 text-slate-600 hover:border-mfu-primary hover:text-mfu-primary"
+                >
+                  จัดการการเปิดสอน
                 </Link>
               )}
               {profile.roles.isAdmin ? (
@@ -79,30 +95,14 @@ export default async function AdminLayout({
                   หลักสูตร
                 </Link>
               )}
-              {(profile.roles.isAdmin ||
-                (profile.roles.directorOfAcademicPrograms?.length ?? 0) > 0) && (
+              {profile.roles.isAdmin && (
                 <Link
-                  href="/admin/offering-manager"
+                  href="/admin/departments"
                   className="border-b-2 border-transparent py-3 text-slate-600 hover:border-mfu-primary hover:text-mfu-primary"
                 >
-                  จัดการการเปิดสอน
+                  สาขาวิชา
                 </Link>
               )}
-              {(profile.roles.isAdmin ||
-                (profile.roles.directorOfAcademicPrograms?.length ?? 0) > 0) && (
-                <Link
-                  href="/admin/assessment-reports"
-                  className="border-b-2 border-transparent py-3 text-slate-600 hover:border-mfu-primary hover:text-mfu-primary"
-                >
-                  รายงานการทวนสอบ
-                </Link>
-              )}
-              <Link
-                href="/verification"
-                className="border-b-2 border-transparent py-3 text-slate-600 hover:border-mfu-primary hover:text-mfu-primary"
-              >
-                รับรองผล
-              </Link>
               {profile.roles.isAdmin && (
                 <Link
                   href="/admin/users"
