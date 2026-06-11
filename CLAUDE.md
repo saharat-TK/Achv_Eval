@@ -8,6 +8,17 @@ This file is the orientation for the app. The full evaluation *methodology*
 lives in `functions/prompts/CLAUDE.master.md` / `CLAUDE.undergrad.md` — read
 those only when changing the AI analysis behavior.
 
+## Design Context
+
+`PRODUCT.md` (repo root) is the design source of truth — read it before UI work.
+Register: **product** (design serves the task). Personality: **calm, trustworthy,
+efficient** — quiet institutional confidence, Thai-first, restrained. Principles:
+the tool disappears into the task; trust the record (official documents, deliberate
+destructive actions); built for non-technical Thai-reading faculty; status always
+legible as text, not color alone; restrained — one green accent on neutral surfaces.
+A11y targets: WCAG AA contrast, Thai (Sarabun) readability, reduced motion. Visual
+tokens live in `docs/THEME.md` (and `DESIGN.md` once generated).
+
 ## Stack
 
 Next.js 14 (App Router, TypeScript) · Firebase Auth (Google SSO, `@mfu.ac.th`) ·
