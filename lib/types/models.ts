@@ -147,8 +147,35 @@ export interface AcademicProgramDoc {
   /** The department this program belongs to. */
   departmentId?: string | null;
   isActive: boolean;
+  /** Standing assessment-verification committee for this program (added 2026-06). */
+  assessmentCommittee?: AssessmentCommittee | null;
   createdAt: Ts;
   updatedAt: Ts;
+}
+
+/**
+ * One person on a program's assessment-verification committee. Directory picks
+ * carry a `uid` (a real user) or `allowlistId` (pending sign-in) for traceability
+ * and access-granting; free-typed external assessors carry only a name.
+ */
+export interface AssessmentCommitteeMember {
+  name: string;
+  uid?: string;
+  allowlistId?: string;
+}
+
+/**
+ * Standing assessment committee per academic program. Internal roles
+ * (head, internal assessors, secretary) also grant `assessorOfAcademicPrograms`
+ * access; external assessors are recorded names only.
+ */
+export interface AssessmentCommittee {
+  headAssessor: AssessmentCommitteeMember | null; // ประธานผู้ทวนสอบ
+  externalAssessors: AssessmentCommitteeMember[]; // ผู้ทวนสอบภายนอก (≤3)
+  internalAssessors: AssessmentCommitteeMember[]; // ผู้ทวนสอบภายใน (program lecturers)
+  secretary: AssessmentCommitteeMember | null; // ผู้ทวนสอบภายในและเลขานุการ
+  updatedAt?: Ts;
+  updatedBy?: string;
 }
 
 /**
@@ -211,6 +238,9 @@ export interface AllowlistDoc {
   presetDirectorAcademicProgramIds?: string[];
   /** Academic-program ids expanded to `roles.lecturerOf` when this pending user first signs in. */
   presetLecturerAcademicProgramIds?: string[];
+  /** Academic-program ids applied to `roles.assessorOfAcademicPrograms` on first sign-in
+   *  (set when a pending user is placed on a program's assessment committee). */
+  presetAssessorAcademicProgramIds?: string[];
   addedBy: string; // admin uid
   addedAt: Ts;
   consumedAt?: Ts | null;

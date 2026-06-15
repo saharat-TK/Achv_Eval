@@ -124,6 +124,7 @@ export async function POST(request: NextRequest) {
         presetDirectorProgramId?: string | null;
         presetDirectorAcademicProgramIds?: string[];
         presetLecturerAcademicProgramIds?: string[];
+        presetAssessorAcademicProgramIds?: string[];
       };
       const fallback = decoded.email!.split('@')[0] ?? decoded.email!;
       // Apply preset roles. Lecturer defaults true. Older allowlist rows may
@@ -182,6 +183,10 @@ export async function POST(request: NextRequest) {
       ].sort((a, b) => a.localeCompare(b));
       const lecturerOf = await expandAcademicPrograms(lecturerOfAcademicPrograms);
       const isLecturer = allow.presetIsLecturer !== false || lecturerOf.length > 0;
+      // Assessment-committee placements made while this user was still pending.
+      const assessorOfAcademicPrograms = [
+        ...new Set((allow.presetAssessorAcademicProgramIds ?? []).filter(Boolean)),
+      ].sort((a, b) => a.localeCompare(b));
       await userRef.set({
         email: decoded.email,
         nameTh: allow.nameTh?.trim() || fallback,
@@ -196,7 +201,7 @@ export async function POST(request: NextRequest) {
           verifierOf: [],
           lecturerOf,
           directorOfAcademicPrograms,
-          assessorOfAcademicPrograms: [],
+          assessorOfAcademicPrograms,
           verifierOfAcademicPrograms: [],
         },
         createdAt: FieldValue.serverTimestamp(),

@@ -4,22 +4,14 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { updateUserRoles, type UserRolesData } from '@/app/admin/users/actions';
 
-export interface AcademicProgramOption {
-  id: string;
-  code: string;
-  nameTh: string;
-}
-
 export default function UserRolesEditor({
   userId,
   isSelf,
-  academicPrograms,
   initial,
   canManageAdmins = false,
 }: {
   userId: string;
   isSelf: boolean;
-  academicPrograms: AcademicProgramOption[];
   initial: UserRolesData;
   /** Whether the viewer is a super admin — gates the admin checkboxes. */
   canManageAdmins?: boolean;
@@ -28,15 +20,6 @@ export default function UserRolesEditor({
   const [isSuperAdmin, setIsSuperAdmin] = useState(initial.isSuperAdmin);
   const [isAdmin, setIsAdmin] = useState(initial.isAdmin);
   const [isLecturer, setIsLecturer] = useState(initial.isLecturer);
-  const [directorOfAcademicPrograms, setDirectorOfAcademicPrograms] = useState<
-    string[]
-  >(initial.directorOfAcademicPrograms);
-  const [assessorOfAcademicPrograms, setAssessorOfAcademicPrograms] = useState<
-    string[]
-  >(initial.assessorOfAcademicPrograms);
-  const [verifierOfAcademicPrograms, setVerifierOfAcademicPrograms] = useState<
-    string[]
-  >(initial.verifierOfAcademicPrograms);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
@@ -45,21 +28,10 @@ export default function UserRolesEditor({
   const targetIsAdmin = initial.isAdmin || initial.isSuperAdmin;
   const locked = !canManageAdmins && targetIsAdmin;
 
-  function toggle(list: string[], id: string): string[] {
-    return list.includes(id) ? list.filter((x) => x !== id) : [...list, id];
-  }
-
   async function save() {
     setBusy(true);
     setMsg(null);
-    const res = await updateUserRoles(userId, {
-      isSuperAdmin,
-      isAdmin,
-      isLecturer,
-      directorOfAcademicPrograms,
-      assessorOfAcademicPrograms,
-      verifierOfAcademicPrograms,
-    });
+    const res = await updateUserRoles(userId, { isSuperAdmin, isAdmin, isLecturer });
     setBusy(false);
     if (res.ok) {
       setMsg({ ok: true, text: 'บันทึกสิทธิ์เรียบร้อย' });
@@ -147,35 +119,10 @@ export default function UserRolesEditor({
         </p>
       </section>
 
-      {/* Director */}
-      <RoleAcademicProgramPicker
-        title="ประธานหลักสูตร"
-        hint="จัดการเล่มหลักสูตร รายวิชา และรายวิชาที่เปิดสอนทั้งหมดภายใต้หลักสูตรที่เลือก"
-        academicPrograms={academicPrograms}
-        selected={directorOfAcademicPrograms}
-        disabled={locked}
-        onToggle={(id) => setDirectorOfAcademicPrograms((l) => toggle(l, id))}
-      />
-
-      {/* Assessor */}
-      <RoleAcademicProgramPicker
-        title="ผู้ทวนสอบ"
-        hint="ทวนสอบรายวิชาในทุกเล่มหลักสูตรภายใต้หลักสูตรที่เลือก"
-        academicPrograms={academicPrograms}
-        selected={assessorOfAcademicPrograms}
-        disabled={locked}
-        onToggle={(id) => setAssessorOfAcademicPrograms((l) => toggle(l, id))}
-      />
-
-      {/* Verification committee */}
-      <RoleAcademicProgramPicker
-        title="คณะกรรมการรับรองผล"
-        hint="ตรวจรับรองผลหลังผู้ทวนสอบลงนาม และกำหนดรายการที่ต้องติดตาม"
-        academicPrograms={academicPrograms}
-        selected={verifierOfAcademicPrograms}
-        disabled={locked}
-        onToggle={(id) => setVerifierOfAcademicPrograms((l) => toggle(l, id))}
-      />
+      <p className="text-xs text-slate-500">
+        สิทธิ์ประธานหลักสูตร ผู้ทวนสอบ และคณะกรรมการรับรองผล กำหนดได้จากแท็บที่เกี่ยวข้อง
+        (มอบหมายอาจารย์ประจำหลักสูตร และคณะกรรมการทวนสอบ)
+      </p>
 
       {msg && (
         <p className={`text-sm ${msg.ok ? 'text-green-700' : 'text-red-600'}`}>
@@ -191,50 +138,5 @@ export default function UserRolesEditor({
         {busy ? 'กำลังบันทึก…' : 'บันทึกสิทธิ์'}
       </button>
     </div>
-  );
-}
-
-function RoleAcademicProgramPicker({
-  title,
-  hint,
-  academicPrograms,
-  selected,
-  onToggle,
-  disabled = false,
-}: {
-  title: string;
-  hint: string;
-  academicPrograms: AcademicProgramOption[];
-  selected: string[];
-  onToggle: (id: string) => void;
-  disabled?: boolean;
-}) {
-  return (
-    <section className="rounded-xl border border-slate-200 bg-white p-5">
-      <h2 className="text-sm font-semibold text-slate-700">{title}</h2>
-      <p className="mt-1 text-xs text-slate-500">{hint}</p>
-      {academicPrograms.length === 0 ? (
-        <p className="mt-3 text-sm text-slate-400">ยังไม่มีหลักสูตรในระบบ</p>
-      ) : (
-        <div className="mt-3 space-y-2">
-          {academicPrograms.map((p) => (
-            <label
-              key={p.id}
-              className={`flex items-center gap-2 text-sm ${
-                disabled ? 'text-slate-400' : 'text-slate-700'
-              }`}
-            >
-              <input
-                type="checkbox"
-                checked={selected.includes(p.id)}
-                disabled={disabled}
-                onChange={() => onToggle(p.id)}
-              />
-              <span className="font-medium">{p.code}</span> — {p.nameTh}
-            </label>
-          ))}
-        </div>
-      )}
-    </section>
   );
 }

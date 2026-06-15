@@ -2,8 +2,6 @@ import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import { getCurrentProfile, getSessionUser } from '@/lib/firebase/auth-server';
 import { getUser } from '@/lib/data/users';
-import { getAllAcademicPrograms } from '@/lib/data/academicPrograms';
-import { getAllPrograms } from '@/lib/data/programs';
 import UserRolesEditor from '@/components/UserRolesEditor';
 import UserActiveToggle from '@/components/UserActiveToggle';
 
@@ -18,11 +16,9 @@ export default async function ManageUserRolesPage({
   if (!profile) redirect('/login');
   if (!profile.roles.isAdmin) redirect('/admin');
 
-  const [actor, target, academicPrograms, curriculums] = await Promise.all([
+  const [actor, target] = await Promise.all([
     getSessionUser(),
     getUser(params.userId),
-    getAllAcademicPrograms(),
-    getAllPrograms(),
   ]);
   if (!target) notFound();
 
@@ -30,23 +26,6 @@ export default async function ManageUserRolesPage({
   const targetIsAdmin =
     target.roles?.isAdmin === true || target.roles?.isSuperAdmin === true;
   const activeLocked = targetIsAdmin && !canManageAdmins;
-  const curriculumToAcademicProgram = new Map(
-    curriculums.map((program) => [program.id, program.parentProgramId ?? null]),
-  );
-
-  function academicRoleIds(
-    nextIds: string[] | undefined,
-    legacyCurriculumIds: string[] | undefined,
-  ): string[] {
-    if (nextIds?.length) return [...new Set(nextIds.filter(Boolean))];
-    return [
-      ...new Set(
-        (legacyCurriculumIds ?? [])
-          .map((id) => curriculumToAcademicProgram.get(id))
-          .filter((id): id is string => Boolean(id)),
-      ),
-    ];
-  }
 
   return (
     <div>
@@ -69,27 +48,10 @@ export default async function ManageUserRolesPage({
           userId={target.id}
           isSelf={actor?.uid === target.id}
           canManageAdmins={canManageAdmins}
-          academicPrograms={academicPrograms.map((p) => ({
-            id: p.id,
-            code: p.code,
-            nameTh: p.nameTh,
-          }))}
           initial={{
             isSuperAdmin: target.roles?.isSuperAdmin ?? false,
             isAdmin: target.roles?.isAdmin ?? false,
             isLecturer: target.roles?.isLecturer ?? false,
-            directorOfAcademicPrograms: academicRoleIds(
-              target.roles?.directorOfAcademicPrograms,
-              target.roles?.directorOf,
-            ),
-            assessorOfAcademicPrograms: academicRoleIds(
-              target.roles?.assessorOfAcademicPrograms,
-              target.roles?.assessorOf,
-            ),
-            verifierOfAcademicPrograms: academicRoleIds(
-              target.roles?.verifierOfAcademicPrograms,
-              target.roles?.verifierOf,
-            ),
           }}
         />
       </div>
