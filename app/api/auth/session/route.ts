@@ -125,6 +125,7 @@ export async function POST(request: NextRequest) {
         presetDirectorAcademicProgramIds?: string[];
         presetLecturerAcademicProgramIds?: string[];
         presetAssessorAcademicProgramIds?: string[];
+        presetVerifierAcademicProgramIds?: string[];
       };
       const fallback = decoded.email!.split('@')[0] ?? decoded.email!;
       // Apply preset roles. Lecturer defaults true. Older allowlist rows may
@@ -187,6 +188,13 @@ export async function POST(request: NextRequest) {
       const assessorOfAcademicPrograms = [
         ...new Set((allow.presetAssessorAcademicProgramIds ?? []).filter(Boolean)),
       ].sort((a, b) => a.localeCompare(b));
+      // Verification-committee placements made while this user was still pending.
+      // The verification workspace authorizes by curriculum id, so expand to the
+      // `verifierOf` mirror the same way director/lecturer roles are expanded.
+      const verifierOfAcademicPrograms = [
+        ...new Set((allow.presetVerifierAcademicProgramIds ?? []).filter(Boolean)),
+      ].sort((a, b) => a.localeCompare(b));
+      const verifierOf = await expandAcademicPrograms(verifierOfAcademicPrograms);
       await userRef.set({
         email: decoded.email,
         nameTh: allow.nameTh?.trim() || fallback,
@@ -198,11 +206,11 @@ export async function POST(request: NextRequest) {
           isLecturer,
           directorOf,
           assessorOf: [],
-          verifierOf: [],
+          verifierOf,
           lecturerOf,
           directorOfAcademicPrograms,
           assessorOfAcademicPrograms,
-          verifierOfAcademicPrograms: [],
+          verifierOfAcademicPrograms,
         },
         createdAt: FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp(),

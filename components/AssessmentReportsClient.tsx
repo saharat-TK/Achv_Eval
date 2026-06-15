@@ -8,6 +8,7 @@ import type { ReportSummary, CourseReportLinks } from '@/lib/data/assessmentRepo
 import {
   ALL_PROGRAMS_ID,
   bandFromPercent,
+  type ReportCommitteeMember,
   type ReportCoverage,
   type ReportScope,
   type Semester,
@@ -116,6 +117,7 @@ export default function AssessmentReportsClient({
   courseReportLinks,
   isAdmin,
   committeeOptions,
+  presetCommitteesByProgram,
   academicPrograms,
 }: {
   offerings: ManagedOffering[];
@@ -123,6 +125,7 @@ export default function AssessmentReportsClient({
   courseReportLinks: Record<string, CourseReportLinks>;
   isAdmin: boolean;
   committeeOptions: CommitteeOption[];
+  presetCommitteesByProgram: Record<string, ReportCommitteeMember[]>;
   academicPrograms: ProgramOpt[];
 }) {
   const router = useRouter();
@@ -511,6 +514,11 @@ export default function AssessmentReportsClient({
         <CreateReportModal
           target={createTarget}
           committeeOptions={committeeOptions}
+          presetCommittee={
+            createTarget.coverage === 'program'
+              ? presetCommitteesByProgram[createTarget.academicProgramId] ?? null
+              : null
+          }
           onClose={() => setCreateTarget(null)}
           onCreated={(reportId) => handleCreated(createTarget, reportId)}
         />
@@ -1110,11 +1118,14 @@ const DEFAULT_COMMITTEE: { name: string; role: string }[] = [
 function CreateReportModal({
   target,
   committeeOptions,
+  presetCommittee,
   onClose,
   onCreated,
 }: {
   target: CreateTarget;
   committeeOptions: CommitteeOption[];
+  /** The program's standing assessment committee (read-only) when configured. */
+  presetCommittee: ReportCommitteeMember[] | null;
   onClose: () => void;
   onCreated: (reportId: string) => void;
 }) {
@@ -1130,19 +1141,25 @@ function CreateReportModal({
   const [confirming, setConfirming] = useState(false);
   const [confirmText, setConfirmText] = useState('');
 
+  // When the program has a standing assessment committee, its members are
+  // pulled in read-only; the manual editor is only used as a fallback.
+  const hasPreset = !!presetCommittee && presetCommittee.length > 0;
+
   const meetingPreview = formatThaiMeeting(meetingDate, startTime, endTime);
   const filledNames = committee.map((m) => m.name.trim()).filter(Boolean);
   const hasMember = filledNames.length > 0;
   const hasDuplicate =
     new Set(filledNames.map((n) => n.toLowerCase())).size !== filledNames.length;
   const timeInvalid = !!startTime && !!endTime && endTime <= startTime;
-  const blockReason = !hasMember
-    ? 'กรุณาระบุรายชื่อคณะกรรมการอย่างน้อย 1 คน'
-    : hasDuplicate
-      ? 'มีรายชื่อคณะกรรมการซ้ำกัน'
-      : timeInvalid
-        ? 'เวลาสิ้นสุดต้องอยู่หลังเวลาเริ่ม'
-        : undefined;
+  const blockReason = timeInvalid
+    ? 'เวลาสิ้นสุดต้องอยู่หลังเวลาเริ่ม'
+    : hasPreset
+      ? undefined
+      : !hasMember
+        ? 'กรุณาระบุรายชื่อคณะกรรมการอย่างน้อย 1 คน'
+        : hasDuplicate
+          ? 'มีรายชื่อคณะกรรมการซ้ำกัน'
+          : undefined;
 
   // Directory names already chosen in other rows are hidden from a row's
   // suggestions (the row keeps its own value; free-typed names are allowed).
@@ -1170,15 +1187,18 @@ function CreateReportModal({
     setBusy(true);
     setError(null);
     try {
-      // Attach the directory uid when a name matches an option exactly.
+      // Read-only preset goes through verbatim (members already carry uids);
+      // otherwise attach the directory uid when a manual name matches exactly.
       const byName = new Map(committeeOptions.map((o) => [o.name, o.id]));
-      const committeePayload = committee
-        .map((m) => {
-          const name = m.name.trim();
-          const uid = byName.get(name);
-          return { name, role: m.role, ...(uid ? { uid } : {}) };
-        })
-        .filter((m) => m.name.length > 0);
+      const committeePayload = hasPreset
+        ? presetCommittee!
+        : committee
+            .map((m) => {
+              const name = m.name.trim();
+              const uid = byName.get(name);
+              return { name, role: m.role, ...(uid ? { uid } : {}) };
+            })
+            .filter((m) => m.name.length > 0);
       const res = await createAssessmentReport({
         academicProgramId: target.academicProgramId,
         coverage: target.coverage,
@@ -1256,51 +1276,77 @@ function CreateReportModal({
             />
           </label>
 
-          <div>
-            <div className="flex items-center justify-between">
+          {hasPreset ? (
+            <div>
               <span className="text-xs font-medium text-slate-600">คณะกรรมการทวนสอบ</span>
-              <button
-                type="button"
-                onClick={addMember}
-                className="text-xs text-mfu-primary hover:underline"
-              >
-                + เพิ่มกรรมการ
-              </button>
-            </div>
-            <div className="mt-2 space-y-2">
-              {committee.map((m, i) => (
-                <div key={i} className="flex items-center gap-2">
-                  <CommitteeNameInput
-                    value={m.name}
-                    options={optionsFor(i)}
-                    onChange={(name) => setMember(i, 'name', name)}
-                  />
-                  <select
-                    value={m.role}
-                    onChange={(e) => setMember(i, 'role', e.target.value)}
-                    className="w-44 shrink-0 rounded-lg border border-slate-300 px-2 py-1.5 text-sm focus:border-mfu-primary focus:outline-none"
+              <p className="mt-1 text-xs text-slate-500">
+                ดึงจากคณะกรรมการทวนสอบของหลักสูตร — แก้ไขได้ที่แท็บ{' '}
+                <Link
+                  href="/admin/users/assessment-committee"
+                  className="text-mfu-primary hover:underline"
+                >
+                  คณะกรรมการทวนสอบ
+                </Link>
+              </p>
+              <div className="mt-2 space-y-2">
+                {presetCommittee!.map((m, i) => (
+                  <div
+                    key={i}
+                    className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm"
                   >
-                    {COMMITTEE_ROLES.map((r) => (
-                      <option key={r} value={r}>
-                        {r}
-                      </option>
-                    ))}
-                  </select>
-                  <button
-                    type="button"
-                    onClick={() => removeMember(i)}
-                    className="shrink-0 px-1 text-slate-500 hover:text-red-600"
-                    aria-label="ลบกรรมการ"
-                  >
-                    ✕
-                  </button>
-                </div>
-              ))}
+                    <span className="min-w-0 flex-1 truncate text-slate-700">{m.name}</span>
+                    <span className="shrink-0 text-xs text-slate-500">{m.role}</span>
+                  </div>
+                ))}
+              </div>
             </div>
-            {hasDuplicate && (
-              <p className="mt-1.5 text-xs text-red-600">มีรายชื่อคณะกรรมการซ้ำกัน</p>
-            )}
-          </div>
+          ) : (
+            <div>
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-medium text-slate-600">คณะกรรมการทวนสอบ</span>
+                <button
+                  type="button"
+                  onClick={addMember}
+                  className="text-xs text-mfu-primary hover:underline"
+                >
+                  + เพิ่มกรรมการ
+                </button>
+              </div>
+              <div className="mt-2 space-y-2">
+                {committee.map((m, i) => (
+                  <div key={i} className="flex items-center gap-2">
+                    <CommitteeNameInput
+                      value={m.name}
+                      options={optionsFor(i)}
+                      onChange={(name) => setMember(i, 'name', name)}
+                    />
+                    <select
+                      value={m.role}
+                      onChange={(e) => setMember(i, 'role', e.target.value)}
+                      className="w-44 shrink-0 rounded-lg border border-slate-300 px-2 py-1.5 text-sm focus:border-mfu-primary focus:outline-none"
+                    >
+                      {COMMITTEE_ROLES.map((r) => (
+                        <option key={r} value={r}>
+                          {r}
+                        </option>
+                      ))}
+                    </select>
+                    <button
+                      type="button"
+                      onClick={() => removeMember(i)}
+                      className="shrink-0 px-1 text-slate-500 hover:text-red-600"
+                      aria-label="ลบกรรมการ"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                ))}
+              </div>
+              {hasDuplicate && (
+                <p className="mt-1.5 text-xs text-red-600">มีรายชื่อคณะกรรมการซ้ำกัน</p>
+              )}
+            </div>
+          )}
         </div>
 
         {error && <p className="mt-3 text-sm text-red-600">{error}</p>}

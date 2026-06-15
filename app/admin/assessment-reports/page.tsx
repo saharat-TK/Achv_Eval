@@ -10,10 +10,34 @@ import {
 } from '@/lib/data/assessmentReports';
 import { getAllUsers } from '@/lib/data/users';
 import { getAllAllowlistEntries } from '@/lib/data/allowlist';
-import { ALL_PROGRAMS_ID } from '@/lib/types/models';
+import {
+  ALL_PROGRAMS_ID,
+  type AssessmentCommittee,
+  type AssessmentCommitteeMember,
+  type ReportCommitteeMember,
+} from '@/lib/types/models';
 import AssessmentReportsClient from '@/components/AssessmentReportsClient';
 
 export const dynamic = 'force-dynamic';
+
+/** Maps a program's standing assessment committee to the report's committee
+ *  member list, ordered ประธาน → ผู้ทรงคุณวุฒิ (ภายนอก) → กรรมการ (ภายใน) →
+ *  เลขานุการ, carrying each member's uid through for traceability. */
+function committeeToReportMembers(
+  c: AssessmentCommittee | null | undefined,
+): ReportCommitteeMember[] {
+  if (!c) return [];
+  const out: ReportCommitteeMember[] = [];
+  const push = (m: AssessmentCommitteeMember | null | undefined, role: string) => {
+    const name = m?.name?.trim();
+    if (name) out.push({ name, role, ...(m?.uid ? { uid: m.uid } : {}) });
+  };
+  push(c.headAssessor, 'ประธานกรรมการ');
+  (c.externalAssessors ?? []).forEach((m) => push(m, 'ผู้ทรงคุณวุฒิ'));
+  (c.internalAssessors ?? []).forEach((m) => push(m, 'กรรมการ'));
+  push(c.secretary, 'กรรมการและเลขานุการ');
+  return out;
+}
 
 export default async function AssessmentReportsPage() {
   const profile = await getCurrentProfile();
@@ -39,6 +63,14 @@ export default async function AssessmentReportsPage() {
     getAllAllowlistEntries(),
   ]);
   const courseReportLinks = await getCourseReportLinks(offerings);
+
+  // Per-program assessment committee, pre-mapped to report roles. The create
+  // dialog pre-fills these as read-only when a program committee is configured.
+  const presetCommitteesByProgram: Record<string, ReportCommitteeMember[]> = {};
+  for (const p of programs) {
+    const members = committeeToReportMembers(p.assessmentCommittee);
+    if (members.length) presetCommitteesByProgram[p.id] = members;
+  }
 
   // Committee combobox roster = signed-in users + allowlisted faculty who have
   // not signed in yet (most of the directory lives in `allowlist` until first
@@ -72,6 +104,7 @@ export default async function AssessmentReportsPage() {
         courseReportLinks={courseReportLinks}
         isAdmin={isAdmin}
         committeeOptions={committeeOptions}
+        presetCommitteesByProgram={presetCommitteesByProgram}
         academicPrograms={programs.map((p) => ({
           id: p.id,
           code: p.code,

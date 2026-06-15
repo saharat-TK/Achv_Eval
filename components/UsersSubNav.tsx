@@ -1,11 +1,12 @@
 import Link from 'next/link';
 
-type UsersTab = 'users' | 'committee' | 'assignments' | 'allowlist';
+type UsersTab = 'users' | 'committee' | 'verification' | 'assignments' | 'allowlist';
 
 const TABS: { href: string; label: string; key: UsersTab }[] = [
-  { href: '/admin/users', label: 'ผู้ใช้งานปัจจุบัน', key: 'users' },
   { href: '/admin/users/assessment-committee', label: 'คณะกรรมการทวนสอบ', key: 'committee' },
+  { href: '/admin/users/verification-committee', label: 'คณะกรรมการรับรองผล', key: 'verification' },
   { href: '/admin/users/program-assignments', label: 'มอบหมายอาจารย์ประจำหลักสูตร', key: 'assignments' },
+  { href: '/admin/users', label: 'ผู้ใช้งานปัจจุบัน', key: 'users' },
   { href: '/admin/users/allowlist', label: 'ทะเบียนรายชื่อ', key: 'allowlist' },
 ];
 

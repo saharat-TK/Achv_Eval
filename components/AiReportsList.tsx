@@ -363,25 +363,29 @@ function ReportBody({ out }: { out: StructuredOutput }) {
   return (
     <div className="mt-3 space-y-3">
       {out.overallSummary && (
-        <div className="rounded-lg bg-slate-50 p-3">
-          <div className="text-xs font-semibold text-slate-700">บทสรุป</div>
-          <div className="mt-1">
+        <details open className="rounded-lg bg-slate-50">
+          <summary className="cursor-pointer px-3 py-2 text-sm font-medium text-slate-700">
+            บทสรุป
+          </summary>
+          <div className="px-3 pb-3">
             <MarkdownView>{out.overallSummary}</MarkdownView>
           </div>
-        </div>
+        </details>
       )}
 
       {out.criticalIssues && out.criticalIssues.length > 0 && (
-        <div className="rounded-lg border border-red-200 bg-red-50 p-3">
-          <div className="text-xs font-semibold text-red-700">
+        <details open className="rounded-lg border border-red-200 bg-red-50">
+          <summary className="cursor-pointer px-3 py-2 text-sm font-medium text-red-700">
             ประเด็นสำคัญที่ต้องแก้ไข
+          </summary>
+          <div className="px-3 pb-3">
+            <ul className="list-disc pl-5 text-xs text-slate-700">
+              {out.criticalIssues.map((issue, i) => (
+                <li key={i}>{issue}</li>
+              ))}
+            </ul>
           </div>
-          <ul className="mt-1 list-disc pl-5 text-xs text-slate-700">
-            {out.criticalIssues.map((issue, i) => (
-              <li key={i}>{issue}</li>
-            ))}
-          </ul>
-        </div>
+        </details>
       )}
 
       <Section title="ส่วนที่ 1 — การประเมินผลและการตัดเกรด" body={out.section1Grading} />
