@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import {
   collection,
   onSnapshot,
@@ -139,10 +140,13 @@ export default function AssessmentForm({
   scrollBody?: boolean;
 }) {
   const confirm = useConfirm();
+  const router = useRouter();
   const [assessmentId, setAssessmentId] = useState<string | null>(null);
   // Live local copy of the offering status so the action buttons re-gate after
-  // a draft/submit/return without a full page reload.
+  // a draft/submit/return without a full page reload. Kept in sync with the
+  // server-rendered prop after router.refresh().
   const [status, setStatus] = useState<OfferingStatus>(offeringStatus);
+  useEffect(() => setStatus(offeringStatus), [offeringStatus]);
   const [scores, setScores] = useState<AssessmentDoc['scores']>({
     ...DEFAULT_SCORES,
     item34ExamQuality: hasExamAssessment ? 1 : 'na',
@@ -358,13 +362,16 @@ export default function AssessmentForm({
         } else if (status === 'pending_assessment') {
           setStatus('assessor_review');
         }
+        // Re-fetch the server component so the page's status badge reflects the
+        // new offering status (the local state above only re-gates the buttons).
+        router.refresh();
       } catch (e: any) {
         setMessage({ type: 'err', text: e.message || 'เกิดข้อผิดพลาด' });
       } finally {
         setSaving(false);
       }
     },
-    [offeringId, assessmentId, scores, comments, generalNotes, status, generateCombinedPdf],
+    [offeringId, assessmentId, scores, comments, generalNotes, status, generateCombinedPdf, router],
   );
 
   // Shared follow-up gate for the steps that advance toward sign-off
