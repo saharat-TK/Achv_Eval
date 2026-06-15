@@ -18,9 +18,14 @@ import type {
   AssessmentDoc,
   RubricScore,
   RubricItemComment,
+  OfferingStatus,
 } from '@/lib/types/models';
 import { computeRubricResult } from '@/lib/types/models';
+import type { UserCommitteeRole } from '@/lib/data/assessmentCommittee';
 import { useConfirm } from '@/components/ConfirmDialogProvider';
+
+/** Mirror of the server's AssessorAction (app/api/assessor/submit/route.ts). */
+type AssessorAction = 'draft' | 'submit' | 'sign' | 'return';
 
 // ── Rubric item definitions ─────────────────────────────────────────
 type ScoreKey = keyof AssessmentDoc['scores'];
@@ -115,6 +120,9 @@ const DEFAULT_SCORES: AssessmentDoc['scores'] = {
 export default function AssessmentForm({
   offeringId,
   hasExamAssessment,
+  offeringStatus,
+  committeeRole,
+  isAdmin,
   requireFollowUp = false,
   followUpRecorded = false,
   onGoToFollowUp,
@@ -122,6 +130,9 @@ export default function AssessmentForm({
 }: {
   offeringId: string;
   hasExamAssessment: boolean;
+  offeringStatus: OfferingStatus;
+  committeeRole: UserCommitteeRole;
+  isAdmin: boolean;
   requireFollowUp?: boolean;
   followUpRecorded?: boolean;
   onGoToFollowUp?: () => void;
@@ -129,6 +140,9 @@ export default function AssessmentForm({
 }) {
   const confirm = useConfirm();
   const [assessmentId, setAssessmentId] = useState<string | null>(null);
+  // Live local copy of the offering status so the action buttons re-gate after
+  // a draft/submit/return without a full page reload.
+  const [status, setStatus] = useState<OfferingStatus>(offeringStatus);
   const [scores, setScores] = useState<AssessmentDoc['scores']>({
     ...DEFAULT_SCORES,
     item34ExamQuality: hasExamAssessment ? 1 : 'na',
@@ -191,25 +205,64 @@ export default function AssessmentForm({
   const result = useMemo(() => computeRubricResult(scores), [scores]);
   const bandInfo = BAND_LABEL[result.band] ?? BAND_LABEL.improve;
 
+  // ── Two-step sign-off gating ───────────────────────────────────────
+  // `free` = no standing committee, or an admin override → the original
+  // single-assessor flow (this caller can both draft and sign). Otherwise the
+  // secretary drafts/submits and the head signs/returns. Mirrors the server.
+  const free = !committeeRole.hasCommittee || isAdmin;
+  const isSecretaryActor =
+    committeeRole.isSecretary || (committeeRole.isHead && !committeeRole.hasSecretary);
+  const preSubmit = status === 'pending_assessment' || status === 'assessor_review';
+  const atHeadStage = status === 'pending_head_signoff';
+
+  let showDraft = false;
+  let showSubmit = false;
+  let showSign = false;
+  let showReturn = false;
+  let waitingNote: string | null = null;
+  if (!isLocked) {
+    if (free) {
+      if (preSubmit) {
+        showDraft = true;
+        showSign = true;
+      } else if (atHeadStage) {
+        showSign = true;
+      }
+    } else if (committeeRole.isHead && atHeadStage) {
+      showSign = true;
+      showReturn = true;
+    } else if (isSecretaryActor && preSubmit) {
+      showDraft = true;
+      showSubmit = true;
+    } else if (committeeRole.isHead && preSubmit) {
+      waitingNote = 'รอเลขานุการส่งผลการทวนสอบให้ประธานลงนาม';
+    } else if (isSecretaryActor && atHeadStage) {
+      waitingNote = 'ส่งให้ประธานผู้ทวนสอบแล้ว — รอการลงนาม';
+    } else {
+      waitingNote = 'เฉพาะเลขานุการและประธานผู้ทวนสอบเท่านั้นที่ดำเนินการได้';
+    }
+  }
+  const readOnly = isLocked || !(showDraft || showSubmit || showSign || showReturn);
+
   // Score change handler
   const setScore = useCallback(
     (key: ScoreKey, value: RubricScore) => {
-      if (isLocked) return;
+      if (readOnly) return;
       setScores((prev) => ({ ...prev, [key]: value }));
     },
-    [isLocked],
+    [readOnly],
   );
 
   // Comment change handler
   const setComment = useCallback(
     (key: ScoreKey, field: 'strengths' | 'improvements', value: string) => {
-      if (isLocked) return;
+      if (readOnly) return;
       setComments((prev) => ({
         ...prev,
         [key]: { ...prev[key], [field]: value },
       }));
     },
-    [isLocked],
+    [readOnly],
   );
 
   // Generates the combined report PDF (AI analysis + assessor form) for a
@@ -258,9 +311,9 @@ export default function AssessmentForm({
     if (signedPdfUrl) autoRegenKey.current = null;
   }, [signedPdfUrl]);
 
-  // Submit handler
-  const handleSubmit = useCallback(
-    async (lock: boolean) => {
+  // Action handler — posts the chosen step to the shared endpoint.
+  const runAction = useCallback(
+    async (action: AssessorAction) => {
       setSaving(true);
       setMessage(null);
       try {
@@ -273,26 +326,37 @@ export default function AssessmentForm({
             scores,
             comments,
             generalNotes,
-            lock,
+            action,
           }),
         });
         const json = await res.json();
         if (!res.ok) {
           if (json.error === 'followup_required') {
             throw new Error(
-              'ต้องประเมินและบันทึกผล “ติดตามผลการปรับปรุง” ก่อนลงนามทวนสอบ',
+              'ต้องประเมินและบันทึกผล “ติดตามผลการปรับปรุง” ก่อนส่งผลการทวนสอบ',
             );
           }
           throw new Error(json.error || 'submission_failed');
         }
         if (json.assessmentId) setAssessmentId(json.assessmentId);
-        setMessage({
-          type: 'ok',
-          text: lock ? 'ลงนามทวนสอบแล้ว — ไม่สามารถแก้ไขได้อีก' : 'บันทึกร่างเรียบร้อย',
-        });
-        if (lock) {
+        const OK_TEXT: Record<AssessorAction, string> = {
+          draft: 'บันทึกร่างเรียบร้อย',
+          submit: 'ส่งให้ประธานผู้ทวนสอบแล้ว',
+          sign: 'ลงนามทวนสอบแล้ว — ไม่สามารถแก้ไขได้อีก',
+          return: 'ส่งกลับให้เลขานุการแก้ไขแล้ว',
+        };
+        setMessage({ type: 'ok', text: OK_TEXT[action] });
+        // Reflect the new status locally so the buttons re-gate without a reload.
+        if (action === 'sign') {
           setIsLocked(true);
+          setStatus('assessed');
           await generateCombinedPdf(json.assessmentId ?? assessmentId);
+        } else if (action === 'submit') {
+          setStatus('pending_head_signoff');
+        } else if (action === 'return') {
+          setStatus('assessor_review');
+        } else if (status === 'pending_assessment') {
+          setStatus('assessor_review');
         }
       } catch (e: any) {
         setMessage({ type: 'err', text: e.message || 'เกิดข้อผิดพลาด' });
@@ -300,8 +364,24 @@ export default function AssessmentForm({
         setSaving(false);
       }
     },
-    [offeringId, assessmentId, scores, comments, generalNotes, generateCombinedPdf],
+    [offeringId, assessmentId, scores, comments, generalNotes, status, generateCombinedPdf],
   );
+
+  // Shared follow-up gate for the steps that advance toward sign-off
+  // (secretary `submit`, or `sign` in the single-assessor flow). Returns true
+  // when it's OK to proceed; otherwise routes the user to the follow-up tab.
+  const ensureFollowUp = useCallback(async (): Promise<boolean> => {
+    if (!requireFollowUp || followUpRecorded) return true;
+    const go = await confirm({
+      title: 'ต้องประเมินติดตามผลการปรับปรุงก่อน',
+      message:
+        'รายวิชานี้มีผลการทวนสอบภาคก่อนหน้าที่ต้องติดตาม กรุณาประเมินและบันทึกผลในแท็บ “ติดตามผลการปรับปรุง” ก่อน',
+      confirmLabel: 'ไปที่แท็บติดตามผล',
+      cancelLabel: 'ปิด',
+    });
+    if (go) onGoToFollowUp?.();
+    return false;
+  }, [requireFollowUp, followUpRecorded, confirm, onGoToFollowUp]);
 
   if (!loaded) {
     return <p className="text-sm text-slate-400">กำลังโหลดแบบประเมิน…</p>;
@@ -423,12 +503,12 @@ export default function AssessmentForm({
                           role="radio"
                           aria-checked={currentScore === v}
                           onClick={() => setScore(item.key, v as RubricScore)}
-                          disabled={isLocked}
+                          disabled={readOnly}
                           className={`flex h-9 w-9 items-center justify-center rounded-lg border text-sm transition-colors ${
                             currentScore === v
                               ? 'bg-mfu-primary text-white border-mfu-primary'
                               : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300'
-                          } ${isLocked ? 'opacity-60 cursor-not-allowed' : ''}`}
+                          } ${readOnly ? 'opacity-60 cursor-not-allowed' : ''}`}
                         >
                           {v}
                         </button>
@@ -447,7 +527,7 @@ export default function AssessmentForm({
                         onChange={(e) =>
                           setComment(item.key, 'strengths', e.target.value)
                         }
-                        disabled={isLocked}
+                        disabled={readOnly}
                         placeholder="ข้อดี / จุดเด่น"
                         rows={2}
                         className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-xs text-slate-700 focus:border-mfu-primary focus:outline-none disabled:bg-slate-50 disabled:text-slate-400"
@@ -460,7 +540,7 @@ export default function AssessmentForm({
                         onChange={(e) =>
                           setComment(item.key, 'improvements', e.target.value)
                         }
-                        disabled={isLocked}
+                        disabled={readOnly}
                         placeholder="ข้อเสนอแนะ / ข้อพัฒนา"
                         rows={2}
                         className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-xs text-slate-700 focus:border-mfu-primary focus:outline-none disabled:bg-slate-50 disabled:text-slate-400"
@@ -482,7 +562,7 @@ export default function AssessmentForm({
         <textarea
           value={generalNotes}
           onChange={(e) => setGeneralNotes(e.target.value)}
-          disabled={isLocked}
+          disabled={readOnly}
           placeholder="ข้อสังเกต ความเห็นเพิ่มเติม ฯลฯ"
           rows={4}
           className="mt-2 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700 focus:border-mfu-primary focus:outline-none disabled:bg-slate-50 disabled:text-slate-400"
@@ -490,46 +570,83 @@ export default function AssessmentForm({
       </div>
 
       {/* Actions */}
-      {!isLocked && (
-        <div className="flex items-center gap-3 lg:shrink-0">
-          <button
-            onClick={() => handleSubmit(false)}
-            disabled={saving}
-            className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50 transition"
-          >
-            {saving ? 'กำลังบันทึก…' : 'บันทึกร่าง'}
-          </button>
-          <button
-            onClick={async () => {
-              // Gate: when a previous-semester follow-up applies, the assessor
-              // must complete the follow-up review before signing off.
-              if (requireFollowUp && !followUpRecorded) {
-                const go = await confirm({
-                  title: 'ต้องประเมินติดตามผลการปรับปรุงก่อน',
+      {(showDraft || showSubmit || showSign || showReturn) && (
+        <div className="flex flex-wrap items-center gap-3 lg:shrink-0">
+          {showDraft && (
+            <button
+              onClick={() => runAction('draft')}
+              disabled={saving}
+              className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50 transition"
+            >
+              {saving ? 'กำลังบันทึก…' : 'บันทึกร่าง'}
+            </button>
+          )}
+          {showReturn && (
+            <button
+              onClick={async () => {
+                const ok = await confirm({
+                  title: 'ส่งกลับให้เลขานุการแก้ไข',
                   message:
-                    'รายวิชานี้มีผลการทวนสอบภาคก่อนหน้าที่ต้องติดตาม กรุณาประเมินและบันทึกผลในแท็บ “ติดตามผลการปรับปรุง” ก่อนลงนามทวนสอบ',
-                  confirmLabel: 'ไปที่แท็บติดตามผล',
-                  cancelLabel: 'ปิด',
+                    'ผลการทวนสอบจะถูกส่งกลับให้เลขานุการแก้ไข และกลับสู่สถานะรอผู้ทวนสอบ',
+                  confirmLabel: 'ส่งกลับแก้ไข',
+                  cancelLabel: 'ยกเลิก',
                 });
-                if (go) onGoToFollowUp?.();
-                return;
-              }
-              const ok = await confirm({
-                title: 'ยืนยันการลงนามทวนสอบ',
-                message: 'เมื่อลงนามแล้วจะไม่สามารถแก้ไขได้อีก',
-                confirmLabel: 'ลงนามทวนสอบ',
-                variant: 'danger',
-                acknowledgementLabel: 'ข้าพเจ้ายอมรับว่าเมื่อลงนามแล้วจะไม่สามารถแก้ไขผลทวนสอบนี้ได้อีก',
-                confirmationText: 'ยืนยัน',
-              });
-              if (ok) handleSubmit(true);
-            }}
-            disabled={saving}
-            className="rounded-lg bg-mfu-primary px-4 py-2 text-sm font-medium text-white hover:bg-mfu-primary/90 disabled:opacity-50 transition"
-          >
-            {saving ? 'กำลังลงนาม…' : 'ลงนามทวนสอบ'}
-          </button>
+                if (ok) runAction('return');
+              }}
+              disabled={saving}
+              className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50 transition"
+            >
+              ส่งกลับแก้ไข
+            </button>
+          )}
+          {showSubmit && (
+            <button
+              onClick={async () => {
+                if (!(await ensureFollowUp())) return;
+                const ok = await confirm({
+                  title: 'ส่งให้ประธานผู้ทวนสอบลงนาม',
+                  message:
+                    'ผลการทวนสอบจะถูกส่งให้ประธานเพื่อพิจารณาลงนาม คุณยังแก้ไขได้จนกว่าประธานจะลงนาม',
+                  confirmLabel: 'ส่งให้ประธาน',
+                  cancelLabel: 'ยกเลิก',
+                });
+                if (ok) runAction('submit');
+              }}
+              disabled={saving}
+              className="rounded-lg bg-mfu-primary px-4 py-2 text-sm font-medium text-white hover:bg-mfu-primary/90 disabled:opacity-50 transition"
+            >
+              {saving ? 'กำลังส่ง…' : 'ส่งให้ประธานลงนาม'}
+            </button>
+          )}
+          {showSign && (
+            <button
+              onClick={async () => {
+                if (!(await ensureFollowUp())) return;
+                const ok = await confirm({
+                  title: 'ยืนยันการลงนามทวนสอบ',
+                  message: 'เมื่อลงนามแล้วจะไม่สามารถแก้ไขได้อีก',
+                  confirmLabel: 'ลงนามทวนสอบ',
+                  variant: 'danger',
+                  acknowledgementLabel:
+                    'ข้าพเจ้ายอมรับว่าเมื่อลงนามแล้วจะไม่สามารถแก้ไขผลทวนสอบนี้ได้อีก',
+                  confirmationText: 'ยืนยัน',
+                });
+                if (ok) runAction('sign');
+              }}
+              disabled={saving}
+              className="rounded-lg bg-mfu-primary px-4 py-2 text-sm font-medium text-white hover:bg-mfu-primary/90 disabled:opacity-50 transition"
+            >
+              {saving ? 'กำลังลงนาม…' : 'ลงนามทวนสอบ'}
+            </button>
+          )}
         </div>
+      )}
+
+      {/* Read-only waiting note (not this user's turn) */}
+      {waitingNote && (
+        <p className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-500 lg:shrink-0">
+          {waitingNote}
+        </p>
       )}
 
       {/* Feedback message */}

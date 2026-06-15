@@ -123,6 +123,7 @@ const AI_COMPLETED_STATUSES: OfferingStatus[] = [
   'ai_complete',
   'pending_assessment',
   'assessor_review',
+  'pending_head_signoff',
   'assessed',
   'verification_review',
   'verified',
@@ -154,6 +155,7 @@ const ACTIONABLE_STATUSES: OfferingStatus[] = [
   'ai_complete',
   'pending_assessment',
   'assessor_review',
+  'pending_head_signoff',
   'needs_follow_up',
   'pending_review_next_semester',
   'not_implemented',
@@ -205,6 +207,7 @@ function assessmentReason(
   if (offering.status === 'ai_complete') return 'รออาจารย์ส่งผลเพื่อทวนสอบ';
   if (offering.status === 'pending_assessment') return 'รอผู้ทวนสอบเริ่มประเมิน';
   if (offering.status === 'assessor_review') return 'รอผู้ทวนสอบลงนาม';
+  if (offering.status === 'pending_head_signoff') return 'รอประธานทวนสอบยืนยัน';
   if (offering.status === 'needs_follow_up') return 'รับรองแบบมีเงื่อนไข';
   if (offering.status === 'pending_review_next_semester') {
     return 'รอติดตามภาคการศึกษาถัดไป';
@@ -377,7 +380,9 @@ async function getAssessmentsByOffering(
     }
     if (
       !picked &&
-      ['assessor_review', ...ASSESSED_STATUSES].includes(offering.status)
+      ['assessor_review', 'pending_head_signoff', ...ASSESSED_STATUSES].includes(
+        offering.status,
+      )
     ) {
       picked =
         [...list].sort(

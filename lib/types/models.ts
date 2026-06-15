@@ -53,6 +53,7 @@ export type OfferingStatus =
   | 'ai_complete'
   | 'pending_assessment'
   | 'assessor_review'
+  | 'pending_head_signoff'
   | 'assessed'
   | 'verification_review'
   | 'verified'

@@ -33,7 +33,7 @@ export async function getLecturerOfferingCounts(uid: string): Promise<{
   total: number;
   pendingDocs: number;     // draft | documents_pending | ready_for_ai | ai_in_progress
   aiDone: number;          // ai_complete (analysis ready, not yet at assessor)
-  awaitingAssessor: number; // pending_assessment | assessor_review
+  awaitingAssessor: number; // pending_assessment | assessor_review | pending_head_signoff
   assessed: number;        // assessed and beyond
 }> {
   const snap = await getAdminDb()
@@ -52,7 +52,7 @@ export async function getLecturerOfferingCounts(uid: string): Promise<{
     ).length,
     aiDone: statuses.filter((s) => s === 'ai_complete').length,
     awaitingAssessor: statuses.filter((s) =>
-      ['pending_assessment', 'assessor_review'].includes(s),
+      ['pending_assessment', 'assessor_review', 'pending_head_signoff'].includes(s),
     ).length,
     assessed: statuses.filter((s) =>
       [
