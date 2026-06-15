@@ -30,15 +30,15 @@ export interface ProgramAssignmentData {
   rows: AcademicProgramAssignmentRow[];
 }
 
-function unique(values: string[]): string[] {
+export function unique(values: string[]): string[] {
   return [...new Set(values.filter(Boolean))];
 }
 
-function personLabel(a: AssignmentPerson, b: AssignmentPerson): number {
+export function personLabel(a: AssignmentPerson, b: AssignmentPerson): number {
   return (a.nameTh || a.email).localeCompare(b.nameTh || b.email, 'th');
 }
 
-function deriveAcademicProgramIds(
+export function deriveAcademicProgramIds(
   academicIds: string[] | undefined,
   curriculumIds: string[] | undefined,
   curriculumToAcademicProgram: Map<string, string>,
@@ -51,7 +51,7 @@ function deriveAcademicProgramIds(
   );
 }
 
-async function getCurriculumToAcademicProgram(): Promise<Map<string, string>> {
+export async function getCurriculumToAcademicProgram(): Promise<Map<string, string>> {
   const snap = await getAdminDb().collection('programs').get();
   const map = new Map<string, string>();
   snap.docs.forEach((doc) => {

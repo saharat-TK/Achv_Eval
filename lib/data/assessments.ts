@@ -15,7 +15,12 @@ export async function getOfferingsForAssessor(
 ): Promise<OfferingWithId[]> {
   if (programIds.length === 0) return [];
 
-  const ASSESSOR_STATUSES = ['pending_assessment', 'assessor_review', 'assessed'];
+  const ASSESSOR_STATUSES = [
+    'pending_assessment',
+    'assessor_review',
+    'pending_head_signoff',
+    'assessed',
+  ];
   const db = getAdminDb();
 
   // Firestore `in` supports up to 30 values; programIds is typically 1-3.

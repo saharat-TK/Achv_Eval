@@ -69,7 +69,7 @@ export default async function AdminUsersPage() {
           <table className="w-full text-sm">
             <thead className="bg-slate-50 text-left text-xs text-slate-500">
               <tr>
-                <th className="px-4 py-3 font-medium">ชื่อ</th>
+                <th className="w-72 whitespace-nowrap px-4 py-3 font-medium">ชื่อ</th>
                 <th className="px-4 py-3 font-medium">อีเมล</th>
                 <th className="px-4 py-3 font-medium">สิทธิ์ปัจจุบัน</th>
                 <th className="px-4 py-3 font-medium">สถานะบัญชี</th>
@@ -83,7 +83,7 @@ export default async function AdminUsersPage() {
                     key={u.id}
                     className={`hover:bg-slate-50 ${inactive ? 'bg-slate-50/60' : ''}`}
                   >
-                    <td className="px-4 py-3">
+                    <td className="whitespace-nowrap px-4 py-3">
                       <Link
                         href={`/admin/users/${u.id}`}
                         className="font-medium text-mfu-primary hover:underline"

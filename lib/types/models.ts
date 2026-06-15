@@ -53,6 +53,7 @@ export type OfferingStatus =
   | 'ai_complete'
   | 'pending_assessment'
   | 'assessor_review'
+  | 'pending_head_signoff'
   | 'assessed'
   | 'verification_review'
   | 'verified'
@@ -241,6 +242,9 @@ export interface AllowlistDoc {
   /** Academic-program ids applied to `roles.assessorOfAcademicPrograms` on first sign-in
    *  (set when a pending user is placed on a program's assessment committee). */
   presetAssessorAcademicProgramIds?: string[];
+  /** Academic-program ids applied to `roles.verifierOfAcademicPrograms` on first sign-in
+   *  (set when a pending user is placed on a program's verification committee). */
+  presetVerifierAcademicProgramIds?: string[];
   addedBy: string; // admin uid
   addedAt: Ts;
   consumedAt?: Ts | null;

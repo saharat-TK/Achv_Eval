@@ -72,6 +72,73 @@ export async function getAssessmentCommitteeData(): Promise<AssessmentCommitteeD
   };
 }
 
+/**
+ * The assessment committee resolved for one offering, by mapping the offering's
+ * curriculum `programId` → `programs/{id}.parentProgramId` → the academic
+ * program's `assessmentCommittee`. Carries the uids needed to authorize the
+ * two-step sign-off (secretary drafts/submits, head signs) and to notify them.
+ */
+export interface OfferingCommittee {
+  hasCommittee: boolean;
+  headUid: string | null;
+  secretaryUid: string | null;
+  internalUids: string[];
+}
+
+/** A user's position on an offering's committee — drives both the UI button
+ *  gating and the server-side authorization. */
+export interface UserCommitteeRole {
+  hasCommittee: boolean;
+  hasSecretary: boolean;
+  isHead: boolean;
+  isSecretary: boolean;
+  isInternal: boolean;
+}
+
+export async function getOfferingCommittee(
+  curriculumProgramId: string,
+): Promise<OfferingCommittee> {
+  const empty: OfferingCommittee = {
+    hasCommittee: false,
+    headUid: null,
+    secretaryUid: null,
+    internalUids: [],
+  };
+  const db = getAdminDb();
+  const progSnap = await db.collection('programs').doc(curriculumProgramId).get();
+  const apId = progSnap.exists
+    ? (progSnap.data()?.parentProgramId as string | undefined)
+    : undefined;
+  if (!apId) return empty;
+  const apSnap = await db.collection('academicPrograms').doc(apId).get();
+  const c = apSnap.exists
+    ? (apSnap.data() as AcademicProgramDoc).assessmentCommittee
+    : null;
+  if (!c) return empty;
+  return {
+    hasCommittee: true,
+    headUid: c.headAssessor?.uid ?? null,
+    secretaryUid: c.secretary?.uid ?? null,
+    internalUids: (c.internalAssessors ?? [])
+      .map((m) => m.uid)
+      .filter((u): u is string => !!u),
+  };
+}
+
+/** Derives a user's committee position from a resolved offering committee. */
+export function deriveUserCommitteeRole(
+  c: OfferingCommittee,
+  uid: string | null | undefined,
+): UserCommitteeRole {
+  return {
+    hasCommittee: c.hasCommittee,
+    hasSecretary: !!c.secretaryUid,
+    isHead: !!uid && c.headUid === uid,
+    isSecretary: !!uid && c.secretaryUid === uid,
+    isInternal: !!uid && c.internalUids.includes(uid),
+  };
+}
+
 export type CommitteePosition = 'head' | 'internal' | 'secretary';
 
 export interface CommitteeMembership {

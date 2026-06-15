@@ -10,22 +10,39 @@ import {
   getProgramVerifierIds,
   notifySafely,
 } from '@/lib/data/notifications';
+import {
+  getOfferingCommittee,
+  deriveUserCommitteeRole,
+} from '@/lib/data/assessmentCommittee';
 import type { OfferingStatus } from '@/lib/types/models';
 
 export const runtime = 'nodejs';
 const ASSESSMENT_ALLOWED_STATUSES: OfferingStatus[] = [
   'pending_assessment',
   'assessor_review',
+  'pending_head_signoff',
   'assessed',
 ];
+
+/** Two-step sign-off actions:
+ *  - `draft`   secretary saves progress (stays editable)
+ *  - `submit`  secretary sends to the head (→ pending_head_signoff)
+ *  - `sign`    head signs off (→ assessed, locked)
+ *  - `return`  head sends back to the secretary (→ assessor_review) */
+type AssessorAction = 'draft' | 'submit' | 'sign' | 'return';
+const ASSESSOR_ACTIONS: AssessorAction[] = ['draft', 'submit', 'sign', 'return'];
 
 /**
  * POST /api/assessor/submit
  *
- * Saves or locks an assessment for an offering. Validates that the caller
- * is an assessor for the offering's program.
+ * Records a step in the two-step sign-off for an offering's assessment. The
+ * caller must be an assessor for the offering's program; with a standing
+ * committee, `draft`/`submit` are secretary-only and `sign`/`return` are
+ * head-only (admins and committee-less programs fall back to the original
+ * single-assessor flow).
  *
- * Body: { offeringId, assessmentId?, scores, comments, generalNotes, lock }
+ * Body: { offeringId, assessmentId?, scores, comments, generalNotes, action }
+ *   action: 'draft' | 'submit' | 'sign' | 'return' (legacy: lock=true ⇒ sign)
  */
 export async function POST(request: NextRequest) {
   // 1. Authenticate
@@ -46,7 +63,9 @@ export async function POST(request: NextRequest) {
     scores: AssessmentDoc['scores'];
     comments: AssessmentDoc['comments'];
     generalNotes: string;
-    lock: boolean;
+    action?: AssessorAction;
+    /** Legacy flag (pre two-step). `true` is treated as `action: 'sign'`. */
+    lock?: boolean;
   };
   try {
     body = await request.json();
@@ -54,7 +73,13 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'bad_request' }, { status: 400 });
   }
 
-  const { offeringId, assessmentId, scores, comments, generalNotes, lock } = body;
+  const { offeringId, assessmentId, scores, comments, generalNotes } = body;
+  const action: AssessorAction = ASSESSOR_ACTIONS.includes(body.action as AssessorAction)
+    ? (body.action as AssessorAction)
+    : body.lock
+      ? 'sign'
+      : 'draft';
+  const lock = action === 'sign';
 
   if (!offeringId || !scores) {
     return NextResponse.json({ error: 'missing_fields' }, { status: 400 });
@@ -70,17 +95,53 @@ export async function POST(request: NextRequest) {
   }
 
   const offering = offeringSnap.data()!;
-  if (!profile.roles.assessorOf.includes(offering.programId)) {
+  const isAdmin = profile.roles.isAdmin === true;
+  if (!profile.roles.assessorOf.includes(offering.programId) && !isAdmin) {
     return NextResponse.json({ error: 'not_authorized' }, { status: 403 });
   }
   if (!ASSESSMENT_ALLOWED_STATUSES.includes(offering.status)) {
     return NextResponse.json({ error: 'not_pending_assessment' }, { status: 409 });
   }
 
-  // 3b. On sign-off, require a follow-up review when one applies — i.e. there is
-  // a previous offering with a signed assessment to follow up on. Mirrors the
-  // client-side gate so a direct API call cannot bypass it.
-  if (lock && offering.previousOfferingId) {
+  // Two-step authorization. With a standing assessment committee, the secretary
+  // drafts/submits and the head signs/returns. Without a committee — or for an
+  // admin override — it falls back to the original single-assessor flow (the
+  // caller can both draft and sign). UI gating mirrors this; this is the gate.
+  const committee = await getOfferingCommittee(offering.programId);
+  const role = deriveUserCommitteeRole(committee, user.uid);
+  const free = !committee.hasCommittee || isAdmin;
+  // The head also covers the secretary stage when no secretary is assigned.
+  const isSecretaryActor = role.isSecretary || (role.isHead && !role.hasSecretary);
+  const status = offering.status as OfferingStatus;
+  const preSubmit = status === 'pending_assessment' || status === 'assessor_review';
+
+  const deny = () => NextResponse.json({ error: 'not_authorized' }, { status: 403 });
+  const conflict = () =>
+    NextResponse.json({ error: 'invalid_status' }, { status: 409 });
+
+  if (action === 'draft' || action === 'submit') {
+    if (!(free || isSecretaryActor)) return deny();
+    if (!preSubmit) return conflict();
+    if (action === 'submit' && !committee.hasCommittee) return conflict();
+  } else if (action === 'sign') {
+    if (!(free || role.isHead)) return deny();
+    if (committee.hasCommittee && !free) {
+      if (status !== 'pending_head_signoff') return conflict();
+    } else if (!(preSubmit || status === 'pending_head_signoff')) {
+      return conflict();
+    }
+  } else {
+    // return
+    if (!committee.hasCommittee) return conflict();
+    if (!(role.isHead || isAdmin)) return deny();
+    if (status !== 'pending_head_signoff') return conflict();
+  }
+
+  // 3b. Before advancing toward sign-off (secretary `submit`, or `sign` in the
+  // single-assessor flow), require a follow-up review when one applies — i.e.
+  // there is a previous offering with a signed assessment to follow up on.
+  // Mirrors the client-side gate so a direct API call cannot bypass it.
+  if ((action === 'submit' || action === 'sign') && offering.previousOfferingId) {
     const prevSnap = await db
       .collection('offerings')
       .doc(offering.previousOfferingId)
@@ -158,8 +219,8 @@ export async function POST(request: NextRequest) {
       docId = newRef.id;
     }
 
-    // 7. If locking, update offering status and link
-    if (lock) {
+    // 7. Advance the offering status for the action taken.
+    if (action === 'sign') {
       await offeringRef.update({
         status: 'assessed',
         assessmentId: docId,
@@ -174,8 +235,22 @@ export async function POST(request: NextRequest) {
       if (reviewSnap.exists) {
         await reviewRef.update({ isLocked: true, updatedAt: now });
       }
+    } else if (action === 'submit') {
+      // Secretary sends the draft to the head for sign-off.
+      await offeringRef.update({
+        status: 'pending_head_signoff',
+        updatedAt: now,
+        updatedBy: user.uid,
+      });
+    } else if (action === 'return') {
+      // Head sends it back to the secretary for edits.
+      await offeringRef.update({
+        status: 'assessor_review',
+        updatedAt: now,
+        updatedBy: user.uid,
+      });
     } else if (offering.status === 'pending_assessment') {
-      // Move to assessor_review on first draft save
+      // Move to assessor_review on first draft save.
       await offeringRef.update({
         status: 'assessor_review',
         updatedAt: now,
@@ -184,18 +259,52 @@ export async function POST(request: NextRequest) {
     }
 
     // 8. Audit log
+    const AUDIT_ACTION: Record<AssessorAction, string> = {
+      draft: 'assessment_draft',
+      submit: 'assessment_submitted',
+      sign: 'sign_off',
+      return: 'assessment_returned',
+    };
     await db.collection('auditLog').add({
       occurredAt: now,
       actorId: user.uid,
       actorEmail: user.email,
-      action: lock ? 'sign_off' : 'assessment_draft',
+      action: AUDIT_ACTION[action],
       entityType: 'assessments',
       entityId: docId,
       before: null,
-      after: { offeringId, lock, totalScore: result.totalScore },
+      after: { offeringId, action, totalScore: result.totalScore },
     });
 
-    // 9. On sign-off, notify the lecturer and the program's verifiers.
+    // 9a. On submit, alert the head that a draft is awaiting their sign-off.
+    if (action === 'submit' && committee.headUid) {
+      const courseCode = (offering.courseCode as string | undefined) ?? '';
+      await notifySafely(
+        createNotification({
+          recipientId: committee.headUid,
+          type: 'assessment_awaiting_signoff',
+          title: 'มีผลการทวนสอบรอการลงนาม',
+          body: `รายวิชา ${courseCode} รอประธานผู้ทวนสอบลงนาม`.trim(),
+          relatedOfferingId: offeringId,
+        }),
+      );
+    }
+
+    // 9b. On return, tell the secretary the head sent it back for edits.
+    if (action === 'return' && committee.secretaryUid) {
+      const courseCode = (offering.courseCode as string | undefined) ?? '';
+      await notifySafely(
+        createNotification({
+          recipientId: committee.secretaryUid,
+          type: 'assessment_returned',
+          title: 'ผลการทวนสอบถูกส่งกลับให้แก้ไข',
+          body: `รายวิชา ${courseCode} ถูกส่งกลับโดยประธานผู้ทวนสอบ`.trim(),
+          relatedOfferingId: offeringId,
+        }),
+      );
+    }
+
+    // 9c. On sign-off, notify the lecturer and the program's verifiers.
     if (lock) {
       const courseCode = (offering.courseCode as string | undefined) ?? '';
       await notifySafely(

@@ -3,6 +3,10 @@ import { notFound, redirect } from 'next/navigation';
 import { getCurrentProfile } from '@/lib/firebase/auth-server';
 import { getOffering } from '@/lib/data/offerings';
 import { getAssessmentById, getFollowUpReview } from '@/lib/data/assessments';
+import {
+  getOfferingCommittee,
+  deriveUserCommitteeRole,
+} from '@/lib/data/assessmentCommittee';
 import StatusBadge from '@/components/StatusBadge';
 import AssessorOfferingTabs from '@/components/AssessorOfferingTabs';
 import { SEMESTER_LABEL } from '@/lib/constants';
@@ -13,6 +17,7 @@ export const dynamic = 'force-dynamic';
 const ASSESSMENT_VISIBLE_STATUSES: OfferingStatus[] = [
   'pending_assessment',
   'assessor_review',
+  'pending_head_signoff',
   'assessed',
 ];
 
@@ -37,6 +42,11 @@ export default async function AssessorOfferingPage({
   ) {
     notFound();
   }
+
+  // Resolve the caller's position on the program's assessment committee, which
+  // drives the two-step sign-off (secretary drafts/submits, head signs/returns).
+  const committee = await getOfferingCommittee(offering.programId);
+  const committeeRole = deriveUserCommitteeRole(committee, profile.uid);
 
   // Fetch previous offering and its assessment (1 hop back) for the follow-up tab.
   let previousOffering = null;
@@ -83,6 +93,9 @@ export default async function AssessorOfferingPage({
       <AssessorOfferingTabs
         offeringId={offering.id}
         hasExamAssessment={offering.hasExamAssessment}
+        offeringStatus={offering.status}
+        committeeRole={committeeRole}
+        isAdmin={profile.roles.isAdmin === true}
         previousOffering={
           previousOffering
             ? {

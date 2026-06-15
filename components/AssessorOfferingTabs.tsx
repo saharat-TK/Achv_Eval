@@ -4,19 +4,30 @@ import { useState } from 'react';
 import AiReportsList from '@/components/AiReportsList';
 import AssessmentForm from '@/components/AssessmentForm';
 import FollowUpReviewPanel from '@/components/FollowUpReviewPanel';
-import type { AssessmentDoc, FollowUpReviewDoc } from '@/lib/types/models';
+import type {
+  AssessmentDoc,
+  FollowUpReviewDoc,
+  OfferingStatus,
+} from '@/lib/types/models';
+import type { UserCommitteeRole } from '@/lib/data/assessmentCommittee';
 
 type Tab = 'current' | 'followup';
 
 export default function AssessorOfferingTabs({
   offeringId,
   hasExamAssessment,
+  offeringStatus,
+  committeeRole,
+  isAdmin,
   previousOffering,
   previousAssessment,
   initialFollowUp,
 }: {
   offeringId: string;
   hasExamAssessment: boolean;
+  offeringStatus: OfferingStatus;
+  committeeRole: UserCommitteeRole;
+  isAdmin: boolean;
   previousOffering: {
     id: string;
     academicYear: number;
@@ -96,6 +107,9 @@ export default function AssessorOfferingTabs({
               <AssessmentForm
                 offeringId={offeringId}
                 hasExamAssessment={hasExamAssessment}
+                offeringStatus={offeringStatus}
+                committeeRole={committeeRole}
+                isAdmin={isAdmin}
                 requireFollowUp={showFollowUpTab}
                 followUpRecorded={followUpRecorded}
                 onGoToFollowUp={() => setTab('followup')}
