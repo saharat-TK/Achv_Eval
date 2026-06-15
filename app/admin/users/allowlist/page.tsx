@@ -1,7 +1,7 @@
-import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { getCurrentProfile } from '@/lib/firebase/auth-server';
 import { getAllAllowlistEntries } from '@/lib/data/allowlist';
+import UsersSubNav from '@/components/UsersSubNav';
 import { getAllAcademicPrograms } from '@/lib/data/academicPrograms';
 import AllowlistTable, {
   type AllowlistRow,
@@ -69,26 +69,7 @@ export default async function AdminAllowlistPage() {
       </p>
 
       {/* Sub-nav */}
-      <div className="mt-4 flex gap-4 border-b border-slate-200 text-sm">
-        <Link
-          href="/admin/users"
-          className="border-b-2 border-transparent pb-2 text-slate-600 hover:border-mfu-primary hover:text-mfu-primary"
-        >
-          ผู้ใช้งานปัจจุบัน
-        </Link>
-        <Link
-          href="/admin/users/program-assignments"
-          className="border-b-2 border-transparent pb-2 text-slate-600 hover:border-mfu-primary hover:text-mfu-primary"
-        >
-          มอบหมายอาจารย์ประจำหลักสูตร
-        </Link>
-        <Link
-          href="/admin/users/allowlist"
-          className="border-b-2 border-mfu-primary pb-2 font-medium text-mfu-primary"
-        >
-          ทะเบียนรายชื่อ
-        </Link>
-      </div>
+      <UsersSubNav active="allowlist" />
 
       <div className="mt-4 flex flex-wrap items-center gap-2">
         <span className="text-xs text-slate-500">

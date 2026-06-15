@@ -2,6 +2,8 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { getCurrentProfile } from '@/lib/firebase/auth-server';
 import { getAllUsers } from '@/lib/data/users';
+import { getCommitteeMembershipsByUser } from '@/lib/data/assessmentCommittee';
+import UsersSubNav from '@/components/UsersSubNav';
 
 export const dynamic = 'force-dynamic';
 
@@ -19,18 +21,22 @@ function roleSummary(roles: {
   const parts: string[] = [];
   const directorCount =
     roles.directorOfAcademicPrograms?.length || roles.directorOf?.length || 0;
-  const assessorCount =
-    roles.assessorOfAcademicPrograms?.length || roles.assessorOf?.length || 0;
   const verifierCount =
     roles.verifierOfAcademicPrograms?.length || roles.verifierOf?.length || 0;
   if (roles.isSuperAdmin) parts.push('ผู้ดูแลระบบสูงสุด');
   if (roles.isAdmin && !roles.isSuperAdmin) parts.push('ผู้ดูแลระบบ');
   if (directorCount) parts.push(`ประธานหลักสูตร (${directorCount})`);
-  if (assessorCount) parts.push(`ผู้ทวนสอบ (${assessorCount})`);
   if (verifierCount) parts.push(`กรรมการรับรองผล (${verifierCount})`);
   if (roles.isLecturer) parts.push('อาจารย์ผู้รับผิดชอบ');
-  return parts.length ? parts.join(' · ') : '—';
+  // Assessor roles are shown separately as committee chips (see the table cell).
+  return parts.join(' · ');
 }
+
+const POSITION_LABEL: Record<'head' | 'internal' | 'secretary', string> = {
+  head: 'ประธานผู้ทวนสอบ',
+  internal: 'ผู้ทวนสอบภายใน',
+  secretary: 'เลขานุการ',
+};
 
 export default async function AdminUsersPage() {
   const profile = await getCurrentProfile();
@@ -38,7 +44,10 @@ export default async function AdminUsersPage() {
   // User & role management is admin-only.
   if (!profile.roles.isAdmin) redirect('/admin');
 
-  const users = await getAllUsers();
+  const [users, committeeByUser] = await Promise.all([
+    getAllUsers(),
+    getCommitteeMembershipsByUser(),
+  ]);
 
   return (
     <div>
@@ -49,26 +58,7 @@ export default async function AdminUsersPage() {
       </p>
 
       {/* Sub-nav */}
-      <div className="mt-4 flex gap-4 border-b border-slate-200 text-sm">
-        <Link
-          href="/admin/users"
-          className="border-b-2 border-mfu-primary pb-2 font-medium text-mfu-primary"
-        >
-          ผู้ใช้งานปัจจุบัน
-        </Link>
-        <Link
-          href="/admin/users/program-assignments"
-          className="border-b-2 border-transparent pb-2 text-slate-600 hover:border-mfu-primary hover:text-mfu-primary"
-        >
-          มอบหมายอาจารย์ประจำหลักสูตร
-        </Link>
-        <Link
-          href="/admin/users/allowlist"
-          className="border-b-2 border-transparent pb-2 text-slate-600 hover:border-mfu-primary hover:text-mfu-primary"
-        >
-          ทะเบียนรายชื่อ
-        </Link>
-      </div>
+      <UsersSubNav active="users" />
 
       {users.length === 0 ? (
         <div className="mt-4 rounded-xl border border-dashed border-slate-300 p-10 text-center text-sm text-slate-500">
@@ -102,8 +92,31 @@ export default async function AdminUsersPage() {
                       </Link>
                     </td>
                     <td className="px-4 py-3 text-slate-600">{u.email}</td>
-                    <td className="px-4 py-3 text-slate-600">
-                      {roleSummary(u.roles)}
+                    <td className="px-4 py-3">
+                      {(() => {
+                        const base = roleSummary(u.roles);
+                        const memberships = committeeByUser[u.id] ?? [];
+                        const assessorCount =
+                          u.roles.assessorOfAcademicPrograms?.length ?? 0;
+                        if (!base && memberships.length === 0 && assessorCount === 0)
+                          return <span className="text-slate-500">—</span>;
+                        return (
+                          <div className="flex flex-wrap items-center gap-1.5 text-slate-600">
+                            {base && <span>{base}</span>}
+                            {memberships.map((m, i) => (
+                              <span
+                                key={i}
+                                className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-xs text-slate-700"
+                              >
+                                {POSITION_LABEL[m.position]} · {m.code}
+                              </span>
+                            ))}
+                            {memberships.length === 0 && assessorCount > 0 && (
+                              <span>ผู้ทวนสอบ ({assessorCount})</span>
+                            )}
+                          </div>
+                        );
+                      })()}
                     </td>
                     <td className="px-4 py-3 text-xs">
                       {inactive ? (
