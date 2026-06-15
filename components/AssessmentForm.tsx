@@ -236,7 +236,7 @@ export default function AssessmentForm({
       showSign = true;
       showReturn = true;
     } else if (isSecretaryActor && preSubmit) {
-      showDraft = true;
+      // Single action for the secretary: save + send to the head in one step.
       showSubmit = true;
     } else if (committeeRole.isHead && preSubmit) {
       waitingNote = 'รอเลขานุการส่งผลการทวนสอบให้ประธานลงนาม';
@@ -613,8 +613,8 @@ export default function AssessmentForm({
                 const ok = await confirm({
                   title: 'ส่งให้ประธานผู้ทวนสอบลงนาม',
                   message:
-                    'ผลการทวนสอบจะถูกส่งให้ประธานเพื่อพิจารณาลงนาม คุณยังแก้ไขได้จนกว่าประธานจะลงนาม',
-                  confirmLabel: 'ส่งให้ประธาน',
+                    'ระบบจะบันทึกผลการทวนสอบและส่งให้ประธานเพื่อพิจารณาลงนาม หลังจากส่งแล้วจะแก้ไขไม่ได้จนกว่าประธานจะส่งกลับให้แก้ไข',
+                  confirmLabel: 'บันทึกและส่งให้ประธาน',
                   cancelLabel: 'ยกเลิก',
                 });
                 if (ok) runAction('submit');
