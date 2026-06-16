@@ -1,6 +1,11 @@
 import 'server-only';
 import { getAdminDb } from '@/lib/firebase/admin';
-import type { AssessmentDoc, FollowUpReviewDoc, OfferingDoc } from '@/lib/types/models';
+import type {
+  AssessmentDoc,
+  FollowUpReviewDoc,
+  OfferingDoc,
+  SelfAssessmentDoc,
+} from '@/lib/types/models';
 
 export type OfferingWithId = OfferingDoc & { id: string };
 export type AssessmentWithId = AssessmentDoc & { id: string };
@@ -69,6 +74,22 @@ export async function getFollowUpReview(
     .get();
   if (!snap.exists) return null;
   return snap.data() as FollowUpReviewDoc;
+}
+
+/**
+ * Fetch the lecturer's self-assessment for an offering, if one has been saved.
+ */
+export async function getSelfAssessment(
+  offeringId: string,
+): Promise<SelfAssessmentDoc | null> {
+  const snap = await getAdminDb()
+    .collection('offerings')
+    .doc(offeringId)
+    .collection('selfAssessment')
+    .doc('self')
+    .get();
+  if (!snap.exists) return null;
+  return snap.data() as SelfAssessmentDoc;
 }
 
 /**

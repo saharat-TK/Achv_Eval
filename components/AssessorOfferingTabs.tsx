@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import AiReportsList from '@/components/AiReportsList';
 import AssessmentForm from '@/components/AssessmentForm';
+import RubricScorer from '@/components/RubricScorer';
 import FollowUpReviewPanel from '@/components/FollowUpReviewPanel';
 import type {
   AssessmentDoc,
@@ -20,6 +21,7 @@ export default function AssessorOfferingTabs({
   committeeRole,
   isAdmin,
   isSuperAdmin,
+  selfAssessment,
   previousOffering,
   previousAssessment,
   initialFollowUp,
@@ -30,6 +32,15 @@ export default function AssessorOfferingTabs({
   committeeRole: UserCommitteeRole;
   isAdmin: boolean;
   isSuperAdmin: boolean;
+  /** Lecturer's self-assessment — seeds the assessor form and shows as a
+   *  read-only reference. */
+  selfAssessment: {
+    scores: AssessmentDoc['scores'];
+    comments: AssessmentDoc['comments'];
+    generalNotes: string;
+    lecturerName: string;
+    isSubmitted: boolean;
+  } | null;
   previousOffering: {
     id: string;
     academicYear: number;
@@ -91,8 +102,24 @@ export default function AssessorOfferingTabs({
             <p className="mt-1 text-xs text-slate-500">
               ผลวิเคราะห์จากระบบ AI เพื่อประกอบการพิจารณาของผู้ทวนสอบ
             </p>
-            <div className="mt-4 lg:min-h-0 lg:flex-1">
-              <AiReportsList offeringId={offeringId} scrollBody />
+            <div className="mt-4 space-y-4 lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:pr-1">
+              <AiReportsList offeringId={offeringId} />
+              {selfAssessment && (
+                <details className="rounded-xl border border-slate-200 bg-white">
+                  <summary className="cursor-pointer px-4 py-3 text-sm font-semibold text-slate-700">
+                    ผลการประเมินตนเองของอาจารย์ (อ้างอิง)
+                  </summary>
+                  <div className="px-4 pb-4">
+                    <RubricScorer
+                      scores={selfAssessment.scores}
+                      comments={selfAssessment.comments}
+                      generalNotes={selfAssessment.generalNotes}
+                      hasExamAssessment={hasExamAssessment}
+                      readOnly
+                    />
+                  </div>
+                </details>
+              )}
             </div>
           </section>
 
@@ -113,6 +140,9 @@ export default function AssessorOfferingTabs({
                 committeeRole={committeeRole}
                 isAdmin={isAdmin}
                 isSuperAdmin={isSuperAdmin}
+                seedScores={selfAssessment?.scores}
+                seedComments={selfAssessment?.comments}
+                seedNotes={selfAssessment?.generalNotes}
                 requireFollowUp={showFollowUpTab}
                 followUpRecorded={followUpRecorded}
                 onGoToFollowUp={() => setTab('followup')}
