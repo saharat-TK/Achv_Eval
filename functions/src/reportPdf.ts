@@ -1,6 +1,6 @@
 import * as admin from 'firebase-admin';
 import { google } from 'googleapis';
-import { renderHtmlToPdf, storePdf } from './pdf';
+import { renderHtmlToPdf, stampFooter, storePdf } from './pdf';
 import { buildReportHtml, type ReportMeta } from './reportHtml';
 import {
   getProgramCode,
@@ -89,7 +89,14 @@ export async function generateAndStoreReport(args: {
 
   // ----- Render HTML → PDF → Storage --------------------------------
   const html = buildReportHtml(result, meta);
-  const pdf = await renderHtmlToPdf(html);
+  const rendered = await renderHtmlToPdf(html);
+  // Per-page running footer (title · course | หน้าที่ n/total), matching the
+  // assessment summary report.
+  const pdf = await stampFooter(
+    rendered,
+    `รายงานการวิเคราะห์รายวิชา ${meta.courseCode} ${meta.courseNameTh}` +
+      ` | ปีการศึกษา ${meta.academicYear} ${meta.semesterLabel} · ตอนเรียน ${meta.section}`,
+  );
   const { filePath, downloadUrl } = await storePdf(
     pdf,
     `${dir}/ai-report-${reportId}.pdf`,

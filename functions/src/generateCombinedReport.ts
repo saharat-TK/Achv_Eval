@@ -1,6 +1,6 @@
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import * as admin from 'firebase-admin';
-import { renderHtmlToPdf, storePdf } from './pdf';
+import { renderHtmlToPdf, stampFooter, storePdf } from './pdf';
 import { buildCombinedReportHtml } from './assessmentHtml';
 import type {
   FollowUpForReport,
@@ -223,7 +223,14 @@ export const generateCombinedReport = onCall(
       meta,
     });
 
-    const pdf = await renderHtmlToPdf(html);
+    const rendered = await renderHtmlToPdf(html);
+    // Per-page running footer (title · course | หน้าที่ n/total), matching the
+    // assessment summary report.
+    const pdf = await stampFooter(
+      rendered,
+      `รายงานการประเมินและทวนสอบผลสัมฤทธิ์รายวิชา (ฉบับลงนาม) ${meta.courseCode} ${meta.courseNameTh}` +
+        ` | ปีการศึกษา ${meta.academicYear} ${meta.semesterLabel} · ตอนเรียน ${meta.section}`,
+    );
     const programCode = await getProgramCode(db, offering.programId);
     const pathParts = {
       programCode,
