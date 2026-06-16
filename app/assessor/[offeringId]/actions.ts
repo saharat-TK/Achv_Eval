@@ -4,6 +4,7 @@ import { FieldValue } from 'firebase-admin/firestore';
 import { revalidatePath } from 'next/cache';
 import { getAdminDb } from '@/lib/firebase/admin';
 import { getSessionUser, getCurrentProfile } from '@/lib/firebase/auth-server';
+import { deleteStoredPdf } from '@/lib/data/reportStorage';
 import type { ImplementationDecision, AssessmentDoc } from '@/lib/types/models';
 
 type ScoreKey = keyof AssessmentDoc['scores'];
@@ -95,4 +96,94 @@ export async function saveFollowUp(
     console.error('saveFollowUp error', err);
     return { error: err.message || 'write_failed' };
   }
+}
+
+/**
+ * Reverses a signed-off (`assessed`) offering back to `pending_assessment` so it
+ * can be re-assessed. Super-admin only — voiding a signed verification is a
+ * sensitive action. Unlocks the assessment and its follow-up review, clears the
+ * signature + report link, deletes the stored combined PDF (best-effort; the
+ * voided report must not remain reachable by its token URL), and re-opens the
+ * offering. Re-signing regenerates a fresh report.
+ */
+export async function reverseAssessedSignOff(
+  offeringId: string,
+): Promise<{ ok: true } | { error: string }> {
+  const user = await getSessionUser();
+  if (!user) return { error: 'not_authenticated' };
+  const profile = await getCurrentProfile();
+  if (!profile) return { error: 'no_profile' };
+  if (profile.roles.isSuperAdmin !== true) return { error: 'not_authorized' };
+
+  const db = getAdminDb();
+  const offeringRef = db.collection('offerings').doc(offeringId);
+  const KNOWN_ERRORS = ['offering_not_found', 'not_assessed', 'assessment_not_found'];
+
+  let pdf: { path: string; url: string | null } | null = null;
+  try {
+    await db.runTransaction(async (tx) => {
+      const offeringSnap = await tx.get(offeringRef);
+      if (!offeringSnap.exists) throw new Error('offering_not_found');
+      const offering = offeringSnap.data()!;
+      if (offering.status !== 'assessed') throw new Error('not_assessed');
+      if (!offering.assessmentId) throw new Error('assessment_not_found');
+
+      const assessmentRef = offeringRef
+        .collection('assessments')
+        .doc(offering.assessmentId);
+      const reviewRef = offeringRef.collection('followUpReview').doc('review');
+
+      // All reads must precede writes within the transaction.
+      const assessmentSnap = await tx.get(assessmentRef);
+      if (!assessmentSnap.exists) throw new Error('assessment_not_found');
+      const reviewSnap = await tx.get(reviewRef);
+
+      const a = assessmentSnap.data() as {
+        signedPdfStoragePath?: string | null;
+        signedPdfUrl?: string | null;
+      };
+      if (a.signedPdfStoragePath) {
+        pdf = { path: a.signedPdfStoragePath, url: a.signedPdfUrl ?? null };
+      }
+
+      const now = FieldValue.serverTimestamp();
+      tx.update(assessmentRef, {
+        isLocked: false,
+        signedAt: null,
+        followUpStatus: null,
+        signedPdfStoragePath: null,
+        signedPdfUrl: null,
+        updatedAt: now,
+      });
+      if (reviewSnap.exists) {
+        tx.update(reviewRef, { isLocked: false, updatedAt: now });
+      }
+      tx.update(offeringRef, {
+        status: 'pending_assessment',
+        updatedAt: now,
+        updatedBy: user.uid,
+      });
+    });
+  } catch (err: any) {
+    if (KNOWN_ERRORS.includes(err?.message)) return { error: err.message };
+    console.error('reverseAssessedSignOff error', err);
+    return { error: 'reverse_failed' };
+  }
+
+  // Storage is not transactional — delete the voided report after the commit.
+  if (pdf) await deleteStoredPdf(pdf);
+
+  await db.collection('auditLog').add({
+    occurredAt: FieldValue.serverTimestamp(),
+    actorId: user.uid,
+    actorEmail: user.email,
+    action: 'assessment_signoff_reversed',
+    entityType: 'offerings',
+    entityId: offeringId,
+    before: null,
+    after: { targetStatus: 'pending_assessment' },
+  });
+
+  revalidatePath(`/assessor/${offeringId}`);
+  return { ok: true };
 }

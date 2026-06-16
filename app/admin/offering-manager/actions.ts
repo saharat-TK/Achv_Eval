@@ -2,8 +2,9 @@
 
 import { revalidatePath } from 'next/cache';
 import { FieldValue } from 'firebase-admin/firestore';
-import { getAdminDb, getAdminStorage } from '@/lib/firebase/admin';
+import { getAdminDb } from '@/lib/firebase/admin';
 import { getSessionUser, getCurrentProfile } from '@/lib/firebase/auth-server';
+import { deleteStoredPdf } from '@/lib/data/reportStorage';
 import {
   getCurriculumsWithCourses,
   type CurriculumWithCourses,
@@ -125,36 +126,6 @@ async function audit(
     before: null,
     after,
   });
-}
-
-/** Extract the storage bucket name embedded in a Firebase download URL. */
-function bucketFromDownloadUrl(url: string | null | undefined): string | null {
-  if (!url) return null;
-  const match = url.match(/\/v0\/b\/([^/]+)\/o\//);
-  return match ? decodeURIComponent(match[1]) : null;
-}
-
-/**
- * Best-effort deletion of a generated report PDF after a status reversal —
- * the signed document is voided, so the stored object is removed to prevent
- * direct token-URL access to a now-invalid official report. Runs after the
- * Firestore transaction commits (Storage is not transactional) and never
- * throws: the reversal stands even if the file is already gone.
- */
-async function deleteStoredPdf(pdf: { path: string; url: string | null }) {
-  try {
-    const bucketName =
-      bucketFromDownloadUrl(pdf.url) ??
-      process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET ??
-      undefined;
-    if (!bucketName) return;
-    await getAdminStorage()
-      .bucket(bucketName)
-      .file(pdf.path)
-      .delete({ ignoreNotFound: true });
-  } catch (err) {
-    console.error('reverseOfferingStatuses: failed to delete PDF', pdf.path, err);
-  }
 }
 
 async function grantLecturerRole(lecturerId: string | null | undefined) {

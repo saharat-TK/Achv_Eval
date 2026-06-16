@@ -96,6 +96,7 @@ export default async function AssessorOfferingPage({
         offeringStatus={offering.status}
         committeeRole={committeeRole}
         isAdmin={profile.roles.isAdmin === true}
+        isSuperAdmin={profile.roles.isSuperAdmin === true}
         previousOffering={
           previousOffering
             ? {

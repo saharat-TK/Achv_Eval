@@ -109,7 +109,10 @@ export async function POST(request: NextRequest) {
   // caller can both draft and sign). UI gating mirrors this; this is the gate.
   const committee = await getOfferingCommittee(offering.programId);
   const role = deriveUserCommitteeRole(committee, user.uid);
-  const free = !committee.hasCommittee || isAdmin;
+  // Admins keep an override only when they hold no committee position, so an
+  // admin who is the head/secretary still acts in that committee role.
+  const onCommittee = role.isHead || role.isSecretary || role.isInternal;
+  const free = !committee.hasCommittee || (isAdmin && !onCommittee);
   // The head also covers the secretary stage when no secretary is assigned.
   const isSecretaryActor = role.isSecretary || (role.isHead && !role.hasSecretary);
   const status = offering.status as OfferingStatus;
