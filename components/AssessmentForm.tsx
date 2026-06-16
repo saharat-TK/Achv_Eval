@@ -23,6 +23,7 @@ import type {
 } from '@/lib/types/models';
 import { computeRubricResult } from '@/lib/types/models';
 import type { UserCommitteeRole } from '@/lib/data/assessmentCommittee';
+import { reverseAssessedSignOff } from '@/app/assessor/[offeringId]/actions';
 import { useConfirm } from '@/components/ConfirmDialogProvider';
 
 /** Mirror of the server's AssessorAction (app/api/assessor/submit/route.ts). */
@@ -124,6 +125,7 @@ export default function AssessmentForm({
   offeringStatus,
   committeeRole,
   isAdmin,
+  isSuperAdmin,
   requireFollowUp = false,
   followUpRecorded = false,
   onGoToFollowUp,
@@ -134,6 +136,7 @@ export default function AssessmentForm({
   offeringStatus: OfferingStatus;
   committeeRole: UserCommitteeRole;
   isAdmin: boolean;
+  isSuperAdmin: boolean;
   requireFollowUp?: boolean;
   followUpRecorded?: boolean;
   onGoToFollowUp?: () => void;
@@ -161,6 +164,7 @@ export default function AssessmentForm({
   const [loaded, setLoaded] = useState(false);
   const [signedPdfUrl, setSignedPdfUrl] = useState<string | null>(null);
   const [generatingPdf, setGeneratingPdf] = useState(false);
+  const [reversing, setReversing] = useState(false);
 
   // Subscribe to existing assessment
   useEffect(() => {
@@ -210,10 +214,14 @@ export default function AssessmentForm({
   const bandInfo = BAND_LABEL[result.band] ?? BAND_LABEL.improve;
 
   // ── Two-step sign-off gating ───────────────────────────────────────
-  // `free` = no standing committee, or an admin override → the original
-  // single-assessor flow (this caller can both draft and sign). Otherwise the
-  // secretary drafts/submits and the head signs/returns. Mirrors the server.
-  const free = !committeeRole.hasCommittee || isAdmin;
+  // `free` = the original single-assessor flow (this caller can both draft and
+  // sign): when there is no standing committee, or for an admin who holds no
+  // committee position (an override so admins are never locked out). An admin
+  // who IS the head/secretary still acts in that committee role. Mirrors the
+  // server.
+  const onCommittee =
+    committeeRole.isHead || committeeRole.isSecretary || committeeRole.isInternal;
+  const free = !committeeRole.hasCommittee || (isAdmin && !onCommittee);
   const isSecretaryActor =
     committeeRole.isSecretary || (committeeRole.isHead && !committeeRole.hasSecretary);
   const preSubmit = status === 'pending_assessment' || status === 'assessor_review';
@@ -390,6 +398,37 @@ export default function AssessmentForm({
     return false;
   }, [requireFollowUp, followUpRecorded, confirm, onGoToFollowUp]);
 
+  // Super-admin only: void the sign-off and re-open the offering for assessment.
+  const handleReverse = useCallback(async () => {
+    const ok = await confirm({
+      title: 'ย้อนสถานะกลับเป็นรอทวนสอบ',
+      message:
+        'การลงนามจะถูกยกเลิก รายงานฉบับลงนามจะถูกลบ และรายวิชาจะกลับสู่สถานะรอทวนสอบเพื่อทวนสอบใหม่',
+      confirmLabel: 'ย้อนสถานะ',
+      variant: 'danger',
+      confirmationText: 'ยืนยัน',
+    });
+    if (!ok) return;
+    setReversing(true);
+    setMessage(null);
+    try {
+      const res = await reverseAssessedSignOff(offeringId);
+      if ('error' in res) {
+        setMessage({ type: 'err', text: 'ย้อนสถานะไม่สำเร็จ — กรุณาลองใหม่' });
+        return;
+      }
+      setIsLocked(false);
+      setStatus('pending_assessment');
+      setSignedPdfUrl(null);
+      setMessage({ type: 'ok', text: 'ย้อนสถานะกลับเป็นรอทวนสอบแล้ว' });
+      router.refresh();
+    } catch {
+      setMessage({ type: 'err', text: 'ย้อนสถานะไม่สำเร็จ — กรุณาลองใหม่' });
+    } finally {
+      setReversing(false);
+    }
+  }, [offeringId, confirm, router]);
+
   if (!loaded) {
     return <p className="text-sm text-slate-400">กำลังโหลดแบบประเมิน…</p>;
   }
@@ -414,9 +453,21 @@ export default function AssessmentForm({
             <div className="text-xs mt-0.5">ระดับ: {bandInfo.th}</div>
           </div>
           {isLocked && (
-            <span className="text-xs px-2 py-1 rounded-full bg-white/60 font-medium">
-              🔒 ลงนามแล้ว
-            </span>
+            <div className="flex items-center gap-2">
+              {isSuperAdmin && (
+                <button
+                  type="button"
+                  onClick={handleReverse}
+                  disabled={reversing}
+                  className="rounded-lg border border-amber-300 bg-white/80 px-3 py-1 text-xs font-medium text-amber-700 hover:bg-white disabled:opacity-50"
+                >
+                  {reversing ? 'กำลังย้อน…' : 'ย้อนเป็นรอทวนสอบ'}
+                </button>
+              )}
+              <span className="text-xs px-2 py-1 rounded-full bg-white/60 font-medium">
+                🔒 ลงนามแล้ว
+              </span>
+            </div>
           )}
         </div>
       </div>

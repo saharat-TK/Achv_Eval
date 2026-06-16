@@ -19,6 +19,7 @@ export default function AssessorOfferingTabs({
   offeringStatus,
   committeeRole,
   isAdmin,
+  isSuperAdmin,
   previousOffering,
   previousAssessment,
   initialFollowUp,
@@ -28,6 +29,7 @@ export default function AssessorOfferingTabs({
   offeringStatus: OfferingStatus;
   committeeRole: UserCommitteeRole;
   isAdmin: boolean;
+  isSuperAdmin: boolean;
   previousOffering: {
     id: string;
     academicYear: number;
@@ -110,6 +112,7 @@ export default function AssessorOfferingTabs({
                 offeringStatus={offeringStatus}
                 committeeRole={committeeRole}
                 isAdmin={isAdmin}
+                isSuperAdmin={isSuperAdmin}
                 requireFollowUp={showFollowUpTab}
                 followUpRecorded={followUpRecorded}
                 onGoToFollowUp={() => setTab('followup')}

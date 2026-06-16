@@ -185,9 +185,12 @@ export async function POST(request: NextRequest) {
       const lecturerOf = await expandAcademicPrograms(lecturerOfAcademicPrograms);
       const isLecturer = allow.presetIsLecturer !== false || lecturerOf.length > 0;
       // Assessment-committee placements made while this user was still pending.
+      // The assessor workspace authorizes by curriculum id, so expand to the
+      // `assessorOf` mirror the same way director/lecturer roles are expanded.
       const assessorOfAcademicPrograms = [
         ...new Set((allow.presetAssessorAcademicProgramIds ?? []).filter(Boolean)),
       ].sort((a, b) => a.localeCompare(b));
+      const assessorOf = await expandAcademicPrograms(assessorOfAcademicPrograms);
       // Verification-committee placements made while this user was still pending.
       // The verification workspace authorizes by curriculum id, so expand to the
       // `verifierOf` mirror the same way director/lecturer roles are expanded.
@@ -205,7 +208,7 @@ export async function POST(request: NextRequest) {
           isSuperAdmin: false,
           isLecturer,
           directorOf,
-          assessorOf: [],
+          assessorOf,
           verifierOf,
           lecturerOf,
           directorOfAcademicPrograms,

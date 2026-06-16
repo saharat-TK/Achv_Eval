@@ -72,6 +72,17 @@ function internalIdentities(c: {
   return { uids, allow };
 }
 
+/** Curriculum-revision ids (`programs/{id}`) under an academic program. The
+ *  assessor workspace authorizes by curriculum id (`offerings.programId`), so
+ *  committee members need the `assessorOf` mirror kept in sync with these. */
+async function curriculumIdsForProgram(academicProgramId: string): Promise<string[]> {
+  const snap = await getAdminDb()
+    .collection('programs')
+    .where('parentProgramId', '==', academicProgramId)
+    .get();
+  return snap.docs.map((d) => d.id);
+}
+
 export async function saveAssessmentCommittee(
   input: SaveCommitteeInput,
 ): Promise<CommitteeActionResult> {
@@ -107,6 +118,7 @@ export async function saveAssessmentCommittee(
     : { uids: new Set<string>(), allow: new Set<string>() };
 
   const programId = input.academicProgramId;
+  const curriculumIds = await curriculumIdsForProgram(programId);
   const batch = db.batch();
   batch.update(ref, {
     assessmentCommittee: {
@@ -119,6 +131,9 @@ export async function saveAssessmentCommittee(
   for (const uid of next.uids)
     batch.update(db.collection('users').doc(uid), {
       'roles.assessorOfAcademicPrograms': FieldValue.arrayUnion(programId),
+      ...(curriculumIds.length
+        ? { 'roles.assessorOf': FieldValue.arrayUnion(...curriculumIds) }
+        : {}),
     });
   for (const id of next.allow)
     batch.update(db.collection('allowlist').doc(id), {
@@ -128,6 +143,9 @@ export async function saveAssessmentCommittee(
     if (!next.uids.has(uid))
       batch.update(db.collection('users').doc(uid), {
         'roles.assessorOfAcademicPrograms': FieldValue.arrayRemove(programId),
+        ...(curriculumIds.length
+          ? { 'roles.assessorOf': FieldValue.arrayRemove(...curriculumIds) }
+          : {}),
       });
   for (const id of before.allow)
     if (!next.allow.has(id))
@@ -182,11 +200,15 @@ export async function clearAssessmentCommittee(
       })
     : { uids: new Set<string>(), allow: new Set<string>() };
 
+  const curriculumIds = await curriculumIdsForProgram(academicProgramId);
   const batch = db.batch();
   batch.update(ref, { assessmentCommittee: FieldValue.delete() });
   for (const uid of before.uids)
     batch.update(db.collection('users').doc(uid), {
       'roles.assessorOfAcademicPrograms': FieldValue.arrayRemove(academicProgramId),
+      ...(curriculumIds.length
+        ? { 'roles.assessorOf': FieldValue.arrayRemove(...curriculumIds) }
+        : {}),
     });
   for (const id of before.allow)
     batch.update(db.collection('allowlist').doc(id), {
