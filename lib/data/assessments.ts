@@ -1,5 +1,6 @@
 import 'server-only';
 import { getAdminDb } from '@/lib/firebase/admin';
+import { ASSESSOR_OFFERING_STATUSES } from '@/lib/constants';
 import type {
   AssessmentDoc,
   FollowUpReviewDoc,
@@ -20,19 +21,13 @@ export async function getOfferingsForAssessor(
 ): Promise<OfferingWithId[]> {
   if (programIds.length === 0) return [];
 
-  const ASSESSOR_STATUSES = [
-    'pending_assessment',
-    'assessor_review',
-    'pending_head_signoff',
-    'assessed',
-  ];
   const db = getAdminDb();
 
   // Firestore `in` supports up to 30 values; programIds is typically 1-3.
   const snap = await db
     .collection('offerings')
     .where('programId', 'in', programIds)
-    .where('status', 'in', ASSESSOR_STATUSES)
+    .where('status', 'in', ASSESSOR_OFFERING_STATUSES)
     .orderBy('academicYear', 'desc')
     .orderBy('semester', 'desc')
     .get();

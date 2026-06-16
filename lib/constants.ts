@@ -38,6 +38,19 @@ export const OFFERING_STATUS: Record<
 };
 
 /**
+ * Offering statuses that belong in the assessor workspace queue — from waiting
+ * to be reviewed, through the head's sign-off, to assessed. Single source of
+ * truth for both the server reader (getOfferingsForAssessor) and the live
+ * client list (AssessorOfferingsTable) so they can't drift.
+ */
+export const ASSESSOR_OFFERING_STATUSES: OfferingStatus[] = [
+  'pending_assessment',
+  'assessor_review',
+  'pending_head_signoff',
+  'assessed',
+];
+
+/**
  * Document slots a lecturer uploads per offering.
  * `required` marks documents needed before AI analysis can run.
  */
