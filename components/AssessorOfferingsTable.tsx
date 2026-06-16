@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import { getFirebaseAuth, getFirebaseDb } from '@/lib/firebase/config';
-import { SEMESTER_LABEL } from '@/lib/constants';
+import { ASSESSOR_OFFERING_STATUSES, SEMESTER_LABEL } from '@/lib/constants';
 import type { OfferingStatus, Semester } from '@/lib/types/models';
 import StatusBadge from './StatusBadge';
 
@@ -44,12 +44,6 @@ interface YearGroup {
   count: number;
   semesters: SemesterGroup[];
 }
-
-const ASSESSOR_STATUSES: OfferingStatus[] = [
-  'pending_assessment',
-  'assessor_review',
-  'assessed',
-];
 
 const UNKNOWN_DEPARTMENT_ID = '__unknown_department__';
 const UNKNOWN_DEPARTMENT_NAME = 'ไม่ระบุสาขาวิชา';
@@ -108,7 +102,7 @@ export default function AssessorOfferingsTable({
         const q = query(
           collection(getFirebaseDb(), 'offerings'),
           where('programId', '==', programId),
-          where('status', 'in', ASSESSOR_STATUSES),
+          where('status', 'in', ASSESSOR_OFFERING_STATUSES),
         );
 
         unsubs.push(

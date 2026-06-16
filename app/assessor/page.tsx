@@ -11,9 +11,10 @@ export default async function AssessorDashboard() {
   if (!profile) redirect('/login');
 
   const assessorOf = profile.roles.assessorOf ?? [];
-  // Admins without an assessor assignment see every program's offerings
-  // read-only (the sign-off route still gates on assessorOf).
-  const adminViewing = profile.roles.isAdmin && assessorOf.length === 0;
+  // Admins and super-admins get a full oversight view of every program's
+  // offerings, regardless of committee membership (the sign-off route still
+  // gates on assessorOf, so it's read-only for programs they don't sit on).
+  const adminViewing = profile.roles.isAdmin === true;
   const programs = adminViewing
     ? await getAllPrograms()
     : await getProgramsByIds(assessorOf);
