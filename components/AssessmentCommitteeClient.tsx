@@ -50,6 +50,7 @@ function PersonPicker({
   allowFreeText,
   placeholder,
   excludeKeys,
+  clearable = true,
   onChange,
 }: {
   value: Slot;
@@ -57,6 +58,9 @@ function PersonPicker({
   allowFreeText: boolean;
   placeholder: string;
   excludeKeys?: Set<string>;
+  /** Show the picker's own clear (✕). Off for rows that already have a remove
+   *  button, so the row shows a single delete icon. */
+  clearable?: boolean;
   onChange: (s: Slot) => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -168,7 +172,7 @@ function PersonPicker({
           }}
           className="w-full rounded-lg border border-slate-300 px-3 py-1.5 text-sm focus:border-mfu-primary focus:outline-none"
         />
-        {value.name && (
+        {clearable && value.name && (
           <button
             type="button"
             onClick={() => {
@@ -456,6 +460,7 @@ function CommitteeModal({
                     allowFreeText
                     placeholder="เลือกหรือพิมพ์ชื่อ (ภายนอกระบบได้)"
                     excludeKeys={externalChosen}
+                    clearable={false}
                     onChange={(v) => setExternalAt(i, v)}
                   />
                   <button
@@ -505,6 +510,7 @@ function CommitteeModal({
                         allowFreeText={false}
                         placeholder="เลือกอาจารย์ประจำหลักสูตร"
                         excludeKeys={internalChosen}
+                        clearable={false}
                         onChange={(v) => setInternalAt(i, v)}
                       />
                       <button
