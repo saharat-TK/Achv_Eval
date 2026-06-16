@@ -9,7 +9,15 @@ import {
   getProgramAssessorIds,
   notifySafely,
 } from '@/lib/data/notifications';
-import type { AiReportDoc, OfferingDoc } from '@/lib/types/models';
+import type {
+  AiReportDoc,
+  AssessmentDoc,
+  OfferingDoc,
+  RubricItemComment,
+} from '@/lib/types/models';
+
+type ScoreKey = keyof AssessmentDoc['scores'];
+type SelfAssessmentResult = { ok: true } | { ok: false; error: string };
 
 const ANALYSIS_ATTEMPT_LIMIT = 4;
 
@@ -176,6 +184,131 @@ export async function sendOfferingForAssessment(
   revalidatePath(`/lecturer/${offeringId}`);
   revalidatePath('/assessor');
   return { ok: true };
+}
+
+/**
+ * Writes the lecturer's self-assessment. With `submit`, it also sends the
+ * offering for assessment (ai_complete → pending_assessment) and freezes the
+ * self-assessment — the single "ส่งให้ผู้ทวนสอบ" action. Lecturer-only, editable
+ * only while `ai_complete`, blocked while impersonating.
+ */
+async function writeSelfAssessment(
+  offeringId: string,
+  scores: AssessmentDoc['scores'],
+  comments: Partial<Record<ScoreKey, RubricItemComment>>,
+  generalNotes: string,
+  submit: boolean,
+): Promise<SelfAssessmentResult> {
+  const user = await getSessionUser();
+  if (!user) return { ok: false, error: 'not_authenticated' };
+  if (await isImpersonating()) return { ok: false, error: 'read_only_impersonation' };
+  const profile = await getCurrentProfile();
+  if (!profile) return { ok: false, error: 'no_profile' };
+
+  const db = getAdminDb();
+  const offeringRef = db.collection('offerings').doc(offeringId);
+  const now = FieldValue.serverTimestamp();
+
+  let notificationPayload: { programId: string; courseCode: string } | null = null;
+
+  try {
+    await db.runTransaction(async (tx) => {
+      const offeringSnap = await tx.get(offeringRef);
+      if (!offeringSnap.exists) throw new Error('offering_not_found');
+      const offering = offeringSnap.data() as OfferingDoc;
+      if (offering.isActive === false) throw new Error('offering_not_found');
+      if (offering.lecturerId !== user.uid) throw new Error('not_authorized');
+      if (offering.status !== 'ai_complete') {
+        throw new Error(
+          ['pending_assessment', 'assessor_review', 'pending_head_signoff', 'assessed'].includes(
+            offering.status,
+          )
+            ? 'already_sent'
+            : 'invalid_status',
+        );
+      }
+      if (submit && !offering.latestAiReportId) throw new Error('missing_ai_report');
+
+      const selfRef = offeringRef.collection('selfAssessment').doc('self');
+      const selfSnap = await tx.get(selfRef); // reads must precede writes
+      const prev = selfSnap.exists ? selfSnap.data() : null;
+
+      tx.set(selfRef, {
+        offeringId,
+        scores,
+        comments: comments ?? {},
+        generalNotes: generalNotes.trim() || null,
+        lecturerId: user.uid,
+        lecturerName: profile.nameTh,
+        isSubmitted: submit,
+        submittedAt: submit ? now : prev?.submittedAt ?? null,
+        createdAt: prev?.createdAt ?? now,
+        updatedAt: now,
+      });
+
+      if (submit) {
+        tx.update(offeringRef, {
+          status: 'pending_assessment',
+          updatedAt: now,
+          updatedBy: user.uid,
+        });
+        notificationPayload = {
+          programId: offering.programId,
+          courseCode: offering.courseCode,
+        };
+      }
+
+      tx.set(db.collection('auditLog').doc(), {
+        occurredAt: now,
+        actorId: user.uid,
+        actorEmail: user.email,
+        action: submit ? 'self_assessment_submitted' : 'self_assessment_saved',
+        entityType: 'offerings',
+        entityId: offeringId,
+        before: null,
+        after: { submit },
+      });
+    });
+  } catch (err) {
+    return { ok: false, error: mapSendError(err) };
+  }
+
+  if (notificationPayload) {
+    const { programId, courseCode } = notificationPayload;
+    await notifySafely(
+      getProgramAssessorIds(programId).then((ids) =>
+        createNotifications(ids, {
+          type: 'course_ready_for_review',
+          title: 'มีรายวิชารอการทวนสอบ',
+          body: `รายวิชา ${courseCode} พร้อมให้ทวนสอบแล้ว`.trim(),
+          relatedOfferingId: offeringId,
+        }),
+      ),
+    );
+  }
+
+  revalidatePath('/lecturer');
+  revalidatePath(`/lecturer/${offeringId}`);
+  if (submit) revalidatePath('/assessor');
+  return { ok: true };
+}
+
+export async function saveSelfAssessment(
+  offeringId: string,
+  scores: AssessmentDoc['scores'],
+  comments: Partial<Record<ScoreKey, RubricItemComment>>,
+  generalNotes: string,
+): Promise<SelfAssessmentResult> {
+  return writeSelfAssessment(offeringId, scores, comments, generalNotes, false);
+}
+
+export async function submitSelfAssessment(
+  offeringId: string,
+  scores: AssessmentDoc['scores'],
+  comments: Partial<Record<ScoreKey, RubricItemComment>>,
+  generalNotes: string,
+): Promise<SelfAssessmentResult> {
+  return writeSelfAssessment(offeringId, scores, comments, generalNotes, true);
 }
 
 function mapSendError(err: unknown): string {

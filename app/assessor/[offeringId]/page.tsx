@@ -2,7 +2,11 @@ import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import { getCurrentProfile } from '@/lib/firebase/auth-server';
 import { getOffering } from '@/lib/data/offerings';
-import { getAssessmentById, getFollowUpReview } from '@/lib/data/assessments';
+import {
+  getAssessmentById,
+  getFollowUpReview,
+  getSelfAssessment,
+} from '@/lib/data/assessments';
 import {
   getOfferingCommittee,
   deriveUserCommitteeRole,
@@ -47,6 +51,9 @@ export default async function AssessorOfferingPage({
   // drives the two-step sign-off (secretary drafts/submits, head signs/returns).
   const committee = await getOfferingCommittee(offering.programId);
   const committeeRole = deriveUserCommitteeRole(committee, profile.uid);
+
+  // Lecturer self-assessment — seeds the assessor form + shown as a reference.
+  const self = await getSelfAssessment(offering.id);
 
   // Fetch previous offering and its assessment (1 hop back) for the follow-up tab.
   let previousOffering = null;
@@ -97,6 +104,17 @@ export default async function AssessorOfferingPage({
         committeeRole={committeeRole}
         isAdmin={profile.roles.isAdmin === true}
         isSuperAdmin={profile.roles.isSuperAdmin === true}
+        selfAssessment={
+          self
+            ? {
+                scores: self.scores,
+                comments: self.comments ?? {},
+                generalNotes: self.generalNotes ?? '',
+                lecturerName: self.lecturerName,
+                isSubmitted: self.isSubmitted,
+              }
+            : null
+        }
         previousOffering={
           previousOffering
             ? {

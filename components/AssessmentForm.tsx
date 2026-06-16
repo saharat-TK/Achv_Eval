@@ -129,6 +129,9 @@ export default function AssessmentForm({
   requireFollowUp = false,
   followUpRecorded = false,
   onGoToFollowUp,
+  seedScores,
+  seedComments,
+  seedNotes,
   scrollBody = false,
 }: {
   offeringId: string;
@@ -140,6 +143,11 @@ export default function AssessmentForm({
   requireFollowUp?: boolean;
   followUpRecorded?: boolean;
   onGoToFollowUp?: () => void;
+  /** Lecturer self-assessment used to pre-fill a fresh assessor form (only
+   *  when no assessor assessment exists yet). */
+  seedScores?: AssessmentDoc['scores'];
+  seedComments?: Partial<Record<ScoreKey, RubricItemComment>>;
+  seedNotes?: string;
   scrollBody?: boolean;
 }) {
   const confirm = useConfirm();
@@ -150,14 +158,16 @@ export default function AssessmentForm({
   // server-rendered prop after router.refresh().
   const [status, setStatus] = useState<OfferingStatus>(offeringStatus);
   useEffect(() => setStatus(offeringStatus), [offeringStatus]);
-  const [scores, setScores] = useState<AssessmentDoc['scores']>({
-    ...DEFAULT_SCORES,
-    item34ExamQuality: hasExamAssessment ? 1 : 'na',
-  });
+  const [scores, setScores] = useState<AssessmentDoc['scores']>(
+    seedScores ?? {
+      ...DEFAULT_SCORES,
+      item34ExamQuality: hasExamAssessment ? 1 : 'na',
+    },
+  );
   const [comments, setComments] = useState<
     Partial<Record<ScoreKey, RubricItemComment>>
-  >({});
-  const [generalNotes, setGeneralNotes] = useState('');
+  >(seedComments ?? {});
+  const [generalNotes, setGeneralNotes] = useState(seedNotes ?? '');
   const [isLocked, setIsLocked] = useState(false);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);

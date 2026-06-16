@@ -384,6 +384,30 @@ export interface AssessmentDoc {
   updatedAt: Ts;
 }
 
+// ----- offerings/{id}/selfAssessment/self ---------------------------
+/**
+ * The lecturer's self-assessment, recorded against the same 7 rubric items
+ * before the offering is sent to the assessor. Stored as a single well-known
+ * document (`self`). It is purely the lecturer's view — it never feeds the
+ * official rubric result, sign-off, reports, or verification. Instead it seeds
+ * the assessor's form (when no assessor assessment exists yet) and is shown to
+ * the assessor as a read-only reference.
+ */
+export interface SelfAssessmentDoc {
+  offeringId: string;
+  scores: AssessmentDoc['scores'];
+  comments: Partial<Record<keyof AssessmentDoc['scores'], RubricItemComment>>;
+  generalNotes: string | null;
+  lecturerId: string;
+  lecturerName: string;
+  /** True once the lecturer has sent the offering for assessment; the
+   *  self-assessment is then frozen (read-only). */
+  isSubmitted: boolean;
+  submittedAt: Ts | null;
+  createdAt: Ts;
+  updatedAt: Ts;
+}
+
 // ----- offerings/{id}/verifications/{verificationId} ----------------
 export interface VerificationDoc {
   offeringId: string;
