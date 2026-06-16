@@ -6,12 +6,14 @@ import {
   renderAiSection,
   renderAssessorSection,
   renderFollowUpSection,
+  renderSelfAssessmentSection,
   signatureTable,
   type AssessmentForReport,
   type FollowUpForReport,
+  type SelfAssessmentForReport,
 } from './reportShared';
 
-export type { FollowUpForReport };
+export type { FollowUpForReport, SelfAssessmentForReport };
 
 export interface VerificationForReport {
   decision: 'verified' | 'needs_follow_up';
@@ -37,10 +39,17 @@ export function buildFinalVerificationHtml(args: {
   verification: VerificationForReport;
   meta: ReportMeta;
   followUp?: FollowUpForReport | null;
+  selfAssessment?: SelfAssessmentForReport | null;
 }): string {
-  const { aiResult, assessment, verification, meta, followUp } = args;
+  const { aiResult, assessment, verification, meta, followUp, selfAssessment } = args;
 
-  const committeeSectionNumber = followUp ? 4 : 3;
+  // Sequential section numbers, skipping any optional section that's absent.
+  let n = 1;
+  const aiSection = renderAiSection(aiResult, n++);
+  const selfSection = selfAssessment ? renderSelfAssessmentSection(selfAssessment, n++) : '';
+  const assessorSection = renderAssessorSection(assessment, n++);
+  const followUpSection = followUp ? renderFollowUpSection(followUp, n++) : '';
+  const committeeSectionNumber = n++;
   const committeeSection = `
 <h2>ส่วนที่ ${committeeSectionNumber} — ผลการรับรองขั้นสุดท้ายของคณะกรรมการ <span class="official">ฉบับทางการ</span></h2>
 <div class="result-box">
@@ -82,11 +91,13 @@ export function buildFinalVerificationHtml(args: {
   </table>
 </div>
 
-${renderAiSection(aiResult)}
+${aiSection}
 
-${renderAssessorSection(assessment)}
+${selfSection}
 
-${followUp ? renderFollowUpSection(followUp) : ''}
+${assessorSection}
+
+${followUpSection}
 
 ${committeeSection}
 
