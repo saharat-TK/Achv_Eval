@@ -6,12 +6,14 @@ import {
   renderAiSection,
   renderAssessorSection,
   renderFollowUpSection,
+  renderSelfAssessmentSection,
   signatureTable,
   type AssessmentForReport,
   type FollowUpForReport,
+  type SelfAssessmentForReport,
 } from './reportShared';
 
-export type { AssessmentForReport, FollowUpForReport };
+export type { AssessmentForReport, FollowUpForReport, SelfAssessmentForReport };
 
 /**
  * Builds the combined report HTML: the AI analysis plus the official
@@ -23,8 +25,16 @@ export function buildCombinedReportHtml(args: {
   assessment: AssessmentForReport;
   meta: ReportMeta;
   followUp?: FollowUpForReport | null;
+  selfAssessment?: SelfAssessmentForReport | null;
 }): string {
-  const { aiResult, assessment, meta, followUp } = args;
+  const { aiResult, assessment, meta, followUp, selfAssessment } = args;
+
+  // Sequential section numbers, skipping any optional section that's absent.
+  let n = 1;
+  const aiSection = renderAiSection(aiResult, n++);
+  const selfSection = selfAssessment ? renderSelfAssessmentSection(selfAssessment, n++) : '';
+  const assessorSection = renderAssessorSection(assessment, n++);
+  const followUpSection = followUp ? renderFollowUpSection(followUp, n++) : '';
 
   return `<!doctype html>
 <html lang="th">
@@ -49,11 +59,13 @@ export function buildCombinedReportHtml(args: {
   </table>
 </div>
 
-${renderAiSection(aiResult)}
+${aiSection}
 
-${renderAssessorSection(assessment)}
+${selfSection}
 
-${followUp ? renderFollowUpSection(followUp) : ''}
+${assessorSection}
+
+${followUpSection}
 
 ${signatureTable()}
 

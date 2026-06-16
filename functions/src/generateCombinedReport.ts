@@ -2,7 +2,11 @@ import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import * as admin from 'firebase-admin';
 import { renderHtmlToPdf, storePdf } from './pdf';
 import { buildCombinedReportHtml } from './assessmentHtml';
-import type { FollowUpForReport, RubricScore } from './reportShared';
+import type {
+  FollowUpForReport,
+  RubricScore,
+  SelfAssessmentForReport,
+} from './reportShared';
 import {
   getProgramCode,
   offeringReportDir,
@@ -186,9 +190,25 @@ export const generateCombinedReport = onCall(
       };
     }
 
+    // Lecturer self-assessment, if recorded — shown before the assessor's
+    // official result in the combined report.
+    let selfAssessment: SelfAssessmentForReport | null = null;
+    const selfSnap = await offeringRef.collection('selfAssessment').doc('self').get();
+    if (selfSnap.exists) {
+      const s = selfSnap.data()!;
+      selfAssessment = {
+        lecturerName: (s.lecturerName as string) || lecturerName,
+        scores: (s.scores as Record<string, RubricScore>) ?? {},
+        comments:
+          (s.comments as Record<string, { strengths?: string; improvements?: string }>) ?? {},
+        generalNotes: (s.generalNotes as string | null) ?? null,
+      };
+    }
+
     const html = buildCombinedReportHtml({
       aiResult,
       followUp,
+      selfAssessment,
       assessment: {
         assessorName: assessment.assessorName ?? '',
         signedAtText,

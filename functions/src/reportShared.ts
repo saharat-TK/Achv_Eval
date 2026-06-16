@@ -54,6 +54,36 @@ export interface AssessmentForReport {
   generalNotes: string | null;
 }
 
+/** The lecturer's self-assessment, shown in reports before the assessor's
+ *  official result. Totals/band are computed from `scores` at render time. */
+export interface SelfAssessmentForReport {
+  lecturerName: string;
+  scores: Record<string, RubricScore>;
+  comments: Record<string, { strengths?: string; improvements?: string }>;
+  generalNotes: string | null;
+}
+
+/** Total/max/percent/band from rubric scores — `na` items excluded.
+ *  Mirrors computeRubricResult in lib/types/models.ts. */
+export function computeRubricResult(scores: Record<string, RubricScore>): {
+  total: number;
+  max: number;
+  percent: number;
+  band: string;
+} {
+  let total = 0;
+  let max = 0;
+  for (const item of RUBRIC_ITEMS) {
+    const v = scores[item.key];
+    if (v === undefined || v === 'na') continue;
+    total += v;
+    max += 3;
+  }
+  const percent = max === 0 ? 0 : Math.round((1000 * total) / max) / 10;
+  const band = percent >= 80 ? 'excellent' : percent >= 70 ? 'good' : 'improve';
+  return { total, max, percent, band };
+}
+
 export function esc(s: string): string {
   return (s ?? '')
     .replace(/&/g, '&amp;')
@@ -144,7 +174,7 @@ export function signatureTable(): string {
  * AI-generated 7-item verification rubric. Shared by the combined report
  * and the final verification report.
  */
-export function renderAiSection(aiResult: AnalysisResult): string {
+export function renderAiSection(aiResult: AnalysisResult, sectionNo = 1): string {
   const criticalList = aiResult.criticalIssues.length
     ? `<ul>${aiResult.criticalIssues.map((c) => `<li>${esc(c)}</li>`).join('')}</ul>`
     : '<p class="muted">ไม่พบประเด็นวิกฤต</p>';
@@ -163,7 +193,7 @@ export function renderAiSection(aiResult: AnalysisResult): string {
     .join('');
 
   return `
-<h2>ส่วนที่ 1 — ผลการประเมินจากระบบ AI</h2>
+<h2>ส่วนที่ ${sectionNo} — ผลการประเมินจากระบบ AI</h2>
 <div class="summary section-body">${md(aiResult.overallSummary)}</div>
 <h3>ประเด็นสำคัญที่ต้องแก้ไข</h3>
 <div class="crit">${criticalList}</div>
@@ -221,7 +251,7 @@ export interface FollowUpForReport {
  * "ส่วนที่ 3 — ติดตามผลการปรับปรุง": the assessor's follow-up on the previous
  * semester's verification result. Rendered only when a follow-up review exists.
  */
-export function renderFollowUpSection(followUp: FollowUpForReport): string {
+export function renderFollowUpSection(followUp: FollowUpForReport, sectionNo = 3): string {
   const rows = RUBRIC_ITEMS.map((item) => {
     const prevScore = followUp.previousScores[item.key] ?? 'na';
     const improvement = followUp.previousComments[item.key]?.improvements ?? '';
@@ -239,7 +269,7 @@ export function renderFollowUpSection(followUp: FollowUpForReport): string {
   }).join('');
 
   return `
-<h2>ส่วนที่ 3 — ติดตามผลการปรับปรุง (จากการทวนสอบภาคก่อนหน้า)</h2>
+<h2>ส่วนที่ ${sectionNo} — ติดตามผลการปรับปรุง (จากการทวนสอบภาคก่อนหน้า)</h2>
 <table class="meta">
   <tr><td><strong>ผลการทวนสอบที่นำมาติดตาม</strong></td><td>${esc(followUp.previousTermText)}</td></tr>
   <tr><td><strong>ทวนสอบภาคก่อนโดย</strong></td><td>${esc(followUp.previousAssessorName)}</td></tr>
@@ -270,7 +300,10 @@ ${
  * "ส่วนที่ 2 — ผลการทวนสอบโดยผู้ทวนสอบ": the assessor's official 7-item
  * form. Shared by the combined report and the final verification report.
  */
-export function renderAssessorSection(assessment: AssessmentForReport): string {
+export function renderAssessorSection(
+  assessment: AssessmentForReport,
+  sectionNo = 2,
+): string {
   const rubricRows = RUBRIC_ITEMS.map((item) => {
     const score = assessment.scores[item.key] ?? 'na';
     const c = assessment.comments[item.key] ?? {};
@@ -284,7 +317,7 @@ export function renderAssessorSection(assessment: AssessmentForReport): string {
   }).join('');
 
   return `
-<h2>ส่วนที่ 2 — ผลการทวนสอบโดยผู้ทวนสอบ <span class="official">ฉบับทางการ</span></h2>
+<h2>ส่วนที่ ${sectionNo} — ผลการทวนสอบโดยผู้ทวนสอบ <span class="official">ฉบับทางการ</span></h2>
 <table>
   <thead>
     <tr>
@@ -308,6 +341,59 @@ export function renderAssessorSection(assessment: AssessmentForReport): string {
 ${
   assessment.generalNotes
     ? `<h3>บันทึกเพิ่มเติมของผู้ทวนสอบ</h3><p>${esc(assessment.generalNotes)}</p>`
+    : ''
+}`;
+}
+
+/**
+ * Lecturer's self-assessment of the 7 items, recorded before the offering went
+ * to the assessor. Shown for reference ahead of the assessor's official result.
+ */
+export function renderSelfAssessmentSection(
+  self: SelfAssessmentForReport,
+  sectionNo: number,
+): string {
+  const rubricRows = RUBRIC_ITEMS.map((item) => {
+    const score = self.scores[item.key] ?? 'na';
+    const c = self.comments[item.key] ?? {};
+    return `
+      <tr>
+        <td>${esc(item.labelTh)}</td>
+        ${score === 'na' ? '<td colspan="3" class="score">N/A</td>' : scoreCells(score)}
+        <td>${esc(c.strengths ?? '')}</td>
+        <td>${esc(c.improvements ?? '')}</td>
+      </tr>`;
+  }).join('');
+  const r = computeRubricResult(self.scores);
+
+  return `
+<h2>ส่วนที่ ${sectionNo} — ผลการประเมินตนเองของอาจารย์ผู้รับผิดชอบ <span class="muted">(ก่อนการทวนสอบ)</span></h2>
+<table class="meta">
+  <tr><td><strong>ประเมินตนเองโดย</strong></td><td>${esc(self.lecturerName)}</td></tr>
+</table>
+<table>
+  <thead>
+    <tr>
+      <th>หัวข้อการพิจารณา</th>
+      <th class="score">3</th><th class="score">2</th><th class="score">1</th>
+      <th>ข้อดี</th><th>ข้อพัฒนา</th>
+    </tr>
+  </thead>
+  <tbody>
+    ${rubricRows}
+    <tr>
+      <td colspan="4"><strong>คะแนนรวม</strong></td>
+      <td colspan="2"><strong>${r.total} / ${r.max} (${r.percent}%)</strong></td>
+    </tr>
+  </tbody>
+</table>
+<div class="result-box">
+  <strong>สรุปผลการประเมินตนเอง:</strong> ${bandChecks(r.band)}
+  &nbsp; — ระดับที่ได้: <strong>${BAND_TH[r.band] ?? r.band}</strong>
+</div>
+${
+  self.generalNotes
+    ? `<h3>บันทึกเพิ่มเติมของอาจารย์</h3><p>${esc(self.generalNotes)}</p>`
     : ''
 }`;
 }
