@@ -3,7 +3,7 @@
 import { FieldValue } from 'firebase-admin/firestore';
 import { revalidatePath } from 'next/cache';
 import { getAdminDb } from '@/lib/firebase/admin';
-import { getSessionUser, getCurrentProfile } from '@/lib/firebase/auth-server';
+import { getSessionUser, getCurrentProfile, isImpersonating } from '@/lib/firebase/auth-server';
 import { deleteStoredPdf } from '@/lib/data/reportStorage';
 import type { ImplementationDecision, AssessmentDoc } from '@/lib/types/models';
 
@@ -26,6 +26,7 @@ export async function saveFollowUp(
 
   const profile = await getCurrentProfile();
   if (!profile) return { error: 'no_profile' };
+  if (await isImpersonating()) return { error: 'read_only_impersonation' };
 
   const db = getAdminDb();
 

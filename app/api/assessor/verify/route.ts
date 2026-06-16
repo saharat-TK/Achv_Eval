@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { FieldValue } from 'firebase-admin/firestore';
 import { getAdminDb } from '@/lib/firebase/admin';
-import { getSessionUser, getCurrentProfile } from '@/lib/firebase/auth-server';
+import { getSessionUser, getCurrentProfile, isImpersonating } from '@/lib/firebase/auth-server';
 import type { ImplementationDecision } from '@/lib/types/models';
 
 export const runtime = 'nodejs';
@@ -35,6 +35,9 @@ export async function POST(request: NextRequest) {
   const profile = await getCurrentProfile();
   if (!profile) {
     return NextResponse.json({ error: 'no_profile' }, { status: 403 });
+  }
+  if (await isImpersonating()) {
+    return NextResponse.json({ error: 'read_only_impersonation' }, { status: 403 });
   }
 
   // 2. Parse body

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { FieldValue } from 'firebase-admin/firestore';
 import { getAdminDb } from '@/lib/firebase/admin';
-import { getCurrentProfile, getSessionUser } from '@/lib/firebase/auth-server';
+import { getCurrentProfile, getSessionUser, isImpersonating } from '@/lib/firebase/auth-server';
 import type { OfferingStatus, VerificationDecision, VerificationDoc } from '@/lib/types/models';
 import { createNotification, notifySafely } from '@/lib/data/notifications';
 
@@ -26,6 +26,9 @@ export async function POST(request: NextRequest) {
   const profile = await getCurrentProfile();
   if (!profile) {
     return NextResponse.json({ error: 'no_profile' }, { status: 403 });
+  }
+  if (await isImpersonating()) {
+    return NextResponse.json({ error: 'read_only_impersonation' }, { status: 403 });
   }
 
   let body: {

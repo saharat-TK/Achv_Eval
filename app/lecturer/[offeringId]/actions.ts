@@ -3,7 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { FieldValue } from 'firebase-admin/firestore';
 import { getAdminDb } from '@/lib/firebase/admin';
-import { getSessionUser, getCurrentProfile } from '@/lib/firebase/auth-server';
+import { getSessionUser, getCurrentProfile, isImpersonating } from '@/lib/firebase/auth-server';
 import {
   createNotifications,
   getProgramAssessorIds,
@@ -80,6 +80,7 @@ export async function sendOfferingForAssessment(
 ): Promise<SendResult> {
   const user = await getSessionUser();
   if (!user) return { ok: false, error: 'not_authenticated' };
+  if (await isImpersonating()) return { ok: false, error: 'read_only_impersonation' };
 
   const db = getAdminDb();
   const offeringRef = db.collection('offerings').doc(offeringId);

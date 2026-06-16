@@ -4,6 +4,7 @@ import { getCurrentProfile } from '@/lib/firebase/auth-server';
 import SignOutButton from '@/components/SignOutButton';
 import NotificationBell from '@/components/NotificationBell';
 import WorkspaceSwitcher from '@/components/WorkspaceSwitcher';
+import ViewAsLauncher from '@/components/ViewAsLauncher';
 import AppFooter from '@/components/AppFooter';
 
 export default async function AdminLayout({
@@ -41,6 +42,7 @@ export default async function AdminLayout({
                 <div className="text-xs text-white/70">
                   {profile.roles.isAdmin ? 'ผู้ดูแลระบบ' : 'ประธานหลักสูตร'}
                 </div>
+                {profile.roles.isSuperAdmin && <ViewAsLauncher />}
               </div>
               <SignOutButton tone="dark" />
             </div>

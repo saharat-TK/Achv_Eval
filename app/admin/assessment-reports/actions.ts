@@ -3,7 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { FieldValue } from 'firebase-admin/firestore';
 import { getAdminDb, getAdminStorage } from '@/lib/firebase/admin';
-import { getSessionUser, getCurrentProfile } from '@/lib/firebase/auth-server';
+import { getSessionUser, getCurrentProfile, isImpersonating } from '@/lib/firebase/auth-server';
 import { COMMITTEE_ROLES, REPORT_THRESHOLD, formatThaiMeeting } from '@/lib/constants';
 import {
   academicProgramLabel,
@@ -68,6 +68,9 @@ export async function createAssessmentReport(
 ): Promise<CreateReportResult> {
   const access = await resolveAccess();
   if (!access) return { ok: false, error: 'ไม่มีสิทธิ์ดำเนินการ' };
+  if (await isImpersonating()) {
+    return { ok: false, error: 'อยู่ในโหมดดูมุมมองผู้ใช้ (อ่านอย่างเดียว)' };
+  }
 
   const coverage: ReportCoverage = input.coverage === 'all' ? 'all' : 'program';
   // School-wide reports are admin/super-admin only.
