@@ -131,10 +131,13 @@ export default function DashboardTrends({
 }: {
   trend: DashboardTrendPoint[];
 }) {
-  if (trend.length < 2) {
+  // With no data there's nothing to plot. With a single semester the bars are
+  // still meaningful, so the charts render — only the cross-semester trend line
+  // is withheld until there are ≥2 points (see the gated <Line> below).
+  if (trend.length === 0) {
     return (
       <p className="text-sm text-slate-500">
-        ต้องมีข้อมูลอย่างน้อย 2 ภาคการศึกษาจึงจะแสดงแนวโน้มได้
+        ยังไม่มีข้อมูลการทวนสอบในขอบเขตที่เลือก
       </p>
     );
   }
@@ -200,19 +203,27 @@ export default function DashboardTrends({
                 fill={SLATE_300}
                 isAnimationActive={false}
               />
-              {/* Average score line overlay */}
-              <Line
-                type="monotone"
-                dataKey="averagePercentScore"
-                name="คะแนนเฉลี่ย"
-                stroke={AMBER}
-                strokeWidth={2}
-                dot={{ r: 3 }}
-                connectNulls
-              />
+              {/* Average score line overlay — a true cross-semester trend, so
+                  shown only with ≥2 points (a single semester gets no line/dot). */}
+              {trend.length >= 2 && (
+                <Line
+                  type="monotone"
+                  dataKey="averagePercentScore"
+                  name="คะแนนเฉลี่ย"
+                  stroke={AMBER}
+                  strokeWidth={2}
+                  dot={{ r: 3 }}
+                  connectNulls
+                />
+              )}
             </ComposedChart>
           </ResponsiveContainer>
         </div>
+        {trend.length === 1 && (
+          <p className="mt-1 text-xs text-slate-400">
+            มีข้อมูล 1 ภาคการศึกษา — เส้นคะแนนเฉลี่ยจะแสดงเมื่อมีข้อมูลตั้งแต่ 2 ภาคขึ้นไป
+          </p>
+        )}
       </div>
 
       {/* Right chart: band distribution */}
