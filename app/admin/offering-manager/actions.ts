@@ -19,6 +19,14 @@ const ASSESSED_REVERSE_TARGETS: OfferingStatus[] = [
   'ai_complete',
   'documents_pending',
 ];
+/** In-progress assessment statuses (draft in review / awaiting the head) — no
+ *  signed artifact yet, so reversing just moves the status back. Super-admin only. */
+const IN_REVIEW_STATUSES: OfferingStatus[] = ['assessor_review', 'pending_head_signoff'];
+const IN_REVIEW_REVERSE_TARGETS: OfferingStatus[] = [
+  'pending_assessment',
+  'ai_complete',
+  'documents_pending',
+];
 
 export interface BulkCreateInput {
   academicYear: number;
@@ -366,7 +374,13 @@ export async function reverseOfferingStatuses(
 ): Promise<ManagerActionResult> {
   const access = await resolveAccess();
   if (!access) return { ok: false, error: 'ไม่มีสิทธิ์ดำเนินการ' };
-  if (![...PENDING_REVERSE_TARGETS, ...ASSESSED_REVERSE_TARGETS].includes(targetStatus)) {
+  if (
+    ![
+      ...PENDING_REVERSE_TARGETS,
+      ...ASSESSED_REVERSE_TARGETS,
+      ...IN_REVIEW_REVERSE_TARGETS,
+    ].includes(targetStatus)
+  ) {
     return { ok: false, error: 'สถานะปลายทางไม่ถูกต้อง' };
   }
   if (offeringIds.length === 0) return { ok: true, succeeded: 0, failed: [] };
@@ -461,6 +475,18 @@ export async function reverseOfferingStatuses(
           // so the assessor can edit it again after re-opening the assessment.
           if (reviewSnap.exists) {
             tx.update(reviewRef, { isLocked: false, updatedAt: now });
+          }
+        } else if (IN_REVIEW_STATUSES.includes(offering.status)) {
+          // Draft in review / awaiting the head — no signed PDF, no locked
+          // follow-up, and offering.assessmentId isn't set until sign-off, so
+          // there's nothing to void; just move the status back. Any draft
+          // assessment + submitted self-assessment are left intact (re-editable
+          // once back at ai_complete, or continued if re-sent forward).
+          if (!IN_REVIEW_REVERSE_TARGETS.includes(targetStatus)) {
+            throw new Error('สถานะปลายทางไม่รองรับรายการที่อยู่ระหว่างทวนสอบ');
+          }
+          if (!access.isSuperAdmin) {
+            throw new Error('เฉพาะผู้ดูแลระบบสูงสุดเท่านั้น');
           }
         } else {
           throw new Error('สถานะปัจจุบันไม่สามารถย้อนกลับได้');
