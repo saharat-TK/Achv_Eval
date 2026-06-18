@@ -192,6 +192,9 @@ export async function POST(request: NextRequest) {
     signedPdfUrl: null,
     signedAt: lock ? now : null,
     isLocked: lock,
+    // Snapshot the committee at sign-off so the report cover reflects who was on
+    // the committee when it was signed, even if it changes later.
+    ...(lock ? { committeeSnapshot: committee.roster } : {}),
     // On sign-off the record carries forward for next-semester verification.
     followUpStatus: lock ? 'pending_review_next_semester' : null,
     createdAt: now,

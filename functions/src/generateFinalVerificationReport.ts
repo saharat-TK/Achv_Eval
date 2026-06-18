@@ -221,6 +221,7 @@ export const generateFinalVerificationReport = onCall(
       aiResult,
       followUp,
       selfAssessment,
+      committee: assessment.committeeSnapshot ?? null,
       assessment: {
         assessorName: assessment.assessorName ?? '',
         signedAtText: thaiDateTime(assessment.signedAt),

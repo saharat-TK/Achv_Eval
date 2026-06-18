@@ -78,11 +78,21 @@ export async function getAssessmentCommitteeData(): Promise<AssessmentCommitteeD
  * program's `assessmentCommittee`. Carries the uids needed to authorize the
  * two-step sign-off (secretary drafts/submits, head signs) and to notify them.
  */
+/** One committee member as it appears on a report — a name + a Thai position
+ *  label. Snapshotted onto the assessment at sign-off. */
+export interface CommitteeRosterEntry {
+  name: string;
+  position: string;
+}
+
 export interface OfferingCommittee {
   hasCommittee: boolean;
   headUid: string | null;
   secretaryUid: string | null;
   internalUids: string[];
+  /** Ordered name+position roster (head → externals → internals → secretary),
+   *  for the report snapshot. */
+  roster: CommitteeRosterEntry[];
 }
 
 /** A user's position on an offering's committee — drives both the UI button
@@ -103,6 +113,7 @@ export async function getOfferingCommittee(
     headUid: null,
     secretaryUid: null,
     internalUids: [],
+    roster: [],
   };
   const db = getAdminDb();
   const progSnap = await db.collection('programs').doc(curriculumProgramId).get();
@@ -115,6 +126,17 @@ export async function getOfferingCommittee(
     ? (apSnap.data() as AcademicProgramDoc).assessmentCommittee
     : null;
   if (!c) return empty;
+
+  const roster: CommitteeRosterEntry[] = [];
+  const addRoster = (m: { name?: string } | null | undefined, position: string) => {
+    const name = m?.name?.trim();
+    if (name) roster.push({ name, position });
+  };
+  addRoster(c.headAssessor, 'ประธานผู้ทวนสอบ');
+  (c.externalAssessors ?? []).forEach((m) => addRoster(m, 'ผู้ทวนสอบภายนอก'));
+  (c.internalAssessors ?? []).forEach((m) => addRoster(m, 'ผู้ทวนสอบภายใน'));
+  addRoster(c.secretary, 'ผู้ทวนสอบภายในและเลขานุการ');
+
   return {
     hasCommittee: true,
     headUid: c.headAssessor?.uid ?? null,
@@ -122,6 +144,7 @@ export async function getOfferingCommittee(
     internalUids: (c.internalAssessors ?? [])
       .map((m) => m.uid)
       .filter((u): u is string => !!u),
+    roster,
   };
 }
 

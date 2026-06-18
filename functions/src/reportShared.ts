@@ -174,6 +174,28 @@ export function signatureTable(): string {
  * AI-generated 7-item verification rubric. Shared by the combined report
  * and the final verification report.
  */
+/** One committee member on a report cover — name + Thai position label. */
+export interface CommitteeMemberForReport {
+  name: string;
+  position: string;
+}
+
+/** "คณะกรรมการทวนสอบ" cover table (position · name per row). Empty → ''. */
+export function renderCommitteeCover(
+  committee: CommitteeMemberForReport[] | null | undefined,
+): string {
+  if (!committee || committee.length === 0) return '';
+  const rows = committee
+    .map(
+      (m) =>
+        `<tr><td><strong>${esc(m.position)}</strong></td><td>${esc(m.name)}</td></tr>`,
+    )
+    .join('');
+  return `
+<h3 style="margin-top:10px;">คณะกรรมการทวนสอบ</h3>
+<table class="meta">${rows}</table>`;
+}
+
 export function renderAiSection(aiResult: AnalysisResult, sectionNo = 1): string {
   const criticalList = aiResult.criticalIssues.length
     ? `<ul>${aiResult.criticalIssues.map((c) => `<li>${esc(c)}</li>`).join('')}</ul>`

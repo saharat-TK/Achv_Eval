@@ -209,6 +209,7 @@ export const generateCombinedReport = onCall(
       aiResult,
       followUp,
       selfAssessment,
+      committee: assessment.committeeSnapshot ?? null,
       assessment: {
         assessorName: assessment.assessorName ?? '',
         signedAtText,
