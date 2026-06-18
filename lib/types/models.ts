@@ -378,6 +378,9 @@ export interface AssessmentDoc {
   signedPdfUrl: string | null;
   signedAt: Ts | null;
   isLocked: boolean;
+  /** The program's assessment committee captured at sign-off (name + Thai
+   *  position), shown in the cover of the combined + final reports. */
+  committeeSnapshot?: { name: string; position: string }[];
   followUpStatus: 'pending_review_next_semester' | 'implemented' | 'not_implemented' | null;
 
   createdAt: Ts;

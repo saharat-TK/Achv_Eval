@@ -5,15 +5,17 @@ import {
   esc,
   renderAiSection,
   renderAssessorSection,
+  renderCommitteeCover,
   renderFollowUpSection,
   renderSelfAssessmentSection,
   signatureTable,
   type AssessmentForReport,
+  type CommitteeMemberForReport,
   type FollowUpForReport,
   type SelfAssessmentForReport,
 } from './reportShared';
 
-export type { FollowUpForReport, SelfAssessmentForReport };
+export type { CommitteeMemberForReport, FollowUpForReport, SelfAssessmentForReport };
 
 export interface VerificationForReport {
   decision: 'verified' | 'needs_follow_up';
@@ -40,8 +42,10 @@ export function buildFinalVerificationHtml(args: {
   meta: ReportMeta;
   followUp?: FollowUpForReport | null;
   selfAssessment?: SelfAssessmentForReport | null;
+  committee?: CommitteeMemberForReport[] | null;
 }): string {
-  const { aiResult, assessment, verification, meta, followUp, selfAssessment } = args;
+  const { aiResult, assessment, verification, meta, followUp, selfAssessment, committee } =
+    args;
 
   // Sequential section numbers, skipping any optional section that's absent.
   let n = 1;
@@ -89,6 +93,7 @@ export function buildFinalVerificationHtml(args: {
     <tr><td><strong>คณะกรรมการรับรองผล</strong></td><td>${esc(verification.verifierName)}</td></tr>
     <tr><td><strong>วันที่รับรองผล</strong></td><td>${esc(verification.signedAtText)}</td></tr>
   </table>
+  ${renderCommitteeCover(committee)}
 </div>
 
 ${aiSection}

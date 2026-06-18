@@ -5,15 +5,22 @@ import {
   esc,
   renderAiSection,
   renderAssessorSection,
+  renderCommitteeCover,
   renderFollowUpSection,
   renderSelfAssessmentSection,
   signatureTable,
   type AssessmentForReport,
+  type CommitteeMemberForReport,
   type FollowUpForReport,
   type SelfAssessmentForReport,
 } from './reportShared';
 
-export type { AssessmentForReport, FollowUpForReport, SelfAssessmentForReport };
+export type {
+  AssessmentForReport,
+  CommitteeMemberForReport,
+  FollowUpForReport,
+  SelfAssessmentForReport,
+};
 
 /**
  * Builds the combined report HTML: the AI analysis plus the official
@@ -26,8 +33,9 @@ export function buildCombinedReportHtml(args: {
   meta: ReportMeta;
   followUp?: FollowUpForReport | null;
   selfAssessment?: SelfAssessmentForReport | null;
+  committee?: CommitteeMemberForReport[] | null;
 }): string {
-  const { aiResult, assessment, meta, followUp, selfAssessment } = args;
+  const { aiResult, assessment, meta, followUp, selfAssessment, committee } = args;
 
   // Sequential section numbers, skipping any optional section that's absent.
   let n = 1;
@@ -57,6 +65,7 @@ export function buildCombinedReportHtml(args: {
     <tr><td><strong>ผู้ทวนสอบ</strong></td><td>${esc(assessment.assessorName)}</td></tr>
     <tr><td><strong>วันที่ลงนามทวนสอบ</strong></td><td>${esc(assessment.signedAtText)}</td></tr>
   </table>
+  ${renderCommitteeCover(committee)}
 </div>
 
 ${aiSection}
