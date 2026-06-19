@@ -502,6 +502,12 @@ export default function AssessmentForm({
       : effectiveSignOffKind === 'self_only'
         ? 'รายงานฉบับลงนาม (ผลประเมินตนเองเท่านั้น)'
         : 'รายงานฉบับลงนาม (เอกสารเท่านั้น)';
+  const signedBadge = isLocked ? (
+    <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-1 text-xs font-medium text-slate-700">
+      <span aria-hidden="true">🔒</span>
+      ลงนามแล้ว
+    </span>
+  ) : null;
 
   if (!loaded) {
     return <p className="text-sm text-slate-400">กำลังโหลดแบบประเมิน…</p>;
@@ -569,9 +575,12 @@ export default function AssessmentForm({
         </section>
       )}
 
-      {showSignOffSummary && (
+      {(showSignOffSummary || (isLocked && !showRubric)) && (
         <div className="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-700 lg:shrink-0">
-          <div className="font-semibold">รูปแบบการลงนาม</div>
+          <div className="flex items-center justify-between gap-3">
+            <div className="font-semibold">รูปแบบการลงนาม</div>
+            {signedBadge}
+          </div>
           <div className="mt-1 text-slate-600">{signOffDescription}</div>
         </div>
       )}
@@ -588,11 +597,7 @@ export default function AssessmentForm({
               </div>
               <div className="text-xs mt-0.5">ระดับ: {bandInfo.th}</div>
             </div>
-            {isLocked && (
-              <span className="text-xs px-2 py-1 rounded-full bg-white/60 font-medium">
-                🔒 ลงนามแล้ว
-              </span>
-            )}
+            {signedBadge}
           </div>
         </div>
       )}
