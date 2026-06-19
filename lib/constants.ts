@@ -80,6 +80,13 @@ export const SIGNED_OFF_STATUSES: OfferingStatus[] = [
   'not_implemented',
 ];
 
+export const ASSESSMENT_SENT_STATUSES: OfferingStatus[] = [
+  'pending_assessment',
+  'assessor_review',
+  'pending_head_signoff',
+  ...SIGNED_OFF_STATUSES,
+];
+
 export const VERIFICATION_ENTRY_STATUSES: OfferingStatus[] = [
   'assessed',
   'assessed_self_only',

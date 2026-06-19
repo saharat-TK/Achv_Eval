@@ -8,14 +8,21 @@ import {
   renderCommitteeCover,
   renderFollowUpSection,
   renderSelfAssessmentSection,
+  renderSignOffKindNotice,
   signatureTable,
   type AssessmentForReport,
   type CommitteeMemberForReport,
   type FollowUpForReport,
   type SelfAssessmentForReport,
+  type SignOffKind,
 } from './reportShared';
 
-export type { CommitteeMemberForReport, FollowUpForReport, SelfAssessmentForReport };
+export type {
+  CommitteeMemberForReport,
+  FollowUpForReport,
+  SelfAssessmentForReport,
+  SignOffKind,
+};
 
 export interface VerificationForReport {
   decision: 'verified' | 'needs_follow_up';
@@ -36,6 +43,7 @@ const DECISION_TH: Record<VerificationForReport['decision'], string> = {
  * Rendered to PDF when the committee signs off (Phase 4B-2).
  */
 export function buildFinalVerificationHtml(args: {
+  signOffKind: SignOffKind;
   aiResult: AnalysisResult;
   assessment: AssessmentForReport;
   verification: VerificationForReport;
@@ -44,16 +52,28 @@ export function buildFinalVerificationHtml(args: {
   selfAssessment?: SelfAssessmentForReport | null;
   committee?: CommitteeMemberForReport[] | null;
 }): string {
-  const { aiResult, assessment, verification, meta, followUp, selfAssessment, committee } =
+  const {
+    signOffKind,
+    aiResult,
+    assessment,
+    verification,
+    meta,
+    followUp,
+    selfAssessment,
+    committee,
+  } =
     args;
 
   // Sequential section numbers, skipping any optional section that's absent.
   let n = 1;
   const aiSection = renderAiSection(aiResult, n++);
   const selfSection = selfAssessment ? renderSelfAssessmentSection(selfAssessment, n++) : '';
-  const assessorSection = renderAssessorSection(assessment, n++);
-  const followUpSection = followUp ? renderFollowUpSection(followUp, n++) : '';
+  const assessorSection =
+    signOffKind === 'committee' ? renderAssessorSection(assessment, n++) : '';
+  const followUpSection =
+    signOffKind === 'committee' && followUp ? renderFollowUpSection(followUp, n++) : '';
   const committeeSectionNumber = n++;
+  const signerLabel = signOffKind === 'committee' ? 'ผู้ทวนสอบ' : 'ผู้ลงนาม';
   const committeeSection = `
 <h2>ส่วนที่ ${committeeSectionNumber} — ผลการรับรองขั้นสุดท้ายของคณะกรรมการ <span class="official">ฉบับทางการ</span></h2>
 <div class="result-box">
@@ -89,11 +109,12 @@ export function buildFinalVerificationHtml(args: {
     <tr><td><strong>รายวิชา</strong></td><td>${esc(meta.courseCode)} ${esc(meta.courseNameTh)} (${esc(meta.courseNameEn)})</td></tr>
     <tr><td><strong>ปีการศึกษา</strong></td><td>${meta.academicYear} ${esc(meta.semesterLabel)} · ตอนเรียน ${esc(meta.section)}</td></tr>
     <tr><td><strong>อาจารย์ผู้รับผิดชอบ</strong></td><td>${esc(meta.lecturerName)}</td></tr>
-    <tr><td><strong>ผู้ทวนสอบ</strong></td><td>${esc(assessment.assessorName)}</td></tr>
+    <tr><td><strong>${signerLabel}</strong></td><td>${esc(assessment.assessorName)}</td></tr>
     <tr><td><strong>คณะกรรมการรับรองผล</strong></td><td>${esc(verification.verifierName)}</td></tr>
     <tr><td><strong>วันที่รับรองผล</strong></td><td>${esc(verification.signedAtText)}</td></tr>
   </table>
-  ${renderCommitteeCover(committee)}
+  ${renderSignOffKindNotice(signOffKind)}
+  ${signOffKind === 'committee' ? renderCommitteeCover(committee) : ''}
 </div>
 
 ${aiSection}

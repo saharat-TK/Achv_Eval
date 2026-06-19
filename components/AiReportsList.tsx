@@ -4,7 +4,11 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { collection, doc, query, orderBy, onSnapshot } from 'firebase/firestore';
 import { getFirebaseAuth, getFirebaseDb } from '@/lib/firebase/config';
-import { REPORT_STATUS_TH, SEMESTER_LABEL } from '@/lib/constants';
+import {
+  ASSESSMENT_SENT_STATUSES,
+  REPORT_STATUS_TH,
+  SEMESTER_LABEL,
+} from '@/lib/constants';
 import { sendOfferingForAssessment } from '@/app/lecturer/[offeringId]/actions';
 import { useConfirm } from '@/components/ConfirmDialogProvider';
 import { useToast } from '@/components/ToastProvider';
@@ -246,9 +250,7 @@ export default function AiReportsList({
               )}
 
               {isLatestReport &&
-                ['pending_assessment', 'assessor_review', 'assessed'].includes(
-                  offeringState?.status ?? '',
-                ) && (
+                ASSESSMENT_SENT_STATUSES.includes(offeringState?.status ?? 'draft') && (
                   <p className="mt-3 rounded-lg border border-violet-200 bg-violet-50 px-3 py-2 text-xs text-violet-700">
                     ส่งผลการวิเคราะห์ให้ผู้ทวนสอบแล้ว
                   </p>

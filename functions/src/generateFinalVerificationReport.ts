@@ -4,10 +4,12 @@ import { renderHtmlToPdf, storePdf } from './pdf';
 import { buildFinalVerificationHtml } from './verificationHtml';
 import type { ReportMeta } from './reportHtml';
 import type { AnalysisResult } from './gemini';
+import { normalizeSignOffKind } from './reportShared';
 import type {
   FollowUpForReport,
   RubricScore,
   SelfAssessmentForReport,
+  SignOffKind,
 } from './reportShared';
 import {
   getProgramCode,
@@ -72,6 +74,7 @@ export const generateFinalVerificationReport = onCall(
       lecturerEmail: string | null;
       latestAiReportId: string | null;
       previousOfferingId: string | null;
+      status?: string;
     };
 
     // Authorize: signing a verification is committee-only. Mirrors the
@@ -110,6 +113,13 @@ export const generateFinalVerificationReport = onCall(
       throw new HttpsError('not-found', 'ไม่พบผลการทวนสอบ');
     }
     const assessment = assessmentSnap.data()!;
+    const signOffKind = inferSignOffKind(assessment.signOffKind, offering.status);
+    if (signOffKind === 'documents_only') {
+      throw new HttpsError(
+        'failed-precondition',
+        'เอกสารเท่านั้นยังไม่สามารถสร้างรายงานรับรองผลขั้นสุดท้ายได้',
+      );
+    }
 
     // Load the AI analysis result.
     const aiReportId = verification.aiReportId ?? offering.latestAiReportId;
@@ -218,10 +228,11 @@ export const generateFinalVerificationReport = onCall(
     }
 
     const html = buildFinalVerificationHtml({
+      signOffKind,
       aiResult,
       followUp,
       selfAssessment,
-      committee: assessment.committeeSnapshot ?? null,
+      committee: signOffKind === 'committee' ? assessment.committeeSnapshot ?? null : null,
       assessment: {
         assessorName: assessment.assessorName ?? '',
         signedAtText: thaiDateTime(assessment.signedAt),
@@ -279,3 +290,10 @@ export const generateFinalVerificationReport = onCall(
     return { url: downloadUrl };
   },
 );
+
+function inferSignOffKind(value: unknown, status: unknown): SignOffKind {
+  if (value) return normalizeSignOffKind(value);
+  if (status === 'assessed_self_only') return 'self_only';
+  if (status === 'closed_documents_only') return 'documents_only';
+  return 'committee';
+}

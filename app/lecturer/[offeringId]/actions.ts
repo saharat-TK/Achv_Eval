@@ -9,6 +9,7 @@ import {
   getProgramAssessorIds,
   notifySafely,
 } from '@/lib/data/notifications';
+import { ASSESSMENT_SENT_STATUSES } from '@/lib/constants';
 import type {
   AiReportDoc,
   AssessmentDoc,
@@ -115,9 +116,7 @@ export async function sendOfferingForAssessment(
       }
       if (offering.status !== 'ai_complete') {
         throw new Error(
-          ['pending_assessment', 'assessor_review', 'assessed'].includes(
-            offering.status,
-          )
+          ASSESSMENT_SENT_STATUSES.includes(offering.status)
             ? 'already_sent'
             : 'invalid_status',
         );
@@ -220,9 +219,7 @@ async function writeSelfAssessment(
       if (offering.lecturerId !== user.uid) throw new Error('not_authorized');
       if (offering.status !== 'ai_complete') {
         throw new Error(
-          ['pending_assessment', 'assessor_review', 'pending_head_signoff', 'assessed'].includes(
-            offering.status,
-          )
+          ASSESSMENT_SENT_STATUSES.includes(offering.status)
             ? 'already_sent'
             : 'invalid_status',
         );

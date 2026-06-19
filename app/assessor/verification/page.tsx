@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { getCurrentProfile } from '@/lib/firebase/auth-server';
 import { getOfferingsPendingVerification } from '@/lib/data/implementationReviews';
-import { SEMESTER_LABEL } from '@/lib/constants';
+import { isCommitteeSignOff, SEMESTER_LABEL } from '@/lib/constants';
 
 export const dynamic = 'force-dynamic';
 
@@ -76,7 +76,7 @@ export default async function VerificationQueuePage() {
                       {offering.academicYear} {SEMESTER_LABEL[offering.semester]}
                     </td>
                     <td className={`${TABLE_CELL_CLASS} whitespace-nowrap text-slate-600`}>
-                      {assessment
+                      {assessment && isCommitteeSignOff(assessment.signOffKind)
                         ? `${assessment.totalScore}/${assessment.maxScore} (${assessment.percentScore}%)`
                         : '—'}
                     </td>
