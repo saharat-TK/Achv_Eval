@@ -516,10 +516,16 @@ export default function AssessmentForm({
       }
     >
       {showSignOffChoice && (
-        <fieldset className="rounded-xl border border-slate-200 bg-white p-4 lg:shrink-0">
-          <legend className="text-sm font-semibold text-slate-700">
+        <section
+          aria-labelledby="sign-off-kind-title"
+          className="rounded-xl border border-slate-200 bg-white p-4 lg:shrink-0"
+        >
+          <h3
+            id="sign-off-kind-title"
+            className="text-sm font-semibold text-slate-700"
+          >
             รูปแบบการลงนาม
-          </legend>
+          </h3>
           <div className="mt-3 space-y-2">
             <label className="flex items-start gap-3 rounded-lg border border-slate-200 p-3 text-sm text-slate-700">
               <input
@@ -556,7 +562,7 @@ export default function AssessmentForm({
               </span>
             </label>
           </div>
-        </fieldset>
+        </section>
       )}
 
       {showSignOffSummary && (
