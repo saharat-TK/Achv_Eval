@@ -2,8 +2,13 @@ import { NextRequest, NextResponse } from 'next/server';
 import { FieldValue } from 'firebase-admin/firestore';
 import { getAdminDb } from '@/lib/firebase/admin';
 import { getSessionUser, getCurrentProfile, isImpersonating } from '@/lib/firebase/auth-server';
+import {
+  finalStatusForSignOffKind,
+  normalizeSignOffKind,
+} from '@/lib/constants';
+import { DEFAULT_SCORES } from '@/lib/rubric';
 import { computeRubricResult } from '@/lib/types/models';
-import type { AssessmentDoc } from '@/lib/types/models';
+import type { AssessmentDoc, OfferingStatus, SignOffKind } from '@/lib/types/models';
 import {
   createNotification,
   createNotifications,
@@ -14,20 +19,22 @@ import {
   getOfferingCommittee,
   deriveUserCommitteeRole,
 } from '@/lib/data/assessmentCommittee';
-import type { OfferingStatus } from '@/lib/types/models';
 
 export const runtime = 'nodejs';
 const ASSESSMENT_ALLOWED_STATUSES: OfferingStatus[] = [
+  'documents_pending',
   'pending_assessment',
   'assessor_review',
   'pending_head_signoff',
   'assessed',
+  'assessed_self_only',
+  'closed_documents_only',
 ];
 
 /** Two-step sign-off actions:
  *  - `draft`   secretary saves progress (stays editable)
  *  - `submit`  secretary sends to the head (→ pending_head_signoff)
- *  - `sign`    head signs off (→ assessed, locked)
+ *  - `sign`    head signs off (→ assessed*, locked)
  *  - `return`  head sends back to the secretary (→ assessor_review) */
 type AssessorAction = 'draft' | 'submit' | 'sign' | 'return';
 const ASSESSOR_ACTIONS: AssessorAction[] = ['draft', 'submit', 'sign', 'return'];
@@ -41,8 +48,10 @@ const ASSESSOR_ACTIONS: AssessorAction[] = ['draft', 'submit', 'sign', 'return']
  * head-only (admins and committee-less programs fall back to the original
  * single-assessor flow).
  *
- * Body: { offeringId, assessmentId?, scores, comments, generalNotes, action }
+ * Body: { offeringId, assessmentId?, scores, comments, generalNotes, action, signOffKind }
  *   action: 'draft' | 'submit' | 'sign' | 'return' (legacy: lock=true ⇒ sign)
+ *   signOffKind: 'committee' | 'self_only' | 'documents_only'. Only committee
+ *   assessments use client rubric scores for official metrics.
  */
 export async function POST(request: NextRequest) {
   // 1. Authenticate
@@ -63,10 +72,12 @@ export async function POST(request: NextRequest) {
   let body: {
     offeringId: string;
     assessmentId?: string | null;
-    scores: AssessmentDoc['scores'];
-    comments: AssessmentDoc['comments'];
+    scores?: AssessmentDoc['scores'];
+    comments?: AssessmentDoc['comments'];
     generalNotes: string;
     action?: AssessorAction;
+    /** committee | self_only | documents_only — set by the form's radio. */
+    signOffKind?: SignOffKind;
     /** Legacy flag (pre two-step). `true` is treated as `action: 'sign'`. */
     lock?: boolean;
   };
@@ -84,7 +95,7 @@ export async function POST(request: NextRequest) {
       : 'draft';
   const lock = action === 'sign';
 
-  if (!offeringId || !scores) {
+  if (!offeringId) {
     return NextResponse.json({ error: 'missing_fields' }, { status: 400 });
   }
 
@@ -120,24 +131,80 @@ export async function POST(request: NextRequest) {
   const isSecretaryActor = role.isSecretary || (role.isHead && !role.hasSecretary);
   const status = offering.status as OfferingStatus;
   const preSubmit = status === 'pending_assessment' || status === 'assessor_review';
+  const headStage = status === 'pending_head_signoff';
+  const docsStage = status === 'documents_pending';
+  const assessmentsCol = offeringRef.collection('assessments');
+  let existingAssessment: AssessmentDoc | null = null;
+  const headStageAction = headStage && (action === 'sign' || action === 'return');
+  let existingAssessmentId = headStageAction
+    ? ((offering.assessmentId as string | undefined) ?? null)
+    : (assessmentId ?? null);
+
+  if (headStageAction) {
+    const existingSnap = existingAssessmentId
+      ? await assessmentsCol.doc(existingAssessmentId).get()
+      : (
+          await assessmentsCol
+            .orderBy('createdAt', 'desc')
+            .limit(1)
+            .get()
+        ).docs[0];
+
+    if (!existingSnap?.exists) {
+      return NextResponse.json({ error: 'assessment_required' }, { status: 409 });
+    }
+
+    existingAssessmentId = existingSnap.id;
+    existingAssessment = existingSnap.data() as AssessmentDoc;
+  }
+
+  const signOffKind: SignOffKind = docsStage
+    ? 'documents_only'
+    : existingAssessment
+      ? normalizeSignOffKind(existingAssessment.signOffKind)
+    : normalizeSignOffKind(body.signOffKind);
+  const committeeKind = signOffKind === 'committee';
+  const selfOnlyKind = signOffKind === 'self_only';
+  const documentsOnlyKind = signOffKind === 'documents_only';
+
+  if (!docsStage && !existingAssessment && documentsOnlyKind) {
+    return NextResponse.json({ error: 'invalid_signoff_kind' }, { status: 400 });
+  }
+  if (committeeKind && !scores && !existingAssessment?.scores) {
+    return NextResponse.json({ error: 'missing_fields' }, { status: 400 });
+  }
+  if (selfOnlyKind && (action === 'submit' || action === 'sign')) {
+    const selfAssessmentSnap = await offeringRef
+      .collection('selfAssessment')
+      .doc('self')
+      .get();
+    if (!selfAssessmentSnap.exists || selfAssessmentSnap.data()?.isSubmitted !== true) {
+      return NextResponse.json(
+        { error: 'self_assessment_required' },
+        { status: 409 },
+      );
+    }
+  }
 
   const deny = () => NextResponse.json({ error: 'not_authorized' }, { status: 403 });
   const conflict = () =>
     NextResponse.json({ error: 'invalid_status' }, { status: 409 });
 
-  if (action === 'draft' || action === 'submit') {
+  if (action === 'draft') {
     if (!(free || isSecretaryActor)) return deny();
-    if (!preSubmit) return conflict();
-    if (action === 'submit' && !committee.hasCommittee) return conflict();
+    if (!preSubmit || !committeeKind) return conflict();
+  } else if (action === 'submit') {
+    if (!(free || isSecretaryActor)) return deny();
+    if (!(preSubmit || docsStage)) return conflict();
+    if (!committee.hasCommittee) return conflict();
   } else if (action === 'sign') {
     if (!(free || role.isHead)) return deny();
     if (committee.hasCommittee && !free) {
       if (status !== 'pending_head_signoff') return conflict();
-    } else if (!(preSubmit || status === 'pending_head_signoff')) {
+    } else if (!(preSubmit || docsStage || status === 'pending_head_signoff')) {
       return conflict();
     }
   } else {
-    // return
     if (!committee.hasCommittee) return conflict();
     if (!(role.isHead || isAdmin)) return deny();
     if (status !== 'pending_head_signoff') return conflict();
@@ -147,7 +214,11 @@ export async function POST(request: NextRequest) {
   // single-assessor flow), require a follow-up review when one applies — i.e.
   // there is a previous offering with a signed assessment to follow up on.
   // Mirrors the client-side gate so a direct API call cannot bypass it.
-  if ((action === 'submit' || action === 'sign') && offering.previousOfferingId) {
+  if (
+    committeeKind &&
+    (action === 'submit' || action === 'sign') &&
+    offering.previousOfferingId
+  ) {
     const prevSnap = await db
       .collection('offerings')
       .doc(offering.previousOfferingId)
@@ -166,8 +237,19 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  // 4. Compute rubric result
-  const result = computeRubricResult(scores);
+  // 4. Compute rubric result. Alternate sign-offs keep neutral rubric fields
+  // only to satisfy the existing document shape; reports key off signOffKind.
+  const persistedScores: AssessmentDoc['scores'] = committeeKind
+    ? (scores ?? existingAssessment!.scores)
+    : DEFAULT_SCORES;
+  const persistedComments: AssessmentDoc['comments'] = committeeKind
+    ? (comments ?? existingAssessment?.comments ?? {})
+    : {};
+  const resolvedGeneralNotes =
+    typeof generalNotes === 'string'
+      ? (generalNotes || null)
+      : (existingAssessment?.generalNotes ?? null);
+  const result = computeRubricResult(persistedScores);
 
   // 5. Build the assessment document
   const now = FieldValue.serverTimestamp();
@@ -180,30 +262,31 @@ export async function POST(request: NextRequest) {
     aiReportId: offering.latestAiReportId ?? '',
     assessorId: user.uid,
     assessorName: profile.nameTh,
-    scores,
-    totalScore: result.totalScore,
-    maxScore: result.maxScore,
-    percentScore: result.percentScore,
-    band: result.band,
-    comments: comments ?? {},
+    scores: persistedScores,
+    totalScore: committeeKind ? result.totalScore : 0,
+    maxScore: committeeKind ? result.maxScore : 0,
+    percentScore: committeeKind ? result.percentScore : 0,
+    band: committeeKind ? result.band : 'improve',
+    comments: persistedComments,
     sectionComments: [],
-    generalNotes: generalNotes || null,
+    generalNotes: resolvedGeneralNotes,
     signedPdfStoragePath: null,
     signedPdfUrl: null,
     signedAt: lock ? now : null,
     isLocked: lock,
+    signOffKind,
     // Snapshot the committee at sign-off so the report cover reflects who was on
-    // the committee when it was signed, even if it changes later.
-    ...(lock ? { committeeSnapshot: committee.roster } : {}),
+    // the committee when it was signed, even if it changes later. Committee kind
+    // only — self-only / documents-only have no committee assessment.
+    ...(lock && committeeKind ? { committeeSnapshot: committee.roster } : {}),
     // On sign-off the record carries forward for next-semester verification.
-    followUpStatus: lock ? 'pending_review_next_semester' : null,
+    followUpStatus: lock && (committeeKind || selfOnlyKind) ? 'pending_review_next_semester' : null,
     createdAt: now,
     updatedAt: now,
   };
 
   // 6. Write to Firestore
-  const assessmentsCol = offeringRef.collection('assessments');
-  let docId = assessmentId;
+  let docId = existingAssessmentId;
 
   try {
     if (docId) {
@@ -230,8 +313,9 @@ export async function POST(request: NextRequest) {
 
     // 7. Advance the offering status for the action taken.
     if (action === 'sign') {
+      const finalStatus = finalStatusForSignOffKind(signOffKind);
       await offeringRef.update({
-        status: 'assessed',
+        status: finalStatus,
         assessmentId: docId,
         updatedAt: now,
         updatedBy: user.uid,
@@ -248,13 +332,14 @@ export async function POST(request: NextRequest) {
       // Secretary sends the draft to the head for sign-off.
       await offeringRef.update({
         status: 'pending_head_signoff',
+        assessmentId: docId,
         updatedAt: now,
         updatedBy: user.uid,
       });
     } else if (action === 'return') {
       // Head sends it back to the secretary for edits.
       await offeringRef.update({
-        status: 'assessor_review',
+        status: documentsOnlyKind ? 'documents_pending' : 'assessor_review',
         updatedAt: now,
         updatedBy: user.uid,
       });
@@ -282,7 +367,12 @@ export async function POST(request: NextRequest) {
       entityType: 'assessments',
       entityId: docId,
       before: null,
-      after: { offeringId, action, totalScore: result.totalScore },
+      after: {
+        offeringId,
+        action,
+        signOffKind,
+        totalScore: committeeKind ? result.totalScore : 0,
+      },
     });
 
     // 9a. On submit, alert the head that a draft is awaiting their sign-off.
@@ -327,14 +417,16 @@ export async function POST(request: NextRequest) {
                 relatedOfferingId: offeringId,
               })
             : Promise.resolve(),
-          getProgramVerifierIds(offering.programId).then((ids) =>
-            createNotifications(ids, {
-              type: 'verification_ready',
-              title: 'มีรายวิชารอการรับรองผล',
-              body: `รายวิชา ${courseCode} พร้อมรับรองผลขั้นสุดท้าย`.trim(),
-              relatedOfferingId: offeringId,
-            }),
-          ),
+          documentsOnlyKind
+            ? Promise.resolve()
+            : getProgramVerifierIds(offering.programId).then((ids) =>
+                createNotifications(ids, {
+                  type: 'verification_ready',
+                  title: 'มีรายวิชารอการรับรองผล',
+                  body: `รายวิชา ${courseCode} พร้อมรับรองผลขั้นสุดท้าย`.trim(),
+                  relatedOfferingId: offeringId,
+                }),
+              ),
         ]),
       );
     }
