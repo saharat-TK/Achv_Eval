@@ -526,7 +526,11 @@ export default function AssessmentForm({
           >
             รูปแบบการลงนาม
           </h3>
-          <div className="mt-3 space-y-2">
+          <div
+            role="radiogroup"
+            aria-labelledby="sign-off-kind-title"
+            className="mt-3 space-y-2"
+          >
             <label className="flex items-start gap-3 rounded-lg border border-slate-200 p-3 text-sm text-slate-700">
               <input
                 type="radio"
