@@ -106,10 +106,15 @@ export const generateCombinedReport = onCall(
       }
     }
 
-    let lecturerName = offering.lecturerEmail ?? '';
+    let lecturerName = offering.lecturerEmail?.trim() || '—';
     if (offering.lecturerId) {
       const u = await db.collection('users').doc(offering.lecturerId).get();
-      lecturerName = (u.data()?.nameTh as string) || lecturerName;
+      const nameTh = (u.data()?.nameTh as string | undefined)?.trim();
+      const email =
+        offering.lecturerEmail?.trim() ||
+        (u.data()?.email as string | undefined)?.trim() ||
+        '';
+      lecturerName = nameTh && email ? `${nameTh} (${email})` : nameTh || email || '—';
     }
 
     const signedAt: Date =

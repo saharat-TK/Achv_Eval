@@ -286,7 +286,8 @@ export default function AssessmentForm({
   }
   const readOnly = isLocked || !(showDraft || showSubmit || showSign || showReturn);
   const showSignOffChoice = preSubmit && !docsStage && !atFinalStage && !readOnly;
-  const canReverseSignOff = isSuperAdmin && status === 'assessed';
+  const canReverseSignOff =
+    isSuperAdmin && (status === 'assessed' || status === 'assessed_self_only');
 
   // Score change handler
   const setScore = useCallback(
@@ -621,12 +622,22 @@ export default function AssessmentForm({
             )}
           </div>
           {signedPdfUrl ? (
-            <a
-              href={signedPdfUrl}
-              className="mt-2 inline-block text-sm text-mfu-primary hover:underline"
-            >
-              ดาวน์โหลดรายงานฉบับลงนาม (PDF)
-            </a>
+            <div className="mt-2 flex flex-wrap items-center gap-3 text-sm">
+              <a
+                href={signedPdfUrl}
+                className="font-medium text-mfu-primary hover:underline"
+              >
+                ดาวน์โหลดรายงานฉบับลงนาม (PDF)
+              </a>
+              <button
+                type="button"
+                onClick={() => generateCombinedPdf(assessmentId)}
+                disabled={generatingPdf}
+                className="text-xs font-medium text-mfu-primary underline hover:text-mfu-primary/80 disabled:text-slate-400 disabled:no-underline"
+              >
+                {generatingPdf ? 'กำลังสร้างรายงานใหม่…' : 'สร้างรายงานใหม่'}
+              </button>
+            </div>
           ) : generatingPdf ? (
             <p className="mt-2 text-xs text-slate-500">
               กำลังสร้างรายงานฉบับลงนาม… อาจใช้เวลาสักครู่

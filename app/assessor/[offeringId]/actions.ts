@@ -5,7 +5,7 @@ import { revalidatePath } from 'next/cache';
 import { getAdminDb } from '@/lib/firebase/admin';
 import { getSessionUser, getCurrentProfile, isImpersonating } from '@/lib/firebase/auth-server';
 import { deleteStoredPdf } from '@/lib/data/reportStorage';
-import type { ImplementationDecision, AssessmentDoc } from '@/lib/types/models';
+import type { ImplementationDecision, AssessmentDoc, OfferingStatus } from '@/lib/types/models';
 
 type ScoreKey = keyof AssessmentDoc['scores'];
 
@@ -14,6 +14,7 @@ const VALID_DECISIONS: ImplementationDecision[] = [
   'partially_implemented',
   'not_implemented',
 ];
+const REVERSIBLE_SIGNED_STATUSES: OfferingStatus[] = ['assessed', 'assessed_self_only'];
 
 export async function saveFollowUp(
   currentOfferingId: string,
@@ -100,12 +101,12 @@ export async function saveFollowUp(
 }
 
 /**
- * Reverses a signed-off (`assessed`) offering back to `pending_assessment` so it
- * can be re-assessed. Super-admin only — voiding a signed verification is a
- * sensitive action. Unlocks the assessment and its follow-up review, clears the
- * signature + report link, deletes the stored combined PDF (best-effort; the
- * voided report must not remain reachable by its token URL), and re-opens the
- * offering. Re-signing regenerates a fresh report.
+ * Reverses a signed-off (`assessed`/`assessed_self_only`) offering back to
+ * `pending_assessment` so it can be re-assessed. Super-admin only — voiding a
+ * signed verification is a sensitive action. Unlocks the assessment and its
+ * follow-up review, clears the signature + report link, deletes the stored
+ * combined PDF (best-effort; the voided report must not remain reachable by its
+ * token URL), and re-opens the offering. Re-signing regenerates a fresh report.
  */
 export async function reverseAssessedSignOff(
   offeringId: string,
@@ -126,7 +127,9 @@ export async function reverseAssessedSignOff(
       const offeringSnap = await tx.get(offeringRef);
       if (!offeringSnap.exists) throw new Error('offering_not_found');
       const offering = offeringSnap.data()!;
-      if (offering.status !== 'assessed') throw new Error('not_assessed');
+      if (!REVERSIBLE_SIGNED_STATUSES.includes(offering.status)) {
+        throw new Error('not_assessed');
+      }
       if (!offering.assessmentId) throw new Error('assessment_not_found');
 
       const assessmentRef = offeringRef
