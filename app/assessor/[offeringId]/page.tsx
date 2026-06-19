@@ -19,10 +19,13 @@ import type { OfferingStatus } from '@/lib/types/models';
 export const dynamic = 'force-dynamic';
 
 const ASSESSMENT_VISIBLE_STATUSES: OfferingStatus[] = [
+  'documents_pending',
   'pending_assessment',
   'assessor_review',
   'pending_head_signoff',
   'assessed',
+  'assessed_self_only',
+  'closed_documents_only',
 ];
 
 export default async function AssessorOfferingPage({
