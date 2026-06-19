@@ -40,6 +40,12 @@ export function buildCombinedReportHtml(args: {
   committee?: CommitteeMemberForReport[] | null;
 }): string {
   const { signOffKind, aiResult, assessment, meta, followUp, selfAssessment, committee } = args;
+  const title =
+    signOffKind === 'committee'
+      ? 'รายงานการประเมินและทวนสอบผลสัมฤทธิ์รายวิชา (ฉบับลงนาม)'
+      : signOffKind === 'self_only'
+        ? 'รายงานการประเมินและทวนสอบผลสัมฤทธิ์รายวิชา (ฉบับลงนาม-ผลประเมินตนเองเท่านั้น)'
+        : 'รายงานการประเมินและทวนสอบผลสัมฤทธิ์รายวิชา (ฉบับลงนาม-เอกสารเท่านั้น)';
 
   // Sequential section numbers, skipping any optional section that's absent.
   let n = 1;
@@ -75,7 +81,7 @@ export function buildCombinedReportHtml(args: {
 <body>
 
 <div class="cover">
-  <h1>รายงานการประเมินและทวนสอบผลสัมฤทธิ์รายวิชา (ฉบับลงนาม)</h1>
+  <h1>${esc(title)}</h1>
   <table class="meta">
     <tr><td><strong>รายวิชา</strong></td><td>${esc(meta.courseCode)} ${esc(meta.courseNameTh)} (${esc(meta.courseNameEn)})</td></tr>
     <tr><td><strong>ปีการศึกษา</strong></td><td>${meta.academicYear} ${esc(meta.semesterLabel)} · ตอนเรียน ${esc(meta.section)}</td></tr>
