@@ -53,9 +53,9 @@ async function getAssessment(
 
 /**
  * Offerings in the assessor's programs awaiting next-semester verification.
- * These are offerings with status `assessed`; once a committee records an
- * implementation review the status moves to `implemented`/`not_implemented`
- * and the offering leaves this queue.
+ * These are offerings with committee/self-only sign-off; once a committee
+ * records an implementation review the status moves to
+ * `implemented`/`not_implemented` and the offering leaves this queue.
  */
 export async function getOfferingsPendingVerification(
   programIds: string[],
@@ -65,7 +65,7 @@ export async function getOfferingsPendingVerification(
   const snap = await getAdminDb()
     .collection('offerings')
     .where('programId', 'in', programIds)
-    .where('status', '==', 'assessed')
+    .where('status', 'in', ['assessed', 'assessed_self_only'])
     .get();
 
   const offerings = snap.docs

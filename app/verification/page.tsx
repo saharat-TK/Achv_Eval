@@ -6,7 +6,12 @@ import {
   getVerificationQueue,
   type VerificationQueueItem,
 } from '@/lib/data/verifications';
-import { SEMESTER_LABEL, VERIFICATION_DECISION } from '@/lib/constants';
+import {
+  isCommitteeSignOff,
+  SEMESTER_LABEL,
+  VERIFICATION_ENTRY_STATUSES,
+  VERIFICATION_DECISION,
+} from '@/lib/constants';
 import StatusBadge from '@/components/StatusBadge';
 import type { Semester } from '@/lib/types/models';
 
@@ -64,7 +69,9 @@ export default async function VerificationDashboardPage() {
   const items = await getVerificationQueue(programIds);
 
   const total = items.length;
-  const assessedOnly = items.filter((i) => i.offering.status === 'assessed').length;
+  const assessedOnly = items.filter((i) =>
+    VERIFICATION_ENTRY_STATUSES.includes(i.offering.status),
+  ).length;
   const inReview = items.filter((i) => i.offering.status === 'verification_review').length;
   const verified = items.filter((i) => i.offering.status === 'verified').length;
   const followUp = items.filter((i) => i.offering.status === 'needs_follow_up').length;
@@ -165,7 +172,7 @@ export default async function VerificationDashboardPage() {
                                   </div>
                                 </td>
                                 <td className={`${TABLE_CELL_CLASS} whitespace-nowrap text-slate-600`}>
-                                  {assessment
+                                  {assessment && isCommitteeSignOff(assessment.signOffKind)
                                     ? `${assessment.totalScore}/${assessment.maxScore} (${assessment.percentScore}%)`
                                     : '—'}
                                 </td>

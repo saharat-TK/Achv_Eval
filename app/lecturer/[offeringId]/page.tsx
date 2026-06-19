@@ -7,20 +7,9 @@ import StatusBadge from '@/components/StatusBadge';
 import AnalyzeCoursePanel from '@/components/AnalyzeCoursePanel';
 import AiReportsList from '@/components/AiReportsList';
 import SelfAssessmentForm from '@/components/SelfAssessmentForm';
-import { SEMESTER_LABEL } from '@/lib/constants';
-import type { OfferingStatus } from '@/lib/types/models';
+import { SEMESTER_LABEL, SIGNED_OFF_STATUSES } from '@/lib/constants';
 
 export const dynamic = 'force-dynamic';
-
-const ASSESSED_STATUSES: OfferingStatus[] = [
-  'assessed',
-  'verification_review',
-  'verified',
-  'needs_follow_up',
-  'pending_review_next_semester',
-  'implemented',
-  'not_implemented',
-];
 
 export default async function OfferingDetailPage({
   params,
@@ -37,7 +26,7 @@ export default async function OfferingDetailPage({
     notFound();
   }
 
-  const assessment = ASSESSED_STATUSES.includes(offering.status)
+  const assessment = SIGNED_OFF_STATUSES.includes(offering.status)
     ? await getLatestAssessment(offering.id)
     : null;
 
