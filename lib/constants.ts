@@ -1,5 +1,6 @@
 import type {
   OfferingStatus,
+  SignOffKind,
   UploadType,
   Semester,
   AiReportStatus,
@@ -29,6 +30,8 @@ export const OFFERING_STATUS: Record<
   assessor_review: { labelTh: 'รอผู้ทวนสอบ', tone: 'violet' },
   pending_head_signoff: { labelTh: 'รอประธานทวนสอบยืนยัน', tone: 'amber' },
   assessed: { labelTh: 'ทวนสอบแล้ว', tone: 'green' },
+  assessed_self_only: { labelTh: 'ทวนสอบ (ประเมินตนเอง)', tone: 'green' },
+  closed_documents_only: { labelTh: 'ปิดรายการ (เอกสารเท่านั้น)', tone: 'slate' },
   verification_review: { labelTh: 'รอคณะกรรมการ', tone: 'violet' },
   verified: { labelTh: 'รับรองผลแล้ว', tone: 'green' },
   needs_follow_up: { labelTh: 'ต้องติดตาม', tone: 'amber' },
@@ -44,11 +47,66 @@ export const OFFERING_STATUS: Record<
  * client list (AssessorOfferingsTable) so they can't drift.
  */
 export const ASSESSOR_OFFERING_STATUSES: OfferingStatus[] = [
+  'documents_pending',
   'pending_assessment',
   'assessor_review',
   'pending_head_signoff',
   'assessed',
+  'assessed_self_only',
+  'closed_documents_only',
 ];
+
+export const SIGN_OFF_KINDS: SignOffKind[] = [
+  'committee',
+  'self_only',
+  'documents_only',
+];
+
+/**
+ * "Signed off" offerings — committee `assessed`, the two close-out kinds, and
+ * everything downstream of assessment. Used for signed-off counts in the
+ * dashboard/reports. Committee-only metrics (averages, bands) instead key on
+ * the assessment's `signOffKind`, not status.
+ */
+export const SIGNED_OFF_STATUSES: OfferingStatus[] = [
+  'assessed',
+  'assessed_self_only',
+  'closed_documents_only',
+  'verification_review',
+  'verified',
+  'needs_follow_up',
+  'pending_review_next_semester',
+  'implemented',
+  'not_implemented',
+];
+
+export const ASSESSMENT_SENT_STATUSES: OfferingStatus[] = [
+  'pending_assessment',
+  'assessor_review',
+  'pending_head_signoff',
+  ...SIGNED_OFF_STATUSES,
+];
+
+export const VERIFICATION_ENTRY_STATUSES: OfferingStatus[] = [
+  'assessed',
+  'assessed_self_only',
+];
+
+export function normalizeSignOffKind(value: unknown): SignOffKind {
+  return SIGN_OFF_KINDS.includes(value as SignOffKind)
+    ? (value as SignOffKind)
+    : 'committee';
+}
+
+export function isCommitteeSignOff(value: unknown): boolean {
+  return normalizeSignOffKind(value) === 'committee';
+}
+
+export function finalStatusForSignOffKind(kind: SignOffKind): OfferingStatus {
+  if (kind === 'self_only') return 'assessed_self_only';
+  if (kind === 'documents_only') return 'closed_documents_only';
+  return 'assessed';
+}
 
 /**
  * Document slots a lecturer uploads per offering.

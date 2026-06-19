@@ -5,7 +5,14 @@ import {
   canAccessVerificationProgram,
   getVerificationQueueItem,
 } from '@/lib/data/verifications';
-import { SEMESTER_LABEL, VERIFICATION_DECISION } from '@/lib/constants';
+import {
+  isCommitteeSignOff,
+  normalizeSignOffKind,
+  SEMESTER_LABEL,
+  VERIFICATION_DECISION,
+  VERIFICATION_ENTRY_STATUSES,
+} from '@/lib/constants';
+import type { OfferingStatus, SignOffKind } from '@/lib/types/models';
 import StatusBadge from '@/components/StatusBadge';
 import FinalVerificationForm from '@/components/FinalVerificationForm';
 import FinalReportLink from '@/components/FinalReportLink';
@@ -30,6 +37,12 @@ export default async function VerificationDetailPage({
   }
 
   const { offering, assessment, latestVerification } = item;
+  const signOffKind = inferSignOffKind(assessment?.signOffKind, offering.status);
+  const committeeAssessment = assessment && isCommitteeSignOff(signOffKind);
+  const canRecordVerification = [
+    ...VERIFICATION_ENTRY_STATUSES,
+    'verification_review',
+  ].includes(offering.status);
 
   return (
     <div>
@@ -54,7 +67,7 @@ export default async function VerificationDetailPage({
         <h2 className="text-sm font-semibold text-slate-700">
           ผลการทวนสอบโดยผู้ทวนสอบ
         </h2>
-        {assessment ? (
+        {committeeAssessment ? (
           <div className="mt-3 grid gap-3 text-sm md:grid-cols-3">
             <Metric label="ผู้ทวนสอบ" value={assessment.assessorName} />
             <Metric
@@ -62,6 +75,11 @@ export default async function VerificationDetailPage({
               value={`${assessment.totalScore}/${assessment.maxScore}`}
             />
             <Metric label="ร้อยละ" value={`${assessment.percentScore}%`} />
+          </div>
+        ) : assessment ? (
+          <div className="mt-3 grid gap-3 text-sm md:grid-cols-2">
+            <Metric label="ผู้ลงนาม" value={assessment.assessorName} />
+            <Metric label="ประเภทการลงนาม" value={SIGN_OFF_KIND_TEXT[signOffKind]} />
           </div>
         ) : (
           <p className="mt-2 text-sm text-slate-400">ไม่พบผลการทวนสอบ</p>
@@ -107,7 +125,7 @@ export default async function VerificationDetailPage({
           <p className="mt-2 text-sm text-slate-500">
             ยังไม่พบผลการทวนสอบจากผู้ทวนสอบ จึงยังรับรองผลขั้นสุดท้ายไม่ได้
           </p>
-        ) : !['assessed', 'verification_review'].includes(offering.status) ? (
+        ) : !canRecordVerification ? (
           <p className="mt-2 text-sm text-slate-500">
             รายวิชานี้ไม่ได้อยู่ในสถานะรอรับรองผล
           </p>
@@ -128,4 +146,17 @@ function Metric({ label, value }: { label: string; value: string }) {
       <div className="mt-1 font-medium text-slate-800">{value}</div>
     </div>
   );
+}
+
+const SIGN_OFF_KIND_TEXT: Record<SignOffKind, string> = {
+  committee: 'ทวนสอบโดยคณะกรรมการ',
+  self_only: 'ประเมินตนเองเท่านั้น',
+  documents_only: 'เอกสารประกอบรายวิชาเท่านั้น',
+};
+
+function inferSignOffKind(value: unknown, status: OfferingStatus): SignOffKind {
+  if (value) return normalizeSignOffKind(value);
+  if (status === 'assessed_self_only') return 'self_only';
+  if (status === 'closed_documents_only') return 'documents_only';
+  return 'committee';
 }

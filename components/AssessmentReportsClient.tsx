@@ -21,6 +21,7 @@ import {
   COMMITTEE_ROLES,
   REPORT_THRESHOLD,
   SEMESTER_LABEL,
+  SIGNED_OFF_STATUSES,
   formatThaiMeeting,
 } from '@/lib/constants';
 import StatusBadge from '@/components/StatusBadge';
@@ -67,11 +68,11 @@ interface Stats {
 }
 
 /** Denominator = active offerings in scope (inactive offerings are hidden from
- *  the workspaces); numerator = those with status `assessed`. */
+ *  the workspaces); numerator = signed-off offerings. */
 function computeStats(offerings: ManagedOffering[]): Stats {
   const active = offerings.filter((o) => o.isActive);
   const total = active.length;
-  const assessed = active.filter((o) => o.status === 'assessed').length;
+  const assessed = active.filter((o) => SIGNED_OFF_STATUSES.includes(o.status)).length;
   const ratio = total === 0 ? 0 : assessed / total;
   return { total, assessed, ratio, eligible: total > 0 && ratio >= REPORT_THRESHOLD };
 }

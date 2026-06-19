@@ -1,5 +1,6 @@
 import 'server-only';
 import { getAdminDb } from '@/lib/firebase/admin';
+import { SIGNED_OFF_STATUSES } from '@/lib/constants';
 import type { OfferingDoc } from '@/lib/types/models';
 
 export type OfferingWithId = OfferingDoc & { id: string };
@@ -54,17 +55,7 @@ export async function getLecturerOfferingCounts(uid: string): Promise<{
     awaitingAssessor: statuses.filter((s) =>
       ['pending_assessment', 'assessor_review', 'pending_head_signoff'].includes(s),
     ).length,
-    assessed: statuses.filter((s) =>
-      [
-        'assessed',
-        'verification_review',
-        'verified',
-        'needs_follow_up',
-        'pending_review_next_semester',
-        'implemented',
-        'not_implemented',
-      ].includes(s),
-    ).length,
+    assessed: statuses.filter((s) => SIGNED_OFF_STATUSES.includes(s)).length,
   };
 }
 

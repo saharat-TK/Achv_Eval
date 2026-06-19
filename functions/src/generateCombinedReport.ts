@@ -7,6 +7,7 @@ import type {
   RubricScore,
   SelfAssessmentForReport,
 } from './reportShared';
+import { normalizeSignOffKind } from './reportShared';
 import {
   getProgramCode,
   offeringReportDir,
@@ -86,18 +87,23 @@ export const generateCombinedReport = onCall(
     if (!assessment.isLocked) {
       throw new HttpsError('failed-precondition', 'ต้องลงนามทวนสอบก่อนจึงจะสร้างรายงานได้');
     }
+    const signOffKind = normalizeSignOffKind(assessment.signOffKind);
 
-    // Load the latest AI analysis result.
-    if (!offering.latestAiReportId) {
-      throw new HttpsError('failed-precondition', 'ยังไม่มีรายงานการวิเคราะห์');
-    }
-    const aiSnap = await offeringRef
-      .collection('aiReports')
-      .doc(offering.latestAiReportId)
-      .get();
-    const aiResult = aiSnap.data()?.structuredOutput as AnalysisResult | undefined;
-    if (!aiResult) {
-      throw new HttpsError('failed-precondition', 'ไม่พบผลการวิเคราะห์ของรายวิชา');
+    // Load the latest AI analysis result. Documents-only close-outs generate a
+    // minimal cover-only PDF and therefore do not require an AI report.
+    let aiResult: AnalysisResult | null = null;
+    if (signOffKind !== 'documents_only') {
+      if (!offering.latestAiReportId) {
+        throw new HttpsError('failed-precondition', 'ยังไม่มีรายงานการวิเคราะห์');
+      }
+      const aiSnap = await offeringRef
+        .collection('aiReports')
+        .doc(offering.latestAiReportId)
+        .get();
+      aiResult = (aiSnap.data()?.structuredOutput as AnalysisResult | undefined) ?? null;
+      if (!aiResult) {
+        throw new HttpsError('failed-precondition', 'ไม่พบผลการวิเคราะห์ของรายวิชา');
+      }
     }
 
     let lecturerName = offering.lecturerEmail ?? '';
@@ -206,10 +212,11 @@ export const generateCombinedReport = onCall(
     }
 
     const html = buildCombinedReportHtml({
+      signOffKind,
       aiResult,
-      followUp,
-      selfAssessment,
-      committee: assessment.committeeSnapshot ?? null,
+      followUp: signOffKind === 'committee' ? followUp : null,
+      selfAssessment: signOffKind === 'documents_only' ? null : selfAssessment,
+      committee: signOffKind === 'committee' ? assessment.committeeSnapshot ?? null : null,
       assessment: {
         assessorName: assessment.assessorName ?? '',
         signedAtText,

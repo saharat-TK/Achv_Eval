@@ -2,8 +2,8 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { SEMESTER_LABEL } from '@/lib/constants';
-import type { Semester } from '@/lib/types/models';
+import { OFFERING_STATUS, SEMESTER_LABEL } from '@/lib/constants';
+import type { OfferingStatus, Semester } from '@/lib/types/models';
 
 export interface DeptOption {
   id: string;
@@ -28,6 +28,7 @@ export default function DashboardFilterBar({
   defaultAcademicProgramId,
   defaultAcademicYear,
   defaultSemester,
+  defaultStatus,
 }: {
   departments: DeptOption[];
   academicPrograms: AcademicProgramOption[];
@@ -36,6 +37,7 @@ export default function DashboardFilterBar({
   defaultAcademicProgramId?: string;
   defaultAcademicYear?: number;
   defaultSemester?: Semester;
+  defaultStatus?: OfferingStatus;
 }) {
   const router = useRouter();
 
@@ -43,6 +45,7 @@ export default function DashboardFilterBar({
   const [apId, setApId] = useState(defaultAcademicProgramId ?? '');
   const [year, setYear] = useState(defaultAcademicYear ? String(defaultAcademicYear) : '');
   const [semester, setSemester] = useState<string>(defaultSemester ?? '');
+  const [status, setStatus] = useState<string>(defaultStatus ?? '');
 
   /** APs visible in the second dropdown (filtered by chosen department). */
   const visibleAps = deptId
@@ -66,6 +69,7 @@ export default function DashboardFilterBar({
     if (apId) params.set('academicProgramId', apId);
     if (year) params.set('academicYear', year);
     if (semester) params.set('semester', semester);
+    if (status) params.set('status', status);
     const q = params.toString();
     router.push(`/admin/dashboard${q ? `?${q}` : ''}`);
   }
@@ -75,11 +79,12 @@ export default function DashboardFilterBar({
     setApId('');
     setYear('');
     setSemester('');
+    setStatus('');
     router.push('/admin/dashboard');
   }
 
   return (
-    <div className="mt-4 grid gap-3 rounded-lg border border-slate-200 bg-white p-4 md:grid-cols-[1fr_1.3fr_0.8fr_0.8fr_auto]">
+    <div className="mt-4 grid gap-3 rounded-lg border border-slate-200 bg-white p-4 md:grid-cols-[1fr_1.3fr_0.75fr_0.75fr_1fr_auto]">
       {/* 1 — Department */}
       <label className="text-sm">
         <span className="text-xs font-medium text-slate-500">สาขาวิชา</span>
@@ -148,7 +153,24 @@ export default function DashboardFilterBar({
         </select>
       </label>
 
-      {/* 5 — Actions */}
+      {/* 5 — Status */}
+      <label className="text-sm">
+        <span className="text-xs font-medium text-slate-500">สถานะ</span>
+        <select
+          value={status}
+          onChange={(e) => setStatus(e.target.value)}
+          className={selectCls}
+        >
+          <option value="">ทุกสถานะ</option>
+          {Object.entries(OFFERING_STATUS).map(([value, meta]) => (
+            <option key={value} value={value}>
+              {meta.labelTh}
+            </option>
+          ))}
+        </select>
+      </label>
+
+      {/* 6 — Actions */}
       <div className="flex items-end gap-2">
         <button
           type="button"

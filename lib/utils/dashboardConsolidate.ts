@@ -31,8 +31,8 @@ export interface ApOption {
  * @param academicPrograms  AP list — used to look up AP code / nameTh.
  *
  * Numeric counts (totalOfferings, aiCompleted, …) are summed.
- * `averagePercentScore` is weighted by `signedCount` so large revisions
- * aren't diluted by small ones.
+ * `averagePercentScore` is weighted by `signedCount`, which represents
+ * committee-scored signed assessments rather than every signed-off offering.
  *
  * Programs with no `parentProgramId` appear as individual rows using their
  * own code / nameTh.

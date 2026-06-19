@@ -432,12 +432,14 @@ function assembleData(
   };
 }
 
-/** Download each assessed course's signed combined report PDF, in row order. */
+/** Download each signed-off course's signed combined report PDF, in row order. */
 async function collectCourseCombinedPdfs(
   db: admin.firestore.Firestore,
   courseRows: CourseRow[],
 ): Promise<Buffer[]> {
   const parts: Buffer[] = [];
+  // `assessed` in the frozen snapshot means signed-off for appendix coverage;
+  // score fields on the row remain null for non-committee signoffs.
   for (const row of courseRows.filter((r) => r.assessed)) {
     const offSnap = await db.collection('offerings').doc(row.offeringId).get();
     const assessmentId = offSnap.data()?.assessmentId as string | undefined;

@@ -28,7 +28,10 @@ const STATUS_ORDER: OfferingStatus[] = [
   'ai_complete',
   'pending_assessment',
   'assessor_review',
+  'pending_head_signoff',
   'assessed',
+  'assessed_self_only',
+  'closed_documents_only',
   'verification_review',
   'verified',
   'needs_follow_up',
@@ -64,6 +67,11 @@ function readSemester(value: string | string[] | undefined): Semester | undefine
   return raw === '1' || raw === '2' || raw === '3' ? raw : undefined;
 }
 
+function readStatus(value: string | string[] | undefined): OfferingStatus | undefined {
+  const raw = readSearchValue(value);
+  return raw && raw in OFFERING_STATUS ? (raw as OfferingStatus) : undefined;
+}
+
 export default async function AdminDashboardPage({
   searchParams,
 }: {
@@ -73,6 +81,7 @@ export default async function AdminDashboardPage({
     programId?: string | string[];
     academicYear?: string | string[];
     semester?: string | string[];
+    status?: string | string[];
   };
 }) {
   const profile = await getCurrentProfile();
@@ -100,6 +109,7 @@ export default async function AdminDashboardPage({
   const selectedProgramId = readSearchValue(searchParams.programId);
   const selectedAcademicYear = readAcademicYear(searchParams.academicYear);
   const selectedSemester = readSemester(searchParams.semester);
+  const selectedStatus = readStatus(searchParams.status);
 
   const departmentFilter = departments.some((d) => d.id === selectedDepartmentId)
     ? selectedDepartmentId
@@ -117,13 +127,12 @@ export default async function AdminDashboardPage({
     programId: programFilter,
     academicYear: selectedAcademicYear,
     semester: selectedSemester,
+    status: selectedStatus,
   });
 
   const apRows = consolidateByAcademicProgram(data.programRows, programs, academicPrograms);
 
-  const visibleStatuses = STATUS_ORDER.filter(
-    (status) => (data.statusCounts[status] ?? 0) > 0,
-  );
+  const visibleStatuses = STATUS_ORDER;
 
   const exportParams = new URLSearchParams();
   if (departmentFilter) exportParams.set('departmentId', departmentFilter);
@@ -133,6 +142,7 @@ export default async function AdminDashboardPage({
     exportParams.set('academicYear', String(selectedAcademicYear));
   }
   if (selectedSemester) exportParams.set('semester', selectedSemester);
+  if (selectedStatus) exportParams.set('status', selectedStatus);
   const exportQuery = exportParams.toString();
   const exportHref = `/api/dashboard/export${exportQuery ? `?${exportQuery}` : ''}`;
   const printHref = `/admin/dashboard/print${exportQuery ? `?${exportQuery}` : ''}`;
@@ -183,13 +193,14 @@ export default async function AdminDashboardPage({
         defaultAcademicProgramId={academicProgramFilter}
         defaultAcademicYear={selectedAcademicYear}
         defaultSemester={selectedSemester}
+        defaultStatus={selectedStatus}
       />
 
       <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
         <MetricCard
-          label="หลักสูตรในขอบเขต"
-          value={data.summary.totalPrograms.toLocaleString('th-TH')}
-          detail={`${data.summary.totalOfferings.toLocaleString('th-TH')} รายวิชาเปิดสอน`}
+          label="รายวิชาเปิดสอน"
+          value={data.summary.totalOfferings.toLocaleString('th-TH')}
+          detail={`${data.summary.totalPrograms.toLocaleString('th-TH')} หลักสูตรในขอบเขต`}
         />
         <MetricCard
           label="วิเคราะห์ AI แล้ว"
@@ -296,7 +307,7 @@ export default async function AdminDashboardPage({
                       {OFFERING_STATUS[status].labelTh}
                     </span>
                     <span className="font-semibold text-slate-800">
-                      {data.statusCounts[status]}
+                      {data.statusCounts[status] ?? 0}
                     </span>
                   </div>
                 ))

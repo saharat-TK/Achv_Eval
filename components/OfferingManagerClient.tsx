@@ -74,6 +74,7 @@ const REVERSE_TARGETS: ReverseTargetStatus[] = [
 /** In-progress assessment statuses (draft in review / awaiting the head) —
  *  reversible by a super admin to any reverse target. Mirrors the server. */
 const IN_REVIEW_STATUSES: OfferingStatus[] = ['assessor_review', 'pending_head_signoff'];
+const REVERSIBLE_SIGNED_STATUSES: OfferingStatus[] = ['assessed', 'assessed_self_only'];
 
 export default function OfferingManagerClient({
   offerings,
@@ -289,7 +290,10 @@ export default function OfferingManagerClient({
       targets.add('ai_complete');
       targets.add('documents_pending');
     }
-    if (isSuperAdmin && block.offerings.some((o) => o.status === 'assessed')) {
+    if (
+      isSuperAdmin &&
+      block.offerings.some((o) => REVERSIBLE_SIGNED_STATUSES.includes(o.status))
+    ) {
       targets.add('pending_assessment');
       targets.add('ai_complete');
       targets.add('documents_pending');
@@ -328,7 +332,7 @@ export default function OfferingManagerClient({
     }
     return (
       isSuperAdmin &&
-      offering.status === 'assessed' &&
+      REVERSIBLE_SIGNED_STATUSES.includes(offering.status) &&
       ['pending_assessment', 'ai_complete', 'documents_pending'].includes(targetStatus)
     );
   }
@@ -354,10 +358,10 @@ export default function OfferingManagerClient({
       ) {
         return [{ offering, reason: 'รายการรอทวนสอบย้อนเป็นสถานะนี้ไม่ได้' }];
       }
-      if (offering.status === 'assessed' && !isSuperAdmin) {
+      if (REVERSIBLE_SIGNED_STATUSES.includes(offering.status) && !isSuperAdmin) {
         return [{ offering, reason: 'เฉพาะผู้ดูแลระบบสูงสุดเท่านั้น' }];
       }
-      if (offering.status === 'assessed') {
+      if (REVERSIBLE_SIGNED_STATUSES.includes(offering.status)) {
         return [{ offering, reason: 'รายการทวนสอบแล้วย้อนเป็นสถานะนี้ไม่ได้' }];
       }
       if (IN_REVIEW_STATUSES.includes(offering.status) && !isSuperAdmin) {

@@ -14,7 +14,8 @@ export type FollowUpReviewWithId = FollowUpReviewDoc & { id: string };
 
 /**
  * Fetch offerings for a set of programs with statuses relevant to an assessor.
- * Returns offerings where status is pending_assessment, assessor_review, or assessed.
+ * The status list is centralized so the server and client assessor queues
+ * include pending, head-signoff, and final close-out states together.
  */
 export async function getOfferingsForAssessor(
   programIds: string[],

@@ -13,16 +13,19 @@ import {
 } from '@/lib/data/assessmentCommittee';
 import StatusBadge from '@/components/StatusBadge';
 import AssessorOfferingTabs from '@/components/AssessorOfferingTabs';
-import { SEMESTER_LABEL } from '@/lib/constants';
+import { isCommitteeSignOff, SEMESTER_LABEL } from '@/lib/constants';
 import type { OfferingStatus } from '@/lib/types/models';
 
 export const dynamic = 'force-dynamic';
 
 const ASSESSMENT_VISIBLE_STATUSES: OfferingStatus[] = [
+  'documents_pending',
   'pending_assessment',
   'assessor_review',
   'pending_head_signoff',
   'assessed',
+  'assessed_self_only',
+  'closed_documents_only',
 ];
 
 export default async function AssessorOfferingPage({
@@ -67,6 +70,9 @@ export default async function AssessorOfferingPage({
         previousOffering.id,
         previousOffering.assessmentId,
       );
+      if (previousAssessment && !isCommitteeSignOff(previousAssessment.signOffKind)) {
+        previousAssessment = null;
+      }
     }
     if (previousAssessment) {
       initialFollowUp = await getFollowUpReview(offering.id);

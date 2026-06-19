@@ -18,6 +18,7 @@ export const REPORT_STYLES = `
   .crit { background: #fef2f2; border: 1px solid #fecaca; padding: 8px 12px; border-radius: 6px; }
   .summary { background: #f8fafc; border: 1px solid #e2e8f0; padding: 8px 12px; border-radius: 6px; }
   .result-box { border: 1px solid #cbd5e1; padding: 8px 12px; margin-top: 8px; }
+  .note { background: #f8fafc; border: 1px solid #cbd5e1; padding: 8px 12px; border-radius: 6px; margin-top: 10px; }
   .sign td { height: 54px; vertical-align: bottom; text-align: center; font-size: 11px; }
   .section-body { page-break-inside: auto; }
   .official { background: #E3F1EA; border: 1px solid #00704A; padding: 4px 10px; border-radius: 4px; display: inline-block; font-size: 11px; }
@@ -30,6 +31,11 @@ export const BAND_TH: Record<string, string> = {
 };
 
 export type RubricScore = 1 | 2 | 3 | 'na';
+export type SignOffKind = 'committee' | 'self_only' | 'documents_only';
+
+export function normalizeSignOffKind(value: unknown): SignOffKind {
+  return value === 'self_only' || value === 'documents_only' ? value : 'committee';
+}
 
 /** The 7 official rubric items, in order. */
 export const RUBRIC_ITEMS: { key: string; labelTh: string }[] = [
@@ -194,6 +200,15 @@ export function renderCommitteeCover(
   return `
 <h3 style="margin-top:10px;">คณะกรรมการทวนสอบ</h3>
 <table class="meta">${rows}</table>`;
+}
+
+export function renderSignOffKindNotice(kind: SignOffKind): string {
+  if (kind === 'committee') return '';
+  const text =
+    kind === 'self_only'
+      ? 'เอกสารประเมินตนเองเท่านั้น — ยังไม่ได้ทวนสอบโดยคณะกรรมการ'
+      : 'เอกสารประกอบรายวิชาเท่านั้น — ยังไม่ได้วิเคราะห์หรือทวนสอบโดยคณะกรรมการ';
+  return `<div class="note"><strong>สถานะการลงนาม:</strong> ${esc(text)}</div>`;
 }
 
 export function renderAiSection(aiResult: AnalysisResult, sectionNo = 1): string {

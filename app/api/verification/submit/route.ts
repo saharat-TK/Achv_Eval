@@ -4,11 +4,15 @@ import { getAdminDb } from '@/lib/firebase/admin';
 import { getCurrentProfile, getSessionUser, isImpersonating } from '@/lib/firebase/auth-server';
 import type { OfferingStatus, VerificationDecision, VerificationDoc } from '@/lib/types/models';
 import { createNotification, notifySafely } from '@/lib/data/notifications';
+import { VERIFICATION_ENTRY_STATUSES } from '@/lib/constants';
 
 export const runtime = 'nodejs';
 
 const DECISIONS: VerificationDecision[] = ['verified', 'needs_follow_up'];
-const ALLOWED_STATUSES: OfferingStatus[] = ['assessed', 'verification_review'];
+const ALLOWED_STATUSES: OfferingStatus[] = [
+  ...VERIFICATION_ENTRY_STATUSES,
+  'verification_review',
+];
 
 /**
  * POST /api/verification/submit

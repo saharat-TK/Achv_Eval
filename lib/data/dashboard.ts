@@ -1,5 +1,6 @@
 import 'server-only';
 import { getAdminDb } from '@/lib/firebase/admin';
+import { SIGNED_OFF_STATUSES, isCommitteeSignOff } from '@/lib/constants';
 import type {
   AssessmentBand,
   AssessmentDoc,
@@ -26,7 +27,7 @@ export interface DashboardProgramRow {
   /** # offerings with a saved follow-up review (assessor's next-semester follow-up). */
   followUpCompleted: number;
   averagePercentScore: number | null;
-  /** # offerings with a signed assessment — denominator used when averaging scores. */
+  /** # committee-scored signed assessments — denominator used when averaging scores. */
   signedCount: number;
 }
 
@@ -59,7 +60,7 @@ export interface DashboardTrendPoint {
   academicYear: number;
   semester: Semester;
   totalOfferings: number;
-  assessedCount: number; // # offerings in an assessed/verified state
+  assessedCount: number; // # offerings in signed-off/downstream states
   completionRate: number; // 0–100, assessed ÷ total
   averagePercentScore: number | null;
   excellent: number;
@@ -83,8 +84,8 @@ export interface RecurringWeakness {
   key: keyof AssessmentDoc['scores'];
   number: string;
   labelTh: string;
-  lowCount: number; // # signed assessments scoring this item 1
-  scoredCount: number; // # signed assessments where the item is not N/A
+  lowCount: number; // # committee assessments scoring this item 1
+  scoredCount: number; // # committee assessments where the item is not N/A
   lowRate: number; // 0–100, lowCount ÷ scoredCount
   affectedCourses: WeaknessCourse[];
 }
@@ -117,6 +118,7 @@ export interface DashboardFilters {
   programId?: string;
   academicYear?: number;
   semester?: Semester;
+  status?: OfferingStatus;
 }
 
 const AI_COMPLETED_STATUSES: OfferingStatus[] = [
@@ -125,16 +127,7 @@ const AI_COMPLETED_STATUSES: OfferingStatus[] = [
   'assessor_review',
   'pending_head_signoff',
   'assessed',
-  'verification_review',
-  'verified',
-  'needs_follow_up',
-  'pending_review_next_semester',
-  'implemented',
-  'not_implemented',
-];
-
-const ASSESSED_STATUSES: OfferingStatus[] = [
-  'assessed',
+  'assessed_self_only',
   'verification_review',
   'verified',
   'needs_follow_up',
@@ -213,7 +206,13 @@ function assessmentReason(
     return 'รอติดตามภาคการศึกษาถัดไป';
   }
   if (offering.status === 'not_implemented') return 'ยังไม่ดำเนินการตามข้อเสนอแนะ';
-  if (assessment && assessment.percentScore < 70) return 'คะแนนทวนสอบต่ำกว่า 70%';
+  if (
+    assessment &&
+    isCommitteeSignOff(assessment.signOffKind) &&
+    assessment.percentScore < 70
+  ) {
+    return 'คะแนนทวนสอบต่ำกว่า 70%';
+  }
   return null;
 }
 
@@ -235,15 +234,18 @@ function buildTrend(
       const signed = group
         .map((offering) => assessmentByOffering.get(offering.id))
         .filter((a): a is AssessmentWithId => Boolean(a?.isLocked));
+      const committeeSigned = signed.filter((assessment) =>
+        isCommitteeSignOff(assessment.signOffKind),
+      );
       const assessedCount = group.filter((o) =>
-        ASSESSED_STATUSES.includes(o.status),
+        SIGNED_OFF_STATUSES.includes(o.status),
       ).length;
       const bands: Record<AssessmentBand, number> = {
         excellent: 0,
         good: 0,
         improve: 0,
       };
-      for (const assessment of signed) bands[assessment.band] += 1;
+      for (const assessment of committeeSigned) bands[assessment.band] += 1;
       return {
         termKey,
         label: `${academicYear}/${semester}`,
@@ -252,7 +254,7 @@ function buildTrend(
         totalOfferings: group.length,
         assessedCount,
         completionRate: Math.round((assessedCount / group.length) * 1000) / 10,
-        averagePercentScore: average(signed.map((a) => a.percentScore)),
+        averagePercentScore: average(committeeSigned.map((a) => a.percentScore)),
         excellent: bands.excellent,
         good: bands.good,
         improve: bands.improve,
@@ -274,6 +276,7 @@ function buildRecurringWeaknesses(
     for (const offering of offerings) {
       const assessment = assessmentByOffering.get(offering.id);
       if (!assessment?.isLocked) continue;
+      if (!isCommitteeSignOff(assessment.signOffKind)) continue;
       const score = assessment.scores[item.key];
       if (score === undefined || score === 'na') continue;
       scoredCount += 1;
@@ -380,7 +383,7 @@ async function getAssessmentsByOffering(
     }
     if (
       !picked &&
-      ['assessor_review', 'pending_head_signoff', ...ASSESSED_STATUSES].includes(
+      ['assessor_review', 'pending_head_signoff', ...SIGNED_OFF_STATUSES].includes(
         offering.status,
       )
     ) {
@@ -449,6 +452,7 @@ export async function getExecutiveDashboardData(
       return false;
     }
     if (filters.semester && offering.semester !== filters.semester) return false;
+    if (filters.status && offering.status !== filters.status) return false;
     return true;
   });
   const assessmentByOffering = await getAssessmentsByOffering(
@@ -464,10 +468,11 @@ export async function getExecutiveDashboardData(
 
   const signedAssessments = offerings
     .map((offering) => assessmentByOffering.get(offering.id))
-    .filter((assessment): assessment is AssessmentWithId =>
-      Boolean(assessment?.isLocked),
-    );
-  const percentScores = signedAssessments.map((assessment) => assessment.percentScore);
+    .filter((assessment): assessment is AssessmentWithId => Boolean(assessment?.isLocked));
+  const committeeAssessments = signedAssessments.filter((assessment) =>
+    isCommitteeSignOff(assessment.signOffKind),
+  );
+  const percentScores = committeeAssessments.map((assessment) => assessment.percentScore);
   const implementedCount = offerings.filter((o) => o.status === 'implemented').length;
   const reviewedImplementationCount = offerings.filter((o) =>
     ['implemented', 'not_implemented'].includes(o.status),
@@ -478,12 +483,12 @@ export async function getExecutiveDashboardData(
     good: 0,
     improve: 0,
   };
-  for (const assessment of signedAssessments) {
+  for (const assessment of committeeAssessments) {
     bandCounts[assessment.band] += 1;
   }
 
   const rubricAverages = RUBRIC_ITEMS.map((item) => {
-    const values = signedAssessments
+    const values = committeeAssessments
       .map((assessment) => numericScore(assessment.scores[item.key]))
       .filter((score): score is number => score !== null);
     return {
@@ -499,11 +504,14 @@ export async function getExecutiveDashboardData(
   const programRows = visiblePrograms.map((program) => {
     const programOfferings = offerings.filter((o) => o.programId === program.id);
     const programScores = programOfferings
-      .map((offering) => {
-        const assessment = assessmentByOffering.get(offering.id);
-        return assessment?.isLocked ? assessment.percentScore : undefined;
-      })
-      .filter((score): score is number => typeof score === 'number');
+      .map((offering) => assessmentByOffering.get(offering.id))
+      .filter(
+        (assessment): assessment is AssessmentWithId =>
+          assessment != null &&
+          assessment.isLocked &&
+          isCommitteeSignOff(assessment.signOffKind),
+      )
+      .map((assessment) => assessment.percentScore);
 
     return {
       programId: program.id,
@@ -512,7 +520,7 @@ export async function getExecutiveDashboardData(
       totalOfferings: programOfferings.length,
       aiCompleted: programOfferings.filter((o) => AI_COMPLETED_STATUSES.includes(o.status))
         .length,
-      assessed: programOfferings.filter((o) => ASSESSED_STATUSES.includes(o.status)).length,
+      assessed: programOfferings.filter((o) => SIGNED_OFF_STATUSES.includes(o.status)).length,
       finalVerified: programOfferings.filter((o) =>
         FINAL_VERIFIED_STATUSES.includes(o.status),
       ).length,
@@ -530,6 +538,7 @@ export async function getExecutiveDashboardData(
       const assessment = assessmentByOffering.get(offering.id) ?? null;
       const reason = assessmentReason(offering, assessment);
       if (!reason && !ACTIONABLE_STATUSES.includes(offering.status)) return null;
+      const committee = assessment ? isCommitteeSignOff(assessment.signOffKind) : false;
       return {
         offeringId: offering.id,
         programId: offering.programId,
@@ -539,8 +548,8 @@ export async function getExecutiveDashboardData(
         semester: offering.semester,
         section: offering.section,
         status: offering.status,
-        percentScore: assessment?.percentScore ?? null,
-        band: assessment?.band ?? null,
+        percentScore: committee ? assessment?.percentScore ?? null : null,
+        band: committee ? assessment?.band ?? null : null,
         reason: reason ?? 'ต้องตรวจสอบสถานะ',
       };
     })
@@ -555,7 +564,7 @@ export async function getExecutiveDashboardData(
       totalPrograms: visiblePrograms.length,
       totalOfferings: offerings.length,
       aiCompleted: offerings.filter((o) => AI_COMPLETED_STATUSES.includes(o.status)).length,
-      assessed: offerings.filter((o) => ASSESSED_STATUSES.includes(o.status)).length,
+      assessed: offerings.filter((o) => SIGNED_OFF_STATUSES.includes(o.status)).length,
       finalVerified: offerings.filter((o) => FINAL_VERIFIED_STATUSES.includes(o.status))
         .length,
       needsFollowUp: offerings.filter((o) => FOLLOW_UP_STATUSES.includes(o.status)).length,

@@ -11,8 +11,8 @@ import {
   consolidateByAcademicProgram,
   type ApConsolidatedRow,
 } from '@/lib/utils/dashboardConsolidate';
-import { SEMESTER_LABEL } from '@/lib/constants';
-import type { Semester } from '@/lib/types/models';
+import { OFFERING_STATUS, SEMESTER_LABEL } from '@/lib/constants';
+import type { OfferingStatus, Semester } from '@/lib/types/models';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -167,6 +167,9 @@ export async function GET(request: NextRequest) {
     rawSemester === '1' || rawSemester === '2' || rawSemester === '3'
       ? rawSemester
       : undefined;
+  const rawStatus = sp.get('status');
+  const status: OfferingStatus | undefined =
+    rawStatus && rawStatus in OFFERING_STATUS ? (rawStatus as OfferingStatus) : undefined;
 
   const filters: DashboardFilters = {
     departmentId: rawDepartmentId || undefined,
@@ -174,6 +177,7 @@ export async function GET(request: NextRequest) {
     programId,
     academicYear,
     semester,
+    status,
   };
   const data = await getExecutiveDashboardData(programs, filters);
   const apRows = consolidateByAcademicProgram(data.programRows, programs, allAcademicPrograms);

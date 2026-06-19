@@ -1,6 +1,6 @@
 import 'server-only';
 import { getAdminDb } from '@/lib/firebase/admin';
-import { RUBRIC_TOPICS } from '@/lib/constants';
+import { RUBRIC_TOPICS, SIGNED_OFF_STATUSES, isCommitteeSignOff } from '@/lib/constants';
 import { bandFromPercent } from '@/lib/types/models';
 import type {
   AssessmentBand,
@@ -185,15 +185,15 @@ export async function buildReportSnapshot(
   let assessedOfferings = 0;
 
   for (const o of offerings) {
-    const isAssessed = o.status === 'assessed';
+    const isSignedOff = SIGNED_OFF_STATUSES.includes(o.status);
     const lecturerName = await lecturerNameOf(db, o);
     let band: ReportCourseRow['band'] = null;
     let percentScore: ReportCourseRow['percentScore'] = null;
 
-    if (isAssessed) {
+    if (isSignedOff) {
       assessedOfferings += 1;
       const assessment = await readAssessment(db, o.id, o.assessmentId);
-      if (assessment) {
+      if (assessment && isCommitteeSignOff(assessment.signOffKind)) {
         band = assessment.band;
         percentScore = assessment.percentScore;
         accumulate(acc, assessment);
@@ -207,7 +207,7 @@ export async function buildReportSnapshot(
       courseNameEn: o.courseNameEn,
       semester: o.semester,
       lecturerName,
-      assessed: isAssessed,
+      assessed: isSignedOff,
       band,
       percentScore,
     });
@@ -253,15 +253,15 @@ export async function buildAllProgramsSnapshot(
     const pPercents: number[] = [];
 
     for (const o of offerings) {
-      const isAssessed = o.status === 'assessed';
+      const isSignedOff = SIGNED_OFF_STATUSES.includes(o.status);
       const lecturerName = await lecturerNameOf(db, o);
       let band: ReportCourseRow['band'] = null;
       let percentScore: ReportCourseRow['percentScore'] = null;
 
-      if (isAssessed) {
+      if (isSignedOff) {
         pAssessed += 1;
         const assessment = await readAssessment(db, o.id, o.assessmentId);
-        if (assessment) {
+        if (assessment && isCommitteeSignOff(assessment.signOffKind)) {
           band = assessment.band;
           percentScore = assessment.percentScore;
           pPercents.push(assessment.percentScore);
@@ -276,7 +276,7 @@ export async function buildAllProgramsSnapshot(
         courseNameEn: o.courseNameEn,
         semester: o.semester,
         lecturerName,
-        assessed: isAssessed,
+        assessed: isSignedOff,
         band,
         percentScore,
         status: o.status,
@@ -401,14 +401,15 @@ export async function getCourseReportLinks(
       ]);
       const aiReportUrl = (aiSnap?.data()?.reportDownloadUrl as string | undefined) ?? null;
       const a = aSnap?.data() as AssessmentDoc | undefined;
+      const committee = a ? isCommitteeSignOff(a.signOffKind) : false;
       const combinedReportUrl = a?.signedPdfUrl ?? null;
       const info: CourseReportLinks = {
         aiReportUrl,
         combinedReportUrl,
-        totalScore: a?.totalScore ?? null,
-        maxScore: a?.maxScore ?? null,
-        percentScore: a?.percentScore ?? null,
-        band: a?.band ?? null,
+        totalScore: committee ? a?.totalScore ?? null : null,
+        maxScore: committee ? a?.maxScore ?? null : null,
+        percentScore: committee ? a?.percentScore ?? null : null,
+        band: committee ? a?.band ?? null : null,
       };
       if (aiReportUrl || combinedReportUrl || a) out[o.id] = info;
     }),

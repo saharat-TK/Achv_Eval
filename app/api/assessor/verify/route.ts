@@ -3,6 +3,7 @@ import { FieldValue } from 'firebase-admin/firestore';
 import { getAdminDb } from '@/lib/firebase/admin';
 import { getSessionUser, getCurrentProfile, isImpersonating } from '@/lib/firebase/auth-server';
 import type { ImplementationDecision } from '@/lib/types/models';
+import { VERIFICATION_ENTRY_STATUSES } from '@/lib/constants';
 
 export const runtime = 'nodejs';
 
@@ -77,7 +78,7 @@ export async function POST(request: NextRequest) {
   }
 
   // 5. The offering must be awaiting verification (signed off, not yet reviewed)
-  if (offering.status !== 'assessed') {
+  if (!VERIFICATION_ENTRY_STATUSES.includes(offering.status)) {
     return NextResponse.json({ error: 'not_pending_verification' }, { status: 409 });
   }
 

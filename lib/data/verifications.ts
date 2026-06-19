@@ -1,5 +1,6 @@
 import 'server-only';
 import { getAdminDb } from '@/lib/firebase/admin';
+import { VERIFICATION_ENTRY_STATUSES } from '@/lib/constants';
 import type {
   AssessmentDoc,
   OfferingDoc,
@@ -19,7 +20,7 @@ export interface VerificationQueueItem {
 }
 
 const VERIFICATION_STATUSES: OfferingStatus[] = [
-  'assessed',
+  ...VERIFICATION_ENTRY_STATUSES,
   'verification_review',
   'needs_follow_up',
   'verified',
@@ -27,6 +28,7 @@ const VERIFICATION_STATUSES: OfferingStatus[] = [
 
 const STATUS_SORT: Record<OfferingStatus, number> = {
   assessed: 0,
+  assessed_self_only: 0,
   verification_review: 1,
   needs_follow_up: 2,
   verified: 3,
@@ -38,6 +40,7 @@ const STATUS_SORT: Record<OfferingStatus, number> = {
   pending_assessment: 9,
   assessor_review: 9,
   pending_head_signoff: 9,
+  closed_documents_only: 9,
   pending_review_next_semester: 9,
   implemented: 9,
   not_implemented: 9,

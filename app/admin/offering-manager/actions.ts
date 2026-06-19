@@ -19,6 +19,7 @@ const ASSESSED_REVERSE_TARGETS: OfferingStatus[] = [
   'ai_complete',
   'documents_pending',
 ];
+const REVERSIBLE_SIGNED_STATUSES: OfferingStatus[] = ['assessed', 'assessed_self_only'];
 /** In-progress assessment statuses (draft in review / awaiting the head) — no
  *  signed artifact yet, so reversing just moves the status back. Super-admin only. */
 const IN_REVIEW_STATUSES: OfferingStatus[] = ['assessor_review', 'pending_head_signoff'];
@@ -427,7 +428,7 @@ export async function reverseOfferingStatuses(
           if (!canReversePending(access, apId)) {
             throw new Error('เฉพาะผู้อำนวยการหลักสูตรหรือผู้ดูแลระบบสูงสุดเท่านั้น');
           }
-        } else if (offering.status === 'assessed') {
+        } else if (REVERSIBLE_SIGNED_STATUSES.includes(offering.status)) {
           if (!ASSESSED_REVERSE_TARGETS.includes(targetStatus)) {
             throw new Error('สถานะปลายทางไม่รองรับรายการทวนสอบแล้ว');
           }
