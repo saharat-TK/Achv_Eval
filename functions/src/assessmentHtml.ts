@@ -8,11 +8,13 @@ import {
   renderCommitteeCover,
   renderFollowUpSection,
   renderSelfAssessmentSection,
+  renderSignOffKindNotice,
   signatureTable,
   type AssessmentForReport,
   type CommitteeMemberForReport,
   type FollowUpForReport,
   type SelfAssessmentForReport,
+  type SignOffKind,
 } from './reportShared';
 
 export type {
@@ -20,6 +22,7 @@ export type {
   CommitteeMemberForReport,
   FollowUpForReport,
   SelfAssessmentForReport,
+  SignOffKind,
 };
 
 /**
@@ -28,21 +31,36 @@ export type {
  * rendered to PDF on sign-off.
  */
 export function buildCombinedReportHtml(args: {
-  aiResult: AnalysisResult;
+  signOffKind: SignOffKind;
+  aiResult?: AnalysisResult | null;
   assessment: AssessmentForReport;
   meta: ReportMeta;
   followUp?: FollowUpForReport | null;
   selfAssessment?: SelfAssessmentForReport | null;
   committee?: CommitteeMemberForReport[] | null;
 }): string {
-  const { aiResult, assessment, meta, followUp, selfAssessment, committee } = args;
+  const { signOffKind, aiResult, assessment, meta, followUp, selfAssessment, committee } = args;
 
   // Sequential section numbers, skipping any optional section that's absent.
   let n = 1;
-  const aiSection = renderAiSection(aiResult, n++);
-  const selfSection = selfAssessment ? renderSelfAssessmentSection(selfAssessment, n++) : '';
-  const assessorSection = renderAssessorSection(assessment, n++);
-  const followUpSection = followUp ? renderFollowUpSection(followUp, n++) : '';
+  const aiSection =
+    signOffKind !== 'documents_only' && aiResult ? renderAiSection(aiResult, n++) : '';
+  const selfSection =
+    signOffKind !== 'documents_only' && selfAssessment
+      ? renderSelfAssessmentSection(selfAssessment, n++)
+      : '';
+  const assessorSection =
+    signOffKind === 'committee' ? renderAssessorSection(assessment, n++) : '';
+  const followUpSection =
+    signOffKind === 'committee' && followUp ? renderFollowUpSection(followUp, n++) : '';
+  const signature = signOffKind === 'documents_only' ? '' : signatureTable();
+  const closingNote =
+    signOffKind === 'documents_only'
+      ? ''
+      : `<p class="muted" style="margin-top:14px;font-size:10px;">
+  เอกสารนี้เป็นส่วนหนึ่งของกระบวนการทวนสอบผลลัพธ์การเรียนรู้รายวิชา
+  ตามข้อกำหนดของ สป.อว. / AUN-QA Criterion 3 · ลงนามทวนสอบโดย ${esc(assessment.assessorName)}
+</p>`;
 
   return `<!doctype html>
 <html lang="th">
@@ -65,7 +83,8 @@ export function buildCombinedReportHtml(args: {
     <tr><td><strong>ผู้ทวนสอบ</strong></td><td>${esc(assessment.assessorName)}</td></tr>
     <tr><td><strong>วันที่ลงนามทวนสอบ</strong></td><td>${esc(assessment.signedAtText)}</td></tr>
   </table>
-  ${renderCommitteeCover(committee)}
+  ${renderSignOffKindNotice(signOffKind)}
+  ${signOffKind === 'committee' ? renderCommitteeCover(committee) : ''}
 </div>
 
 ${aiSection}
@@ -76,12 +95,9 @@ ${assessorSection}
 
 ${followUpSection}
 
-${signatureTable()}
+${signature}
 
-<p class="muted" style="margin-top:14px;font-size:10px;">
-  เอกสารนี้เป็นส่วนหนึ่งของกระบวนการทวนสอบผลลัพธ์การเรียนรู้รายวิชา
-  ตามข้อกำหนดของ สป.อว. / AUN-QA Criterion 3 · ลงนามทวนสอบโดย ${esc(assessment.assessorName)}
-</p>
+${closingNote}
 
 </body>
 </html>`;
