@@ -55,6 +55,8 @@ export type OfferingStatus =
   | 'assessor_review'
   | 'pending_head_signoff'
   | 'assessed'
+  | 'assessed_self_only'
+  | 'closed_documents_only'
   | 'verification_review'
   | 'verified'
   | 'needs_follow_up'
@@ -64,6 +66,7 @@ export type OfferingStatus =
 export type AiReportStatus = 'queued' | 'running' | 'succeeded' | 'failed';
 export type RubricScore = 1 | 2 | 3 | 'na';
 export type AssessmentBand = 'improve' | 'good' | 'excellent';
+export type SignOffKind = 'committee' | 'self_only' | 'documents_only';
 export type ImplementationDecision =
   | 'implemented'
   | 'not_implemented'
@@ -378,6 +381,16 @@ export interface AssessmentDoc {
   signedPdfUrl: string | null;
   signedAt: Ts | null;
   isLocked: boolean;
+  /**
+   * How this offering was signed off (added 2026-06). The durable discriminator
+   * the reports/dashboard use for committee-only metrics, since a self-only
+   * sign-off later becomes verification_review/verified and loses its entry
+   * status. Missing = 'committee' (legacy / normal committee assessment).
+   *  - `committee`      full 7-item committee assessment
+   *  - `self_only`      signed off on the lecturer's self-assessment only
+   *  - `documents_only` closed with documents only (no analysis/assessment)
+   */
+  signOffKind?: SignOffKind;
   /** The program's assessment committee captured at sign-off (name + Thai
    *  position), shown in the cover of the combined + final reports. */
   committeeSnapshot?: { name: string; position: string }[];
