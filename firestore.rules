@@ -49,6 +49,15 @@ service cloud.firestore {
       return isMfu() && hasProfile() && (pid in userDoc().roles.assessorOf);
     }
 
+    // Read-only assessor scope for external committee members. Grants read
+    // access only — never used by any write rule.
+    function viewsAssessmentProgram(pid) {
+      return isMfu()
+        && hasProfile()
+        && userDoc().roles.assessorViewerOf is list
+        && (pid in userDoc().roles.assessorViewerOf);
+    }
+
     function verifiesProgram(pid) {
       return isMfu()
         && hasProfile()
@@ -65,6 +74,7 @@ service cloud.firestore {
       return isAdmin()
         || directsProgram(o.programId)
         || assessesProgram(o.programId)
+        || viewsAssessmentProgram(o.programId)
         || verifiesProgram(o.programId)
         || o.lecturerId == request.auth.uid;
     }
@@ -142,6 +152,7 @@ service cloud.firestore {
       allow read: if isAdmin()
         || directsProgram(resource.data.programId)
         || assessesProgram(resource.data.programId)
+        || viewsAssessmentProgram(resource.data.programId)
         || verifiesProgram(resource.data.programId)
         || resource.data.lecturerId == request.auth.uid;
 

@@ -56,7 +56,7 @@ function cleanList(items: CommitteeMemberInput[]): AssessmentCommitteeMember[] {
 }
 
 /** uids / allowlist ids of the internal roles (head, internal assessors, secretary) —
- *  the members that receive assessor access to the program. */
+ *  the members that receive full (write-capable) assessor access to the program. */
 function internalIdentities(c: {
   headAssessor: AssessmentCommitteeMember | null;
   internalAssessors: AssessmentCommitteeMember[];
@@ -68,6 +68,23 @@ function internalIdentities(c: {
     if (!m) continue;
     if (m.uid) uids.add(m.uid);
     else if (m.allowlistId) allow.add(m.allowlistId);
+  }
+  return { uids, allow };
+}
+
+/** uids / allowlist ids of the external assessors — these receive read-only
+ *  (viewer) access so they can see the queue and open course details, but never
+ *  edit/submit/sign. Anyone who is also an internal role is excluded here (their
+ *  full access wins). Free-typed externals (name only) have no account to grant. */
+function externalIdentities(
+  externals: AssessmentCommitteeMember[],
+  internal: { uids: Set<string>; allow: Set<string> },
+): { uids: Set<string>; allow: Set<string> } {
+  const uids = new Set<string>();
+  const allow = new Set<string>();
+  for (const m of externals) {
+    if (m.uid && !internal.uids.has(m.uid)) uids.add(m.uid);
+    else if (m.allowlistId && !internal.allow.has(m.allowlistId)) allow.add(m.allowlistId);
   }
   return { uids, allow };
 }
@@ -105,16 +122,24 @@ export async function saveAssessmentCommittee(
     secretary: memberFromInput(input.secretary),
   };
 
-  // Reconcile assessor access for the internal roles: grant to the new set,
-  // revoke from anyone dropped since the previous save.
+  // Reconcile assessor access: grant to the new set, revoke from anyone dropped
+  // since the previous save. Internal roles get full (write-capable) access via
+  // `assessorOf`; external assessors get read-only `assessorViewerOf`.
   const prev = (snap.data() as AcademicProgramDoc).assessmentCommittee ?? null;
   const next = internalIdentities(committee);
+  const nextExternal = externalIdentities(committee.externalAssessors, next);
   const before = prev
     ? internalIdentities({
         headAssessor: prev.headAssessor ?? null,
         internalAssessors: prev.internalAssessors ?? [],
         secretary: prev.secretary ?? null,
       })
+    : { uids: new Set<string>(), allow: new Set<string>() };
+  const beforeExternal = prev
+    ? externalIdentities(
+        prev.externalAssessors ?? [],
+        before,
+      )
     : { uids: new Set<string>(), allow: new Set<string>() };
 
   const programId = input.academicProgramId;
@@ -139,6 +164,17 @@ export async function saveAssessmentCommittee(
     batch.update(db.collection('allowlist').doc(id), {
       presetAssessorAcademicProgramIds: FieldValue.arrayUnion(programId),
     });
+  for (const uid of nextExternal.uids)
+    batch.update(db.collection('users').doc(uid), {
+      'roles.assessorViewerOfAcademicPrograms': FieldValue.arrayUnion(programId),
+      ...(curriculumIds.length
+        ? { 'roles.assessorViewerOf': FieldValue.arrayUnion(...curriculumIds) }
+        : {}),
+    });
+  for (const id of nextExternal.allow)
+    batch.update(db.collection('allowlist').doc(id), {
+      presetAssessorViewerAcademicProgramIds: FieldValue.arrayUnion(programId),
+    });
   for (const uid of before.uids)
     if (!next.uids.has(uid))
       batch.update(db.collection('users').doc(uid), {
@@ -151,6 +187,19 @@ export async function saveAssessmentCommittee(
     if (!next.allow.has(id))
       batch.update(db.collection('allowlist').doc(id), {
         presetAssessorAcademicProgramIds: FieldValue.arrayRemove(programId),
+      });
+  for (const uid of beforeExternal.uids)
+    if (!nextExternal.uids.has(uid))
+      batch.update(db.collection('users').doc(uid), {
+        'roles.assessorViewerOfAcademicPrograms': FieldValue.arrayRemove(programId),
+        ...(curriculumIds.length
+          ? { 'roles.assessorViewerOf': FieldValue.arrayRemove(...curriculumIds) }
+          : {}),
+      });
+  for (const id of beforeExternal.allow)
+    if (!nextExternal.allow.has(id))
+      batch.update(db.collection('allowlist').doc(id), {
+        presetAssessorViewerAcademicProgramIds: FieldValue.arrayRemove(programId),
       });
 
   try {
@@ -199,6 +248,9 @@ export async function clearAssessmentCommittee(
         secretary: prev.secretary ?? null,
       })
     : { uids: new Set<string>(), allow: new Set<string>() };
+  const beforeExternal = prev
+    ? externalIdentities(prev.externalAssessors ?? [], before)
+    : { uids: new Set<string>(), allow: new Set<string>() };
 
   const curriculumIds = await curriculumIdsForProgram(academicProgramId);
   const batch = db.batch();
@@ -213,6 +265,17 @@ export async function clearAssessmentCommittee(
   for (const id of before.allow)
     batch.update(db.collection('allowlist').doc(id), {
       presetAssessorAcademicProgramIds: FieldValue.arrayRemove(academicProgramId),
+    });
+  for (const uid of beforeExternal.uids)
+    batch.update(db.collection('users').doc(uid), {
+      'roles.assessorViewerOfAcademicPrograms': FieldValue.arrayRemove(academicProgramId),
+      ...(curriculumIds.length
+        ? { 'roles.assessorViewerOf': FieldValue.arrayRemove(...curriculumIds) }
+        : {}),
+    });
+  for (const id of beforeExternal.allow)
+    batch.update(db.collection('allowlist').doc(id), {
+      presetAssessorViewerAcademicProgramIds: FieldValue.arrayRemove(academicProgramId),
     });
 
   try {

@@ -10,7 +10,15 @@ export default async function AssessorDashboard() {
   const profile = await getCurrentProfile();
   if (!profile) redirect('/login');
 
-  const assessorOf = profile.roles.assessorOf ?? [];
+  // Full assessors (write-capable) plus external assessors who hold read-only
+  // viewer access — both can see the queue and open details. The sign-off route
+  // gates writes strictly on assessorOf, so viewers stay read-only.
+  const assessorOf = [
+    ...new Set([
+      ...(profile.roles.assessorOf ?? []),
+      ...(profile.roles.assessorViewerOf ?? []),
+    ]),
+  ];
   // Admins and super-admins get a full oversight view of every program's
   // offerings, regardless of committee membership (the sign-off route still
   // gates on assessorOf, so it's read-only for programs they don't sit on).

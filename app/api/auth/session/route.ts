@@ -125,6 +125,7 @@ export async function POST(request: NextRequest) {
         presetDirectorAcademicProgramIds?: string[];
         presetLecturerAcademicProgramIds?: string[];
         presetAssessorAcademicProgramIds?: string[];
+        presetAssessorViewerAcademicProgramIds?: string[];
         presetVerifierAcademicProgramIds?: string[];
       };
       const fallback = decoded.email!.split('@')[0] ?? decoded.email!;
@@ -191,6 +192,15 @@ export async function POST(request: NextRequest) {
         ...new Set((allow.presetAssessorAcademicProgramIds ?? []).filter(Boolean)),
       ].sort((a, b) => a.localeCompare(b));
       const assessorOf = await expandAcademicPrograms(assessorOfAcademicPrograms);
+      // External assessment-committee placements made while this user was still
+      // pending. Read-only assessor scope — expanded to curriculum ids the same
+      // way `assessorOf` is, but never grants write access.
+      const assessorViewerOfAcademicPrograms = [
+        ...new Set((allow.presetAssessorViewerAcademicProgramIds ?? []).filter(Boolean)),
+      ].sort((a, b) => a.localeCompare(b));
+      const assessorViewerOf = await expandAcademicPrograms(
+        assessorViewerOfAcademicPrograms,
+      );
       // Verification-committee placements made while this user was still pending.
       // The verification workspace authorizes by curriculum id, so expand to the
       // `verifierOf` mirror the same way director/lecturer roles are expanded.
@@ -209,10 +219,12 @@ export async function POST(request: NextRequest) {
           isLecturer,
           directorOf,
           assessorOf,
+          assessorViewerOf,
           verifierOf,
           lecturerOf,
           directorOfAcademicPrograms,
           assessorOfAcademicPrograms,
+          assessorViewerOfAcademicPrograms,
           verifierOfAcademicPrograms,
         },
         createdAt: FieldValue.serverTimestamp(),

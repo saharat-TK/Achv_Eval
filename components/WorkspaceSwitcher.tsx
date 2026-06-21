@@ -11,6 +11,7 @@ export interface SwitcherRoles {
   isLecturer?: boolean;
   directorOf?: string[];
   assessorOf?: string[];
+  assessorViewerOf?: string[];
   verifierOf?: string[];
 }
 
@@ -39,7 +40,10 @@ const WORKSPACES: WorkspaceDef[] = [
     key: 'assessor',
     label: 'ทวนสอบ',
     href: '/assessor',
-    canAccess: (r) => !!r.isAdmin || (r.assessorOf?.length ?? 0) > 0,
+    canAccess: (r) =>
+      !!r.isAdmin ||
+      (r.assessorOf?.length ?? 0) > 0 ||
+      (r.assessorViewerOf?.length ?? 0) > 0,
   },
   {
     key: 'verification',

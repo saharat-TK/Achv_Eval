@@ -113,10 +113,18 @@ export interface UserDoc {
     directorOf: string[]; // curriculum ids
     assessorOf: string[]; // curriculum ids
     verifierOf: string[]; // curriculum ids
+    /**
+     * Optional — added 2026-06. Read-only assessor scope (curriculum ids)
+     * granted to external assessment-committee members. Lets them see the
+     * assessor queue and open course details, but grants NO write access
+     * anywhere (only `assessorOf` passes the edit/submit/verify gates).
+     */
+    assessorViewerOf?: string[]; // curriculum ids
     lecturerOf?: string[]; // curriculum ids
     /** Academic-program-scope role arrays (`academicPrograms/{id}` ids). */
     directorOfAcademicPrograms?: string[];
     assessorOfAcademicPrograms?: string[];
+    assessorViewerOfAcademicPrograms?: string[];
     verifierOfAcademicPrograms?: string[];
   };
   createdAt: Ts;
@@ -245,6 +253,9 @@ export interface AllowlistDoc {
   /** Academic-program ids applied to `roles.assessorOfAcademicPrograms` on first sign-in
    *  (set when a pending user is placed on a program's assessment committee). */
   presetAssessorAcademicProgramIds?: string[];
+  /** Academic-program ids applied to `roles.assessorViewerOfAcademicPrograms` on first
+   *  sign-in (set when a pending user is placed as an external assessor — read-only). */
+  presetAssessorViewerAcademicProgramIds?: string[];
   /** Academic-program ids applied to `roles.verifierOfAcademicPrograms` on first sign-in
    *  (set when a pending user is placed on a program's verification committee). */
   presetVerifierAcademicProgramIds?: string[];

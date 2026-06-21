@@ -14,6 +14,7 @@
     "assign-role": "tsx --env-file=.env.local scripts/assign-role.ts",
     "backfill-lecturer-role": "tsx --env-file=.env.local scripts/backfill-lecturer-role.ts",
     "backfill-academic-role-scope": "tsx --env-file=.env.local scripts/backfill-academic-program-role-scope.ts",
+    "backfill-external-assessor-viewer": "tsx --env-file=.env.local scripts/backfill-external-assessor-viewer.ts",
     "firebase:rules": "firebase deploy --only firestore:rules",
     "firebase:indexes": "firebase deploy --only firestore:indexes"
   },

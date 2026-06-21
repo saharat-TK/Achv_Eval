@@ -14,12 +14,20 @@ export default async function AssessorLayout({
   const profile = await getCurrentProfile();
   if (!profile) redirect('/login');
 
-  // Must be an assessor of at least one program, or an admin viewing
-  // read-only. The sign-off route still gates strictly on assessorOf.
-  const hasAssessor = (profile.roles.assessorOf ?? []).length > 0;
+  // Must be an assessor of at least one program, an external assessor with
+  // read-only viewer access, or an admin viewing read-only. The sign-off route
+  // still gates strictly on assessorOf.
+  const hasAssessor =
+    (profile.roles.assessorOf ?? []).length > 0 ||
+    (profile.roles.assessorViewerOf ?? []).length > 0;
   if (!profile.roles.isAdmin && !hasAssessor) {
     redirect('/login');
   }
+
+  // The follow-up ("การนำไปปฏิบัติ") tab keys on write-capable assessor scope —
+  // hide it from read-only external assessors, for whom it is always empty.
+  const showFollowUpTab =
+    profile.roles.isAdmin === true || (profile.roles.assessorOf ?? []).length > 0;
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -55,12 +63,14 @@ export default async function AssessorLayout({
               >
                 รายการทวนสอบ
               </Link>
-              <Link
-                href="/assessor/verification"
-                className="border-b-2 border-transparent py-3 text-slate-600 hover:border-mfu-primary hover:text-mfu-primary"
-              >
-                การนำไปปฏิบัติ
-              </Link>
+              {showFollowUpTab && (
+                <Link
+                  href="/assessor/verification"
+                  className="border-b-2 border-transparent py-3 text-slate-600 hover:border-mfu-primary hover:text-mfu-primary"
+                >
+                  การนำไปปฏิบัติ
+                </Link>
+              )}
             </div>
           </div>
         </nav>
