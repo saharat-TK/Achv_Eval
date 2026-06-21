@@ -38,14 +38,18 @@ export default async function AssessorOfferingPage({
 
   const offering = await getOffering(params.offeringId);
 
-  // Assessor must be assigned to the offering's program. Admins may view
-  // any offering read-only — the sign-off API still checks assessorOf.
+  // Assessor must be assigned to the offering's program — or an external
+  // assessor with read-only viewer access. Admins may view any offering
+  // read-only. The sign-off API still gates writes strictly on assessorOf, so
+  // viewers/admins only ever see the form read-only.
+  const canViewProgram =
+    !!offering &&
+    (profile.roles.assessorOf.includes(offering.programId) ||
+      (profile.roles.assessorViewerOf ?? []).includes(offering.programId));
   if (
     !offering ||
     !ASSESSMENT_VISIBLE_STATUSES.includes(offering.status) ||
-    (!profile.roles.isAdmin &&
-      (!profile.roles.assessorOf.includes(offering.programId) ||
-        offering.isActive === false))
+    (!profile.roles.isAdmin && (!canViewProgram || offering.isActive === false))
   ) {
     notFound();
   }

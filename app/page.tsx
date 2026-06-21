@@ -22,8 +22,11 @@ export default async function RootPage() {
     redirect('/verification');
   }
 
-  // Assessors go to the assessor workspace.
-  if (profile.roles.assessorOf && profile.roles.assessorOf.length > 0) {
+  // Assessors (and read-only external assessors) go to the assessor workspace.
+  if (
+    (profile.roles.assessorOf && profile.roles.assessorOf.length > 0) ||
+    (profile.roles.assessorViewerOf && profile.roles.assessorViewerOf.length > 0)
+  ) {
     redirect('/assessor');
   }
 
