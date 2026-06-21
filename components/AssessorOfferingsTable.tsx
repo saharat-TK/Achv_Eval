@@ -60,6 +60,25 @@ const TABLE_HEADER_ROW_CLASS =
 const TABLE_HEAD_CELL_CLASS = 'px-3 py-2';
 const TABLE_CELL_CLASS = 'px-3 py-1.5 align-middle';
 
+/** Disclosure chevron — rotates 90° to point down when its group is open. */
+function Chevron({ open, className = '' }: { open: boolean; className?: string }) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={`transition-transform ${open ? 'rotate-90' : ''} ${className}`}
+      aria-hidden
+    >
+      <polyline points="9 18 15 12 9 6" />
+    </svg>
+  );
+}
+
 /**
  * Live grouped list of offerings an assessor can review. The list mirrors
  * the lecturer workspace grouping: academic year desc, semester desc, then
@@ -74,7 +93,10 @@ export default function AssessorOfferingsTable({
   programMetaById: Record<string, ProgramMeta>;
 }) {
   const [offerings, setOfferings] = useState<Offering[] | null>(null);
-  const [expanded, setExpanded] = useState<Set<number>>(new Set());
+  // Collapse state for every group level (year / semester / department) keyed by
+  // a composite path. A key present in the set means that node is collapsed —
+  // so everything is expanded by default, except non-current years (see below).
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const initialisedRef = useRef(false);
 
   const queryProgramIds = useMemo(
@@ -205,15 +227,17 @@ export default function AssessorOfferingsTable({
 
   useEffect(() => {
     if (initialisedRef.current || groups.length === 0) return;
-    setExpanded(new Set([groups[0].year]));
+    // Start with every year except the most recent one collapsed; semesters and
+    // departments default to expanded.
+    setCollapsed(new Set(groups.slice(1).map((g) => `y:${g.year}`)));
     initialisedRef.current = true;
   }, [groups]);
 
-  function toggleYear(year: number) {
-    setExpanded((prev) => {
+  function toggle(key: string) {
+    setCollapsed((prev) => {
       const next = new Set(prev);
-      if (next.has(year)) next.delete(year);
-      else next.add(year);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
       return next;
     });
   }
@@ -233,28 +257,18 @@ export default function AssessorOfferingsTable({
   return (
     <div className="mt-6 space-y-5">
       {groups.map((g, idx) => {
-        const isOpen = expanded.has(g.year);
+        const yearKey = `y:${g.year}`;
+        const yearOpen = !collapsed.has(yearKey);
         return (
           <section key={g.year} className={YEAR_SECTION_CLASS}>
             <button
               type="button"
-              onClick={() => toggleYear(g.year)}
+              onClick={() => toggle(yearKey)}
+              aria-expanded={yearOpen}
               className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition-colors hover:brightness-[0.98]"
             >
               <span className="flex items-center gap-2">
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth={2}
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  className={`h-4 w-4 transition-transform ${isOpen ? 'rotate-90' : ''} ${YEAR_TEXT_CLASS} opacity-60`}
-                  aria-hidden
-                >
-                  <polyline points="9 18 15 12 9 6" />
-                </svg>
+                <Chevron open={yearOpen} className={`h-4 w-4 ${YEAR_TEXT_CLASS} opacity-60`} />
                 <span className={`text-base font-semibold ${YEAR_TEXT_CLASS}`}>
                   ปีการศึกษา {g.year}
                 </span>
@@ -269,24 +283,55 @@ export default function AssessorOfferingsTable({
               </span>
             </button>
 
-            {isOpen && (
+            {yearOpen && (
               <div className="space-y-4 px-3 pb-3">
-                {g.semesters.map((s) => (
-                  <div key={s.sem} className="space-y-3">
-                    <h3 className="text-xs font-semibold text-slate-500">
-                      {SEMESTER_LABEL[s.sem]}
-                    </h3>
-                    {s.departments.map((dept) => (
-                      <div key={dept.departmentId} className={INNER_CARD_CLASS}>
-                        <div className="flex items-center justify-between gap-3 px-3 py-2.5">
-                          <h4 className="text-sm font-semibold text-slate-700">
-                            {dept.departmentNameTh}
-                          </h4>
-                          <span className="text-xs text-slate-400">
-                            {dept.offerings.length} รายวิชา
+                {g.semesters.map((s) => {
+                  const semKey = `s:${g.year}:${s.sem}`;
+                  const semOpen = !collapsed.has(semKey);
+                  const semCount = s.departments.reduce(
+                    (total, dept) => total + dept.offerings.length,
+                    0,
+                  );
+                  return (
+                    <div key={s.sem} className="space-y-3">
+                      <button
+                        type="button"
+                        onClick={() => toggle(semKey)}
+                        aria-expanded={semOpen}
+                        className="flex w-full items-center justify-between gap-2 rounded-md px-1 py-1 text-left transition-colors hover:bg-slate-50"
+                      >
+                        <span className="flex items-center gap-1.5">
+                          <Chevron open={semOpen} className="h-3.5 w-3.5 text-slate-400" />
+                          <span className="text-xs font-semibold text-slate-500">
+                            {SEMESTER_LABEL[s.sem]}
                           </span>
-                        </div>
-                        <div className={TABLE_WRAPPER_CLASS}>
+                        </span>
+                        <span className="text-[11px] text-slate-400">{semCount} รายวิชา</span>
+                      </button>
+                      {semOpen &&
+                        s.departments.map((dept) => {
+                          const deptKey = `d:${g.year}:${s.sem}:${dept.departmentId}`;
+                          const deptOpen = !collapsed.has(deptKey);
+                          return (
+                            <div key={dept.departmentId} className={INNER_CARD_CLASS}>
+                              <button
+                                type="button"
+                                onClick={() => toggle(deptKey)}
+                                aria-expanded={deptOpen}
+                                className="flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left transition-colors hover:bg-slate-50"
+                              >
+                                <span className="flex items-center gap-1.5">
+                                  <Chevron open={deptOpen} className="h-3.5 w-3.5 text-slate-400" />
+                                  <span className="text-sm font-semibold text-slate-700">
+                                    {dept.departmentNameTh}
+                                  </span>
+                                </span>
+                                <span className="text-xs text-slate-400">
+                                  {dept.offerings.length} รายวิชา
+                                </span>
+                              </button>
+                              {deptOpen && (
+                              <div className={TABLE_WRAPPER_CLASS}>
                           <table className={OFFERING_TABLE_CLASS}>
                             <colgroup>
                               <col className="w-[15%]" />
@@ -351,11 +396,14 @@ export default function AssessorOfferingsTable({
                               })}
                             </tbody>
                           </table>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ))}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                    </div>
+                  );
+                })}
               </div>
             )}
           </section>
