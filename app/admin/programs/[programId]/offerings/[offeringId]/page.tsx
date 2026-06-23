@@ -37,6 +37,7 @@ export default async function EditOfferingPage({
     academicYear: offering.academicYear,
     semester: offering.semester,
     section: offering.section,
+    part: offering.part ?? 1,
     lecturerId: offering.lecturerId,
     hasExamAssessment: offering.hasExamAssessment,
     assignedPloNumbers: offering.assignedPloNumbers ?? [],

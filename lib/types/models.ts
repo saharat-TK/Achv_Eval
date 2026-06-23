@@ -300,6 +300,15 @@ export interface OfferingDoc {
   academicYear: number; // Buddhist year, e.g. 2568
   semester: Semester;
   section: string;
+  /**
+   * Optional — added 2026-06. Thesis/dissertation installment
+   * (ส่วนที่/ครั้งที่ลงทะเบียน), 1–6. A thesis shares one 7-digit course code
+   * but is registered in credit blocks across terms, each block separately
+   * analyzed + assessed. Folded into the offering ID only when > 1 (P2..P6),
+   * so ordinary coursework and "part 1" keep their existing
+   * `${courseId}_${year}_${sem}_${section}` id. Missing/1 = ordinary offering.
+   */
+  part?: number | null;
   lecturerId: string | null;
   lecturerEmail: string | null;
   /** Pending lecturer assignment before the allowlisted person first signs in. */

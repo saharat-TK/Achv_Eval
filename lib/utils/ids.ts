@@ -11,3 +11,31 @@
 export function toDocId(raw: string): string {
   return raw.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
 }
+
+/**
+ * Normalises a thesis-installment input (ส่วนที่/ครั้งที่ลงทะเบียน). Returns the
+ * part number only when it is a real 2nd+ installment (2–6); part 1, null, and
+ * out-of-range values collapse to `null` so ordinary coursework and "part 1"
+ * keep their original offering id and dedup untouched.
+ */
+export function normalizeThesisPart(part: number | null | undefined): number | null {
+  if (part == null) return null;
+  const n = Math.trunc(part);
+  return n >= 2 && n <= 6 ? n : null;
+}
+
+/**
+ * Builds an offering document id. A `_P{n}` suffix is appended only for thesis
+ * installments 2–6 (`part` already normalised via {@link normalizeThesisPart}),
+ * so ordinary offerings keep `${courseId}_${year}_${sem}_${section}`.
+ */
+export function offeringDocId(
+  courseId: string,
+  year: number,
+  semester: string,
+  section: string,
+  part: number | null,
+): string {
+  const base = `${courseId}_${year}_${semester}_${section}`;
+  return part ? `${base}_P${part}` : base;
+}

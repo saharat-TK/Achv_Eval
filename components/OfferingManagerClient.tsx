@@ -40,6 +40,16 @@ function lecturerOptionValue(lecturer: ManagedLecturer): string {
   return `${lecturer.kind}:${lecturer.id}`;
 }
 
+/** Thesis-installment marker (ส่วนที่ N), shown only for parts 2–6. */
+function PartBadge({ part }: { part: number | null }) {
+  if (!part || part <= 1) return null;
+  return (
+    <span className="ml-1.5 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-normal text-slate-500">
+      ส่วนที่ {part}
+    </span>
+  );
+}
+
 const STATUS_TONE_CLASS: Record<
   'slate' | 'amber' | 'blue' | 'violet' | 'green' | 'red',
   string
@@ -705,6 +715,7 @@ export default function OfferingManagerClient({
                                       >
                                         <td className={OFFERING_TABLE_CODE_CELL_CLASS}>
                                           {o.courseCode}
+                                          <PartBadge part={o.part} />
                                           {!o.isActive && (
                                             <span className="ml-1.5 rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] text-amber-700">
                                               ปิด
@@ -949,6 +960,7 @@ export default function OfferingManagerClient({
                               </td>
                               <td className="whitespace-nowrap px-3 py-2 font-medium text-slate-700">
                                 {offering.courseCode}
+                                <PartBadge part={offering.part} />
                               </td>
                               <td className="min-w-0 px-3 py-2 text-slate-600">
                                 <div className="truncate" title={offering.courseNameTh}>
@@ -1010,6 +1022,7 @@ export default function OfferingManagerClient({
                               <tr key={offering.id}>
                                 <td className="whitespace-nowrap px-3 py-2 font-medium text-slate-700">
                                   {offering.courseCode}
+                                  <PartBadge part={offering.part} />
                                 </td>
                                 <td className="min-w-0 px-3 py-2 text-slate-600">
                                   <div className="truncate" title={offering.courseNameTh}>
@@ -1185,6 +1198,7 @@ export default function OfferingManagerClient({
                       <div>
                         <p className="text-sm font-medium text-slate-700">
                           {offering.courseCode}
+                          <PartBadge part={offering.part} />
                         </p>
                         <p className="truncate text-xs text-slate-500">
                           {offering.courseNameTh}

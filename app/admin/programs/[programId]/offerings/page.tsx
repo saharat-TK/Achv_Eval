@@ -84,6 +84,11 @@ export default async function ProgramOfferingsPage({
                     >
                       {o.courseCode}
                     </Link>
+                    {o.part && o.part > 1 ? (
+                      <span className="ml-2 rounded bg-slate-100 px-1.5 py-0.5 text-xs text-slate-500">
+                        ส่วนที่ {o.part}
+                      </span>
+                    ) : null}
                   </td>
                   <td className="px-4 py-3 text-slate-700">{o.courseNameTh}</td>
                   <td className="px-4 py-3 text-slate-600">{o.section}</td>

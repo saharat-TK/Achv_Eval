@@ -51,6 +51,7 @@ export default function OfferingForm({
       academicYear: new Date().getFullYear() + 543,
       semester: '1',
       section: '1',
+      part: 1,
       lecturerId: null,
       hasExamAssessment: true,
       assignedPloNumbers: [],
@@ -148,6 +149,23 @@ export default function OfferingForm({
               value={data.section}
               onChange={(e) => set('section', e.target.value)}
             />
+          </Field>
+          <Field label="ส่วนที่ลงทะเบียน (วิทยานิพนธ์)">
+            <select
+              className={inputCls}
+              value={data.part ?? 1}
+              onChange={(e) => set('part', Number(e.target.value))}
+            >
+              <option value={1}>— วิชาทั่วไป / ส่วนที่ 1 —</option>
+              {[2, 3, 4, 5, 6].map((n) => (
+                <option key={n} value={n}>
+                  ส่วนที่ {n}
+                </option>
+              ))}
+            </select>
+            <span className="mt-1 block text-xs text-slate-400">
+              สำหรับวิทยานิพนธ์/ดุษฎีนิพนธ์ที่ใช้รหัสวิชาเดียวกันแต่ลงทะเบียนหลายส่วน
+            </span>
           </Field>
         </div>
         <label className="mt-4 flex items-center gap-2 text-sm text-slate-700">

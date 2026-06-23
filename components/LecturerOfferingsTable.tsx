@@ -15,6 +15,7 @@ interface Offering {
   academicYear: number;
   semester: Semester;
   section: string;
+  part?: number | null;
   status: OfferingStatus;
 }
 
@@ -104,7 +105,11 @@ export default function LecturerOfferingsTable({ uid }: { uid: string }) {
             sem,
             offerings: semMap
               .get(sem)!
-              .sort((a, b) => a.courseCode.localeCompare(b.courseCode)),
+              .sort(
+                (a, b) =>
+                  a.courseCode.localeCompare(b.courseCode) ||
+                  (a.part ?? 1) - (b.part ?? 1),
+              ),
           }));
         const count = semesters.reduce((n, s) => n + s.offerings.length, 0);
         return { year, count, semesters };
@@ -219,8 +224,15 @@ export default function LecturerOfferingsTable({ uid }: { uid: string }) {
                                   </Link>
                                 </td>
                                 <td className={`${TABLE_CELL_CLASS} min-w-0 text-slate-700`}>
-                                  <div className="truncate" title={o.courseNameTh}>
-                                    {o.courseNameTh}
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="truncate" title={o.courseNameTh}>
+                                      {o.courseNameTh}
+                                    </span>
+                                    {o.part && o.part > 1 ? (
+                                      <span className="shrink-0 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-normal text-slate-500">
+                                        ส่วนที่ {o.part}
+                                      </span>
+                                    ) : null}
                                   </div>
                                 </td>
                                 <td className={`${TABLE_CELL_CLASS} whitespace-nowrap text-center text-slate-600`}>
