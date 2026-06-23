@@ -8,6 +8,7 @@ import AnalyzeCoursePanel from '@/components/AnalyzeCoursePanel';
 import AiReportsList from '@/components/AiReportsList';
 import SelfAssessmentForm from '@/components/SelfAssessmentForm';
 import { SEMESTER_LABEL, SIGNED_OFF_STATUSES } from '@/lib/constants';
+import { revisionLabel } from '@/lib/utils/ids';
 
 export const dynamic = 'force-dynamic';
 
@@ -45,10 +46,12 @@ export default async function OfferingDetailPage({
         <div>
           <h1 className="text-xl font-semibold text-slate-800">
             {offering.courseCode} {offering.courseNameTh}
+            {revisionLabel(offering.part) && ` · ${revisionLabel(offering.part)}`}
           </h1>
           <p className="mt-1 text-sm text-slate-500">
             {offering.courseNameEn} · ปีการศึกษา {offering.academicYear}{' '}
             {SEMESTER_LABEL[offering.semester]} · ตอนเรียน {offering.section}
+            {revisionLabel(offering.part) && ` · ${revisionLabel(offering.part)}`}
           </p>
         </div>
         <StatusBadge status={offering.status} />

@@ -14,6 +14,7 @@ import {
 import StatusBadge from '@/components/StatusBadge';
 import AssessorOfferingTabs from '@/components/AssessorOfferingTabs';
 import { isCommitteeSignOff, SEMESTER_LABEL } from '@/lib/constants';
+import { revisionLabel } from '@/lib/utils/ids';
 import type { OfferingStatus } from '@/lib/types/models';
 
 export const dynamic = 'force-dynamic';
@@ -93,10 +94,12 @@ export default async function AssessorOfferingPage({
         <div>
           <h1 className="text-xl font-semibold text-slate-800">
             {offering.courseCode} {offering.courseNameTh}
+            {revisionLabel(offering.part) && ` · ${revisionLabel(offering.part)}`}
           </h1>
           <p className="mt-1 text-sm text-slate-500">
             {offering.courseNameEn} · ปีการศึกษา {offering.academicYear}{' '}
             {SEMESTER_LABEL[offering.semester]} · ตอนเรียน {offering.section}
+            {revisionLabel(offering.part) && ` · ${revisionLabel(offering.part)}`}
           </p>
           {offering.lecturerEmail && (
             <p className="mt-1 text-xs text-slate-400">

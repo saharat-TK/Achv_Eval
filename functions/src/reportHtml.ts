@@ -1,5 +1,12 @@
 import type { AnalysisResult } from './gemini';
-import { REPORT_STYLES, esc, md, scoreCells, signatureTable } from './reportShared';
+import {
+  REPORT_STYLES,
+  esc,
+  md,
+  scoreCells,
+  signatureTable,
+  revisionLabel,
+} from './reportShared';
 
 export interface ReportMeta {
   courseCode: string;
@@ -8,6 +15,8 @@ export interface ReportMeta {
   academicYear: number;
   semesterLabel: string;
   section: string;
+  /** Thesis installment (2–6); null/absent for ordinary offerings. */
+  part?: number | null;
   lecturerName: string;
   generatedAt: string; // formatted Thai date-time
 }
@@ -51,7 +60,7 @@ export function buildReportHtml(result: AnalysisResult, meta: ReportMeta): strin
   <h1>รายงานการประเมินและทวนสอบผลสัมฤทธิ์รายวิชา</h1>
   <table class="meta">
     <tr><td><strong>รายวิชา</strong></td><td>${esc(meta.courseCode)} ${esc(meta.courseNameTh)} (${esc(meta.courseNameEn)})</td></tr>
-    <tr><td><strong>ปีการศึกษา</strong></td><td>${meta.academicYear} ${esc(meta.semesterLabel)} · ตอนเรียน ${esc(meta.section)}</td></tr>
+    <tr><td><strong>ปีการศึกษา</strong></td><td>${meta.academicYear} ${esc(meta.semesterLabel)} · ตอนเรียน ${esc(meta.section)}${revisionLabel(meta.part) ? ` · ${revisionLabel(meta.part)}` : ''}</td></tr>
     <tr><td><strong>อาจารย์ผู้รับผิดชอบ</strong></td><td>${esc(meta.lecturerName)}</td></tr>
     <tr><td><strong>วันที่จัดทำรายงาน</strong></td><td>${esc(meta.generatedAt)}</td></tr>
   </table>

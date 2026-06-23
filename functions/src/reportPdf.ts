@@ -48,6 +48,7 @@ export async function generateAndStoreReport(args: {
         academicYear: number;
         semester: string;
         section: string;
+        part?: number | null;
         lecturerId: string | null;
         lecturerEmail: string | null;
       }
@@ -73,6 +74,7 @@ export async function generateAndStoreReport(args: {
     academicYear: offering.academicYear,
     semesterLabel: SEMESTER_LABEL[offering.semester] ?? offering.semester,
     section: offering.section,
+    part: offering.part ?? null,
     lecturerName,
     generatedAt,
   };

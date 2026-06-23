@@ -1,4 +1,10 @@
-import { REPORT_STYLES, esc } from './reportShared';
+import { REPORT_STYLES, esc, revisionLabel } from './reportShared';
+
+/** ` · Revision N` for thesis installments 2–6, else ''. */
+function revSuffix(part?: number | null): string {
+  const label = revisionLabel(part);
+  return label ? ` · ${label}` : '';
+}
 
 export interface SummaryTopic {
   number: string;
@@ -15,6 +21,7 @@ export interface SummaryCourseRow {
   courseCode: string;
   courseNameEn: string;
   courseNameTh: string;
+  part?: number | null;
   lecturerName: string | null;
   bandLabel: string | null;
 }
@@ -36,6 +43,7 @@ export interface SummaryProgramRollup {
 export interface SummaryProgramCourseRow {
   courseCode: string;
   courseNameEn: string;
+  part?: number | null;
   semesterLabel: string;
   academicYear?: number;
   percentScore: number | null;
@@ -171,7 +179,7 @@ function programCourseListSection(groups: SummaryProgramCourseGroup[]): string {
       <tbody>${g.rows
         .map(
           (r) => `<tr>
-          <td>${esc(r.courseCode)} ${esc(r.courseNameEn)}</td>
+          <td>${esc(r.courseCode)} ${esc(r.courseNameEn)}${revSuffix(r.part)}</td>
           <td>${esc(r.semesterLabel)}${r.academicYear ? ` / ${r.academicYear}` : ''}</td>
           <td>${r.percentScore == null ? '—' : `${r.percentScore}%`}</td>
           <td>${r.percentScore == null ? '—' : BAND_TH(r.percentScore)}</td>
@@ -209,7 +217,7 @@ export function buildAssessmentSummaryHtml(d: SummaryReportData): string {
         ${g.rows
           .map(
             (r) => `<tr>
-              <td>${esc(r.courseCode)} ${esc(r.courseNameEn)}</td>
+              <td>${esc(r.courseCode)} ${esc(r.courseNameEn)}${revSuffix(r.part)}</td>
               <td>${esc(r.lecturerName ?? '—')}</td>
               <td>${esc(r.bandLabel ?? '—')}</td>
             </tr>`,
@@ -295,7 +303,7 @@ ${
   ${d.semesterGroups
     .map(
       (g) => `<div style="margin-top:6px;"><strong>${esc(g.semesterLabel)}</strong>
-      <ol>${g.rows.map((r) => `<li>${esc(r.courseCode)} ${esc(r.courseNameEn)}</li>`).join('')}</ol></div>`,
+      <ol>${g.rows.map((r) => `<li>${esc(r.courseCode)} ${esc(r.courseNameEn)}${revSuffix(r.part)}</li>`).join('')}</ol></div>`,
     )
     .join('')}
 </div>`

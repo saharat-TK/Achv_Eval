@@ -370,7 +370,7 @@ export default function AssessorOfferingsTable({
                                       </Link>
                                       {o.part && o.part > 1 ? (
                                         <span className="ml-2 rounded bg-slate-100 px-1.5 py-0.5 text-xs font-normal text-slate-500">
-                                          ส่วนที่ {o.part}
+                                          Revision {o.part}
                                         </span>
                                       ) : null}
                                     </td>

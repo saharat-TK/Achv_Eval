@@ -551,6 +551,8 @@ export interface ReportCourseRow {
   courseCode: string;
   courseNameTh: string;
   courseNameEn: string;
+  /** Thesis installment (2–6); null/absent for ordinary offerings. */
+  part?: number | null;
   semester: Semester;
   lecturerName: string | null;
   assessed: boolean;

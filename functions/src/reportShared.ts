@@ -98,6 +98,17 @@ export function esc(s: string): string {
 }
 
 /**
+ * Display label for a thesis installment — the English word "Revision" by
+ * product choice. Returns `"Revision N"` for installments 2–6, else `""`.
+ * Mirrors `revisionLabel` in the app's lib/utils/ids (separate package).
+ */
+export function revisionLabel(part?: number | null): string {
+  return typeof part === 'number' && part >= 2 && part <= 6
+    ? `Revision ${part}`
+    : '';
+}
+
+/**
  * Repairs common Markdown-table malformations from the LLM before parsing.
  * On long, wide tables (the มคอ.3 weekly plan) the model produces delimiter
  * rows that `marked` rejects — e.g. a single runaway dash run

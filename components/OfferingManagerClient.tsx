@@ -40,12 +40,12 @@ function lecturerOptionValue(lecturer: ManagedLecturer): string {
   return `${lecturer.kind}:${lecturer.id}`;
 }
 
-/** Thesis-installment marker (ส่วนที่ N), shown only for parts 2–6. */
+/** Thesis-installment marker ("Revision N"), shown only for parts 2–6. */
 function PartBadge({ part }: { part: number | null }) {
   if (!part || part <= 1) return null;
   return (
     <span className="ml-1.5 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-normal text-slate-500">
-      ส่วนที่ {part}
+      Revision {part}
     </span>
   );
 }

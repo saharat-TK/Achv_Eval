@@ -329,10 +329,10 @@ export default function BatchOfferingModal({
         {!edit && selected.length > 0 && (
           <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50/60 p-3">
             <p className="text-xs font-medium text-slate-700">
-              ส่วนการลงทะเบียน (สำหรับวิทยานิพนธ์/ดุษฎีนิพนธ์)
+              Revision การลงทะเบียน (สำหรับวิทยานิพนธ์/ดุษฎีนิพนธ์)
             </p>
             <p className="mt-0.5 text-[11px] text-slate-500">
-              วิชาทั่วไปใช้ “ส่วนที่ 1” โดยอัตโนมัติ — เลือกส่วนที่ 2–6 เพิ่มเฉพาะวิทยานิพนธ์ที่ลงทะเบียนหลายส่วนในเทอมเดียวกัน
+              วิชาทั่วไปใช้ “Revision 1” โดยอัตโนมัติ — เลือก Revision 2–6 เพิ่มเฉพาะวิทยานิพนธ์ที่ลงทะเบียนหลายส่วนในเทอมเดียวกัน
             </p>
             <div className="mt-2 max-h-48 space-y-1.5 overflow-y-auto">
               {selected.map((s) => {
@@ -356,7 +356,7 @@ export default function BatchOfferingModal({
                             disabled={n === 1}
                             onClick={() => togglePart(s.id, n)}
                             aria-pressed={active}
-                            title={n === 1 ? 'ส่วนที่ 1 (ค่าเริ่มต้น)' : `ส่วนที่ ${n}`}
+                            title={n === 1 ? 'Revision 1 (ค่าเริ่มต้น)' : `Revision ${n}`}
                             className={`h-6 w-6 rounded text-xs font-medium transition-colors ${
                               active
                                 ? 'bg-mfu-primary text-white'

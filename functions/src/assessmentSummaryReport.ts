@@ -46,6 +46,7 @@ interface CourseRow {
   courseCode: string;
   courseNameTh: string;
   courseNameEn: string;
+  part?: number | null;
   semester: string;
   lecturerName: string | null;
   assessed: boolean;
@@ -343,6 +344,7 @@ function assembleData(
         courseCode: r.courseCode,
         courseNameEn: r.courseNameEn,
         courseNameTh: r.courseNameTh,
+        part: r.part ?? null,
         lecturerName: r.lecturerName,
         bandLabel: r.band ? BAND_LABEL[r.band] ?? r.band : null,
       })),
@@ -385,6 +387,7 @@ function assembleData(
           .map((r) => ({
             courseCode: r.courseCode,
             courseNameEn: r.courseNameEn,
+            part: r.part ?? null,
             semesterLabel: SEMESTER_LABEL[r.semester] ?? r.semester,
             academicYear: r.academicYear,
             percentScore: r.percentScore ?? null,

@@ -150,16 +150,16 @@ export default function OfferingForm({
               onChange={(e) => set('section', e.target.value)}
             />
           </Field>
-          <Field label="ส่วนที่ลงทะเบียน (วิทยานิพนธ์)">
+          <Field label="Revision ที่ลงทะเบียน (วิทยานิพนธ์)">
             <select
               className={inputCls}
               value={data.part ?? 1}
               onChange={(e) => set('part', Number(e.target.value))}
             >
-              <option value={1}>— วิชาทั่วไป / ส่วนที่ 1 —</option>
+              <option value={1}>— วิชาทั่วไป / Revision 1 —</option>
               {[2, 3, 4, 5, 6].map((n) => (
                 <option key={n} value={n}>
-                  ส่วนที่ {n}
+                  Revision {n}
                 </option>
               ))}
             </select>

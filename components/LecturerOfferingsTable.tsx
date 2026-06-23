@@ -230,7 +230,7 @@ export default function LecturerOfferingsTable({ uid }: { uid: string }) {
                                     </span>
                                     {o.part && o.part > 1 ? (
                                       <span className="shrink-0 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-normal text-slate-500">
-                                        ส่วนที่ {o.part}
+                                        Revision {o.part}
                                       </span>
                                     ) : null}
                                   </div>

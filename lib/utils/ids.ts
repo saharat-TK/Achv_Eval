@@ -39,3 +39,15 @@ export function offeringDocId(
   const base = `${courseId}_${year}_${semester}_${section}`;
   return part ? `${base}_P${part}` : base;
 }
+
+/**
+ * Display label for a thesis installment — the English word "Revision" by
+ * product choice. Returns `"Revision N"` for installments 2–6, or `""` for
+ * ordinary offerings / the collapsed first installment (so callers can render
+ * nothing). Callers add their own separator (e.g. `· `) around a non-empty
+ * result.
+ */
+export function revisionLabel(part: number | null | undefined): string {
+  const p = normalizeThesisPart(part);
+  return p ? `Revision ${p}` : '';
+}

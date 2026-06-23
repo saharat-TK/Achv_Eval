@@ -9,6 +9,7 @@ import {
   renderFollowUpSection,
   renderSelfAssessmentSection,
   renderSignOffKindNotice,
+  revisionLabel,
   signatureTable,
   type AssessmentForReport,
   type CommitteeMemberForReport,
@@ -107,7 +108,7 @@ export function buildFinalVerificationHtml(args: {
   <h1>รายงานการประเมินและทวนสอบผลสัมฤทธิ์รายวิชา (ฉบับรับรองสุดท้าย)</h1>
   <table class="meta">
     <tr><td><strong>รายวิชา</strong></td><td>${esc(meta.courseCode)} ${esc(meta.courseNameTh)} (${esc(meta.courseNameEn)})</td></tr>
-    <tr><td><strong>ปีการศึกษา</strong></td><td>${meta.academicYear} ${esc(meta.semesterLabel)} · ตอนเรียน ${esc(meta.section)}</td></tr>
+    <tr><td><strong>ปีการศึกษา</strong></td><td>${meta.academicYear} ${esc(meta.semesterLabel)} · ตอนเรียน ${esc(meta.section)}${revisionLabel(meta.part) ? ` · ${revisionLabel(meta.part)}` : ''}</td></tr>
     <tr><td><strong>อาจารย์ผู้รับผิดชอบ</strong></td><td>${esc(meta.lecturerName)}</td></tr>
     <tr><td><strong>${signerLabel}</strong></td><td>${esc(assessment.assessorName)}</td></tr>
     <tr><td><strong>คณะกรรมการรับรองผล</strong></td><td>${esc(verification.verifierName)}</td></tr>

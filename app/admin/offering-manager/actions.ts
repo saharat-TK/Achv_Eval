@@ -274,7 +274,7 @@ export async function bulkCreateOfferings(
       .sort((a, b) => (a ?? 1) - (b ?? 1));
 
     for (const part of parts) {
-      const label = part ? `${course.code} ส่วนที่ ${part}` : course.code;
+      const label = part ? `${course.code} Revision ${part}` : course.code;
       const offeringId = offeringDocId(
         courseId,
         input.academicYear,
