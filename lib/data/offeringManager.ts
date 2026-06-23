@@ -59,6 +59,8 @@ export interface ManagedOffering {
   academicYear: number;
   semester: Semester;
   section: string;
+  /** Thesis installment (ส่วนที่), 2–6 for later parts; null/1 = ordinary. */
+  part: number | null;
   status: OfferingStatus;
   lecturerId: string | null;
   lecturerEmail: string | null;
@@ -131,6 +133,7 @@ export async function getOfferingsForAcademicPrograms(
         academicYear: o.academicYear,
         semester: o.semester,
         section: o.section,
+        part: o.part ?? null,
         status: o.status,
         lecturerId: o.lecturerId ?? null,
         lecturerEmail: o.lecturerEmail ?? null,

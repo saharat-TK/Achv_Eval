@@ -53,12 +53,56 @@ export default function BatchOfferingModal({
   const [curriculums, setCurriculums] = useState<CurriculumWithCourses[]>([]);
   const [activeCurr, setActiveCurr] = useState('');
   const [selected, setSelected] = useState<DualListItem[]>(
-    edit ? edit.initial.map((i) => ({ id: i.courseId, code: i.code, nameTh: i.nameTh })) : [],
+    // Dedupe by courseId: a thesis course with several parts has multiple
+    // offerings in the term, but the dual-list is keyed by course. Removal
+    // still purges every part via the full `edit.initial` below.
+    edit
+      ? Array.from(
+          new Map(
+            edit.initial.map((i) => [i.courseId, { id: i.courseId, code: i.code, nameTh: i.nameTh }]),
+          ).values(),
+        )
+      : [],
   );
   const [linkToPrevious, setLinkToPrevious] = useState(true);
+  // Thesis installments: courseId → parts to create (default [1] when absent).
+  const [partsByCourse, setPartsByCourse] = useState<Record<string, number[]>>({});
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Drop part selections for courses no longer selected.
+  useEffect(() => {
+    const ids = new Set(selected.map((s) => s.id));
+    setPartsByCourse((prev) => {
+      const next: Record<string, number[]> = {};
+      for (const [id, parts] of Object.entries(prev)) {
+        if (ids.has(id)) next[id] = parts;
+      }
+      return Object.keys(next).length === Object.keys(prev).length ? prev : next;
+    });
+  }, [selected]);
+
+  function partsOf(courseId: string): number[] {
+    return partsByCourse[courseId] ?? [1];
+  }
+
+  function togglePart(courseId: string, n: number) {
+    if (n === 1) return; // part 1 is the always-present base
+    setPartsByCourse((prev) => {
+      const current = prev[courseId] ?? [1];
+      const has = current.includes(n);
+      const next = has ? current.filter((p) => p !== n) : [...current, n];
+      return { ...prev, [courseId]: next.sort((a, b) => a - b) };
+    });
+  }
+
+  // Total offerings that will be created (each part is its own offering).
+  const totalOfferings = useMemo(
+    () => selected.reduce((sum, s) => sum + partsOf(s.id).length, 0),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [selected, partsByCourse],
+  );
 
   // Load curriculums + courses for the chosen academic program.
   useEffect(() => {
@@ -117,7 +161,7 @@ export default function BatchOfferingModal({
           .map((i) => i.offeringId);
 
         if (added.length) {
-          const res = await bulkCreateOfferings({ academicYear: year, semester, courseIds: added, linkToPrevious });
+          const res = await bulkCreateOfferings({ academicYear: year, semester, courseIds: added, linkToPrevious, partsByCourse });
           if (!res.ok) {
             setError(res.error);
             setBusy(false);
@@ -151,6 +195,7 @@ export default function BatchOfferingModal({
           semester,
           courseIds: selected.map((s) => s.id),
           linkToPrevious,
+          partsByCourse,
         });
         if (!res.ok) {
           setError(res.error);
@@ -278,6 +323,58 @@ export default function BatchOfferingModal({
           )}
         </div>
 
+        {/* Thesis installments — pick which ส่วน to create per selected course.
+            Create mode only: the edit flow's course list is keyed by courseId
+            and can't represent multiple parts of one course. */}
+        {!edit && selected.length > 0 && (
+          <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50/60 p-3">
+            <p className="text-xs font-medium text-slate-700">
+              ส่วนการลงทะเบียน (สำหรับวิทยานิพนธ์/ดุษฎีนิพนธ์)
+            </p>
+            <p className="mt-0.5 text-[11px] text-slate-500">
+              วิชาทั่วไปใช้ “ส่วนที่ 1” โดยอัตโนมัติ — เลือกส่วนที่ 2–6 เพิ่มเฉพาะวิทยานิพนธ์ที่ลงทะเบียนหลายส่วนในเทอมเดียวกัน
+            </p>
+            <div className="mt-2 max-h-48 space-y-1.5 overflow-y-auto">
+              {selected.map((s) => {
+                const parts = partsOf(s.id);
+                return (
+                  <div
+                    key={s.id}
+                    className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md bg-white px-2.5 py-1.5"
+                  >
+                    <span className="min-w-0 flex-1 truncate text-xs text-slate-700">
+                      <span className="font-medium">{s.code}</span>{' '}
+                      <span className="text-slate-500">{s.nameTh}</span>
+                    </span>
+                    <span className="flex shrink-0 items-center gap-1">
+                      {[1, 2, 3, 4, 5, 6].map((n) => {
+                        const active = parts.includes(n);
+                        return (
+                          <button
+                            key={n}
+                            type="button"
+                            disabled={n === 1}
+                            onClick={() => togglePart(s.id, n)}
+                            aria-pressed={active}
+                            title={n === 1 ? 'ส่วนที่ 1 (ค่าเริ่มต้น)' : `ส่วนที่ ${n}`}
+                            className={`h-6 w-6 rounded text-xs font-medium transition-colors ${
+                              active
+                                ? 'bg-mfu-primary text-white'
+                                : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+                            } ${n === 1 ? 'cursor-default opacity-80' : ''}`}
+                          >
+                            {n}
+                          </button>
+                        );
+                      })}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         {/* Link-to-previous toggle — only meaningful when creating new offerings */}
         {!edit && (
           <label className="mt-4 flex cursor-pointer items-start gap-2.5">
@@ -318,7 +415,7 @@ export default function BatchOfferingModal({
               edit ? 'bg-mfu-primary' : 'bg-red-600 hover:bg-red-700'
             }`}
           >
-            {busy ? 'กำลังบันทึก…' : edit ? 'บันทึกการแก้ไข' : `ยืนยันการเปิดสอน (${selected.length})`}
+            {busy ? 'กำลังบันทึก…' : edit ? 'บันทึกการแก้ไข' : `ยืนยันการเปิดสอน (${totalOfferings})`}
           </button>
         </div>
       </div>

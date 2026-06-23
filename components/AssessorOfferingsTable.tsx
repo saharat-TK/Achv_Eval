@@ -17,6 +17,7 @@ interface Offering {
   academicYear: number;
   semester: Semester;
   section: string;
+  part?: number | null;
   status: OfferingStatus;
   lecturerEmail: string | null;
 }
@@ -201,7 +202,8 @@ export default function AssessorOfferingsTable({
                   offerings: deptOfferings.sort(
                     (a, b) =>
                       a.courseCode.localeCompare(b.courseCode) ||
-                      a.section.localeCompare(b.section),
+                      a.section.localeCompare(b.section) ||
+                      (a.part ?? 1) - (b.part ?? 1),
                   ),
                 };
               })
@@ -366,6 +368,11 @@ export default function AssessorOfferingsTable({
                                       >
                                         {o.courseCode}
                                       </Link>
+                                      {o.part && o.part > 1 ? (
+                                        <span className="ml-2 rounded bg-slate-100 px-1.5 py-0.5 text-xs font-normal text-slate-500">
+                                          ส่วนที่ {o.part}
+                                        </span>
+                                      ) : null}
                                     </td>
                                     <td className={`${TABLE_CELL_CLASS} min-w-0 text-slate-700`}>
                                       <div className="truncate" title={o.courseNameTh}>

@@ -9,6 +9,7 @@ import {
   getCurriculumsWithCourses,
   type CurriculumWithCourses,
 } from '@/lib/data/offeringManager';
+import { normalizeThesisPart, offeringDocId } from '@/lib/utils/ids';
 import type { OfferingStatus, Semester } from '@/lib/types/models';
 
 const DEFAULT_SECTION = '01';
@@ -34,6 +35,13 @@ export interface BulkCreateInput {
   semester: Semester;
   courseIds: string[];
   linkToPrevious?: boolean;
+  /**
+   * Optional thesis-installment selection per course (courseId → parts to
+   * create, e.g. `[1, 2, 3]`). A course absent from this map, or mapped to an
+   * empty list, gets a single ordinary offering (part 1). Each part becomes its
+   * own offering; parts 2–6 carry a `_P{n}` id suffix (part 1 stays unchanged).
+   */
+  partsByCourse?: Record<string, number[]>;
 }
 
 export interface LecturerAssignmentInput {
@@ -176,10 +184,12 @@ export async function loadCurriculumsWithCourses(
 }
 
 /**
- * Create one offering per selected course at the given year/semester
- * (section "01", lecturer null). Courses may span multiple curriculums of
- * an academic program. Skips courses the actor can't manage, dangling
- * courses, and duplicates (same course/year/semester/section).
+ * Create offerings for the selected courses at the given year/semester
+ * (section "01", lecturer null). One offering per course by default, or one per
+ * requested thesis installment when `partsByCourse` is supplied (parts 2–6 get
+ * a `_P{n}` id suffix). Courses may span multiple curriculums of an academic
+ * program. Skips courses the actor can't manage, dangling courses, and
+ * duplicates (same course/year/semester/section/part).
  */
 export async function bulkCreateOfferings(
   input: BulkCreateInput,
@@ -225,32 +235,10 @@ export async function bulkCreateOfferings(
       continue;
     }
 
-    const offeringId = `${courseId}_${input.academicYear}_${input.semester}_${DEFAULT_SECTION}`;
-
-    // Doc-ID check: fast path for readable-ID collision detection.
-    const idSnap = await db.collection('offerings').doc(offeringId).get();
-    if (idSnap.exists) {
-      failed.push({ id: courseId, label: course.code, reason: 'ซ้ำกับการเปิดสอนเดิม' });
-      continue;
-    }
-
-    // Dedupe where() query: catches legacy offerings that carry random IDs.
-    const dup = await db
-      .collection('offerings')
-      .where('courseId', '==', courseId)
-      .where('academicYear', '==', input.academicYear)
-      .where('semester', '==', input.semester)
-      .where('section', '==', DEFAULT_SECTION)
-      .limit(1)
-      .get();
-    if (!dup.empty) {
-      failed.push({ id: courseId, label: course.code, reason: 'ซ้ำกับการเปิดสอนเดิม' });
-      continue;
-    }
-
-    // Resolve previousOfferingId: find the most recent offering of this course
-    // that predates the target term. Fetches all offerings for the course and
-    // sorts in memory — per-course counts are small, no composite index needed.
+    // Resolve previousOfferingId once per course (part-independent): the most
+    // recent offering of this course that predates the target term. Fetches all
+    // offerings for the course and sorts in memory — per-course counts are
+    // small, no composite index needed. All parts share the same prior link.
     let previousOfferingId: string | null = null;
     if (input.linkToPrevious) {
       const prevSnap = await db
@@ -276,32 +264,76 @@ export async function bulkCreateOfferings(
       previousOfferingId = candidates[0]?.id ?? null;
     }
 
-    await db.collection('offerings').doc(offeringId).set({
-      courseId,
-      programId: curriculumId,
-      courseCode: course.code,
-      courseNameTh: course.nameTh,
-      courseNameEn: course.nameEn,
-      academicYear: input.academicYear,
-      semester: input.semester,
-      section: DEFAULT_SECTION,
-      lecturerId: null,
-      lecturerEmail: null,
-      pendingLecturerEmail: null,
-      pendingLecturerAllowlistId: null,
-      hasExamAssessment: true,
-      assignedPloNumbers: [],
-      status: 'draft' as OfferingStatus,
-      previousOfferingId,
-      latestAiReportId: null,
-      assessmentId: null,
-      isActive: true,
-      createdAt: now,
-      updatedAt: now,
-      createdBy: access.uid,
-      updatedBy: access.uid,
-    });
-    createdIds.push(offeringId);
+    // Thesis installments: one offering per requested ส่วน. Absent/empty map →
+    // a single ordinary offering (part 1). Deduped and sorted so a repeated or
+    // unordered selection is harmless.
+    const requested = input.partsByCourse?.[courseId];
+    const parts = (requested && requested.length > 0 ? requested : [1])
+      .map((p) => normalizeThesisPart(p))
+      .filter((p, i, arr) => arr.indexOf(p) === i)
+      .sort((a, b) => (a ?? 1) - (b ?? 1));
+
+    for (const part of parts) {
+      const label = part ? `${course.code} ส่วนที่ ${part}` : course.code;
+      const offeringId = offeringDocId(
+        courseId,
+        input.academicYear,
+        input.semester,
+        DEFAULT_SECTION,
+        part,
+      );
+
+      // Doc-ID check: fast path for readable-ID collision detection.
+      const idSnap = await db.collection('offerings').doc(offeringId).get();
+      if (idSnap.exists) {
+        failed.push({ id: courseId, label, reason: 'ซ้ำกับการเปิดสอนเดิม' });
+        continue;
+      }
+
+      // Dedupe where() query: catches legacy offerings that carry random IDs.
+      // The `part` filter is only added for installments 2–6 — legacy/ordinary
+      // offerings have no `part` field, so a `== null` filter would miss them.
+      let dupQuery = db
+        .collection('offerings')
+        .where('courseId', '==', courseId)
+        .where('academicYear', '==', input.academicYear)
+        .where('semester', '==', input.semester)
+        .where('section', '==', DEFAULT_SECTION);
+      if (part) dupQuery = dupQuery.where('part', '==', part);
+      const dup = await dupQuery.limit(1).get();
+      if (!dup.empty) {
+        failed.push({ id: courseId, label, reason: 'ซ้ำกับการเปิดสอนเดิม' });
+        continue;
+      }
+
+      await db.collection('offerings').doc(offeringId).set({
+        courseId,
+        programId: curriculumId,
+        courseCode: course.code,
+        courseNameTh: course.nameTh,
+        courseNameEn: course.nameEn,
+        academicYear: input.academicYear,
+        semester: input.semester,
+        section: DEFAULT_SECTION,
+        part,
+        lecturerId: null,
+        lecturerEmail: null,
+        pendingLecturerEmail: null,
+        pendingLecturerAllowlistId: null,
+        hasExamAssessment: true,
+        assignedPloNumbers: [],
+        status: 'draft' as OfferingStatus,
+        previousOfferingId,
+        latestAiReportId: null,
+        assessmentId: null,
+        isActive: true,
+        createdAt: now,
+        updatedAt: now,
+        createdBy: access.uid,
+        updatedBy: access.uid,
+      });
+      createdIds.push(offeringId);
+    }
   }
 
   if (createdIds.length > 0) {

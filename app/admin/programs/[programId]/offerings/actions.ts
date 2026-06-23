@@ -4,7 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { FieldValue } from 'firebase-admin/firestore';
 import { getAdminDb } from '@/lib/firebase/admin';
 import { getSessionUser, getCurrentProfile } from '@/lib/firebase/auth-server';
-import { toDocId } from '@/lib/utils/ids';
+import { toDocId, normalizeThesisPart, offeringDocId } from '@/lib/utils/ids';
 import type { Semester, OfferingStatus, OfferingDoc } from '@/lib/types/models';
 
 const ANALYSIS_ATTEMPT_LIMIT = 4;
@@ -14,6 +14,8 @@ export interface OfferingFormData {
   academicYear: number;
   semester: Semester;
   section: string;
+  /** Thesis installment (ส่วนที่), 1–6. 1/null = ordinary offering. */
+  part?: number | null;
   lecturerId: string | null;
   hasExamAssessment: boolean;
   assignedPloNumbers: number[];
@@ -120,7 +122,14 @@ export async function createOffering(
 
   const db = getAdminDb();
   const section = data.section.trim();
-  const id = `${data.courseId}_${data.academicYear}_${data.semester}_${section}`;
+  const part = normalizeThesisPart(data.part);
+  const id = offeringDocId(
+    data.courseId,
+    data.academicYear,
+    data.semester,
+    section,
+    part,
+  );
 
   // Doc-ID check: catches exact-duplicate offering for new readable-ID docs.
   const docSnap = await db.collection('offerings').doc(id).get();
@@ -128,14 +137,16 @@ export async function createOffering(
     return { ok: false, error: 'รายวิชาที่เปิดสอนนี้มีอยู่แล้ว' };
   }
   // Dedup where() query: catches legacy offerings that still carry random IDs.
-  const dupSnap = await db
+  // The `part` filter is only added for installments 2–6 — legacy/ordinary
+  // offerings have no `part` field, so a `== null` filter would miss them.
+  let dupQuery = db
     .collection('offerings')
     .where('courseId', '==', data.courseId)
     .where('academicYear', '==', data.academicYear)
     .where('semester', '==', data.semester)
-    .where('section', '==', section)
-    .limit(1)
-    .get();
+    .where('section', '==', section);
+  if (part) dupQuery = dupQuery.where('part', '==', part);
+  const dupSnap = await dupQuery.limit(1).get();
   if (!dupSnap.empty) {
     return { ok: false, error: 'รายวิชาที่เปิดสอนนี้มีอยู่แล้ว' };
   }
@@ -152,6 +163,7 @@ export async function createOffering(
     academicYear: data.academicYear,
     semester: data.semester,
     section,
+    part,
     lecturerId: data.lecturerId ?? null,
     lecturerEmail: refs.lecturerEmail,
     hasExamAssessment: data.hasExamAssessment,
@@ -205,6 +217,7 @@ export async function updateOffering(
     academicYear: data.academicYear,
     semester: data.semester,
     section: data.section.trim(),
+    part: normalizeThesisPart(data.part),
     lecturerId: data.lecturerId ?? null,
     lecturerEmail: refs.lecturerEmail,
     hasExamAssessment: data.hasExamAssessment,
@@ -249,7 +262,7 @@ export async function cloneOfferings(
   const targetKeys = new Set(
     offerings
       .filter((o) => o.academicYear === toYear && o.semester === toSemester)
-      .map((o) => `${o.courseId}__${o.section}`),
+      .map((o) => `${o.courseId}__${o.section}__${normalizeThesisPart(o.part) ?? ''}`),
   );
 
   let created = 0;
@@ -257,11 +270,18 @@ export async function cloneOfferings(
   const now = FieldValue.serverTimestamp();
 
   for (const src of source) {
-    if (targetKeys.has(`${src.courseId}__${src.section}`)) {
+    const srcPart = normalizeThesisPart(src.part);
+    if (targetKeys.has(`${src.courseId}__${src.section}__${srcPart ?? ''}`)) {
       skipped++;
       continue;
     }
-    const cloneId = `${src.courseId}_${toYear}_${toSemester}_${src.section}`;
+    const cloneId = offeringDocId(
+      src.courseId,
+      toYear,
+      toSemester,
+      src.section,
+      srcPart,
+    );
     // Doc-ID check: extra guard against readable-ID collisions not captured
     // by the in-memory targetKeys set (which is built before any writes).
     const cloneSnap = await db.collection('offerings').doc(cloneId).get();
@@ -278,6 +298,7 @@ export async function cloneOfferings(
       academicYear: toYear,
       semester: toSemester,
       section: src.section,
+      part: srcPart,
       lecturerId: src.lecturerId ?? null,
       lecturerEmail: src.lecturerEmail ?? null,
       hasExamAssessment: src.hasExamAssessment ?? true,
